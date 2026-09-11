@@ -129,7 +129,26 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 
 ---
 
-## 3. 実行方法（予定。STEP ごとに更新）
+## 3. 実行方法（STEP ごとに更新）
+
+### 動作確認用ツール
+
+```powershell
+# STEP 2: モックサーボの追従・負荷・温度変化をコンソールに表示
+.\.venv\Scripts\python.exe tools\demo_mock_servo.py --heat-tau 60
+```
+
+### ハードウェア層の設計（STEP 2）
+
+- `serpens/hw/servo_bus.py` … 抽象クラス `ServoBus`。角度は**関節角 [deg]**（0° = まっすぐ）。
+  ソフトウェアリミット（config の `min_deg` / `max_deg`）でのクランプはここで共通に行う。
+- `serpens/hw/mock_bus.py` … 一次遅れ追従。温度は一次系で、時定数 `mock_servo.heat_tau_s` を変えられる。
+- `serpens/hw/feetech_bus.py` … 実機用。根拠は [docs/sts3215_registers.md](docs/sts3215_registers.md)。
+  取り付け向き（`direction`）と組立オフセット（`offset_deg`）は config で関節ごとに設定する。
+- `serpens/hw/head_io.py` … 頭部 XIAO ESP32S3。`SerialHeadIO`（自動再接続）と `MockHeadIO`（同じ行形式を生成）。
+- 切り替えは `make_bus("mock" | "feetech", cfg, port)`。
+
+### アプリ（予定）
 
 ```powershell
 # シミュレータのみ（実機なし）
@@ -167,7 +186,7 @@ serpens/
 | STEP | 内容 | 状態 |
 |---|---|---|
 | 1 | 環境構築 | ✅ |
-| 2 | サーボ抽象層とモック | – |
+| 2 | サーボ抽象層とモック / 頭部 I/O | ✅（実機テストは未実施） |
 | 3 | 歩容エンジン | – |
 | 4 | 2D シミュレータ | – |
 | 5 | 知覚 | – |

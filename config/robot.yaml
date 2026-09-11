@@ -1,0 +1,105 @@
+# Serpens EX-1 設定ファイル
+# 寸法・しきい値・ゲインはすべてここに書く。コードに数値を直書きしない。
+# 単位はキー名の接尾辞で示す: _mm, _deg, _s, _hz, _c(℃), _v, _g, _dps(°/s), _dps2(°/s²)
+# 「仮」と書いた値は未確定。実機を見て必ず見直すこと。
+
+# ---------------------------------------------------------------------------
+# 機体寸法（確定値）
+# 原点 = 尾端、+x が頭方向、単位 mm
+# ---------------------------------------------------------------------------
+body:
+  length_mm: 850
+  diameter_mm: 50
+  mass_g: 1000
+  tail_x_mm: 0
+  head_tip_x_mm: 850
+
+# 関節。x_mm は尾端からの位置。axis は yaw(水平) / pitch(持ち上げ) / roll(かしげ)。
+# servo_id はバス上の ID、direction は取り付け向き(+1/-1)、offset_deg は組立誤差の補正。
+# min_deg / max_deg はソフトウェアリミット（仮。機構干渉を実機で確認すること）。
+joints:
+  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, offset_deg: 0.0, min_deg: 0.0,   max_deg: 90.0}
+  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
+  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, offset_deg: 0.0, min_deg: -30.0, max_deg: 30.0}
+
+# 首（J7）の使い分け
+neck:
+  look_min_deg: 55.0        # 人を見るときの J7 下限
+  look_max_deg: 65.0        # 人を見るときの J7 上限（これ以上倒すと J8 が世界座標で roll になる）
+  full_rear_min_deg: 85.0   # 「真上から見下ろすフル鎌首」演出専用の範囲
+  full_rear_max_deg: 90.0
+
+# 質量配分（仮定値。実測したら差し替える）
+mass_budget_g:
+  servo_each: 55
+  servo_count: 9
+  segment_frame_each: 30
+  segment_frame_count: 8
+  passive_wheels_total: 60      # 受動輪16個 + ベアリング
+  head_total: 90                # シェル + XIAO + ToF + LED
+  skin_and_wiring: 115
+  neck_lifted_mass: 200         # J7 が持ち上げる質量
+  neck_lifted_cog_mm: 104       # J7 から重心までの距離
+
+# ---------------------------------------------------------------------------
+# サーボ STS3215（出典は docs/sts3215_registers.md）
+# ---------------------------------------------------------------------------
+servo:
+  baudrate: 1000000
+  steps_per_rev: 4096
+  center_step: 2047          # [W] の中立位置。[M] の「2048 校正」とは 1step 差
+  step_min: 0
+  step_max: 4095
+  speed_max_step_s: 3400     # [M] 運転速度の最大
+  speed_min_step_s: 1        # 0 の意味が資料に無いので書かない
+  accel_unit_step_s2: 100    # 加速度レジスタ 1 あたり
+  accel_reg_min: 1           # 0 の意味が資料に無いので書かない
+  accel_reg_max: 254
+  voltage_unit_v: 0.1
+  load_unit: 0.001           # 現在負荷 1 あたり（デューティ比）
+  load_sign_bit: null        # 現在負荷の符号ビット。公式資料に記載なし → 実機で確認して設定
+  torque_limit_full: 1000    # トルク制限 1000 = 100%
+  temperature_limit_c: 70    # [M] 最高温度の初期値
+  stall_torque_kgfcm: 30.0   # 12V 時
+  continuous_torque_ratio: 0.333  # 連続実用トルク = ストールの 1/3
+  sync_read: true            # SYNC READ を使う（非対応なら自動で個別 READ に落ちる）
+
+# ---------------------------------------------------------------------------
+# モックサーボ（シミュレーション用の模擬値。実機の挙動に合わせて調整する）
+# ---------------------------------------------------------------------------
+mock_servo:
+  position_tau_s: 0.08       # 目標角への一次遅れ時定数
+  integration_step_s: 0.002  # 内部の積分刻み（安定のため position_tau_s より十分小さく）
+  initial_deg: 0.0
+  load_per_speed: 0.25       # 最高速度で動いたときの負荷率
+  load_per_error_deg: 0.01   # 目標との偏差 1° あたりの負荷率（保持トルク）
+  ambient_c: 25.0            # 環境温度
+  heat_tau_s: 300.0          # 温度の一次遅れ時定数（Energy の演出テストでは短くする）
+  heat_gain_c: 30.0          # 負荷率 1.0 を続けたときの温度上昇（平衡値）
+  holding_heat_c: 2.0        # トルク ON で静止しているときの温度上昇（平衡値）
+  voltage_nominal_v: 12.0
+  voltage_sag_v: 0.6         # 負荷率 1.0 あたりの電圧降下
+  model_number: 777          # ping() が返すダミー型番（実機の値とは無関係）
+
+# ---------------------------------------------------------------------------
+# 頭部 I/O（XIAO ESP32S3、USB CDC）
+# ---------------------------------------------------------------------------
+head_io:
+  baudrate: 115200
+  sensor_rate_hz: 10          # ESP32 → PC の S 行の周期
+  link_timeout_s: 1.0         # これだけ S 行が来なければ「頭部I/O断」表示（動作は継続）
+  reconnect_interval_s: 1.0   # ポートが消えたときの再接続間隔
+  read_timeout_s: 0.05        # シリアル読み出しのタイムアウト
+  tof_max_mm: 4000
+  seq_modulo: 65536
+  eye_modes: {"off": 0, "on": 1, "breath": 2, "blink": 3}   # YAML では on/off を引用符で囲む（真偽値になるため）
+  esp32_failsafe_s: 3.0       # ESP32 側: これだけコマンドが来なければ目を呼吸に戻す（モックで模擬）
+  mock:
+    fw_version: "mock-0.1"
+    tof_idle_mm: 1500         # 何も無いときの ToF 距離
