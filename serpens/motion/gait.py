@@ -8,7 +8,8 @@ n は胴体ヨー関節の番号（0 = J1 = 尾側 … N = J6 = 頭側）。
 旋回入力は オフセット γ だけ。関節への配り方（gait.turn_profile）は2種類:
   uniform       γ(n) = γ0              … 胴体全体が均一な円弧
   head_weighted γ(n) = γ0 · n / N      … 頭で舵を切って胴がついてくる
-γ0 はステップで変えず、gait.turn_ramp_periods 周期かけてなめらかに変える。
+γ0 はステップで変えず、変化の速さを制限する: 0 → turn_full_scale_deg の変化にちょうど
+gait.turn_ramp_periods 周期かかる速さ（小さな変化はそのぶん短く済む）。毎周期目標を変えても滑らかに追う。
 """
 from __future__ import annotations
 
@@ -96,36 +97,36 @@ class GaitEngine:
         self.profile = str(g["turn_profile"])
         self._blend_s = float(g["blend_s"])
         self._ramp_periods = float(g["turn_ramp_periods"])
+        self._full_scale = float(g["turn_full_scale_deg"])
         self.params: GaitParams | None = None
         self._phase = 0.0            # 時間位相 [rad] の積分（周波数を変えても位相が飛ばない）
         self._gain = 0.0
         self._target_gain = 0.0
         self._last_t: float | None = None
-        # γ0 のランプ: from → to を ramp_s かけて smoothstep で
-        self.gamma0 = 0.0
-        self._g_from = self._g_to = 0.0
-        self._g_elapsed = self._g_ramp_s = 0.0
+        self.gamma0 = 0.0            # 現在の γ0（目標 _g_to へ速さ制限つきで近づく）
+        self._g_to = 0.0
 
     @property
     def active(self) -> bool:
         """振幅が 0 でなければ動作中。"""
         return self._gain > 0.0 or self._target_gain > 0.0
 
-    def start(self, preset_or_params: str | GaitParams) -> None:
-        """歩容を開始（または別の歩容へ切替）。プリセットの γ0 へランプする。"""
+    def start(self, preset_or_params: str | GaitParams, gamma0_deg: float | None = None) -> None:
+        """歩容を開始（または切替）。γ0 の目標は gamma0_deg（省略時はプリセットの turn_bias_deg）。"""
         p = self.presets[preset_or_params] if isinstance(preset_or_params, str) else preset_or_params
         self.params = p
         self._target_gain = 1.0
-        self.set_turn(p.turn_bias_deg)
+        self.set_turn(p.turn_bias_deg if gamma0_deg is None else gamma0_deg)
 
     def set_turn(self, gamma0_deg: float) -> None:
-        """旋回オフセット γ0 の目標を変える（turn_ramp_periods 周期かけて移る）。"""
-        if gamma0_deg == self._g_to:
-            return
-        self._g_from, self._g_to = self.gamma0, gamma0_deg
-        period = gait_period_s(self.params) if self.params else 0.0
-        self._g_ramp_s = self._ramp_periods * period if math.isfinite(period) else 0.0
-        self._g_elapsed = 0.0
+        """旋回オフセット γ0 の目標を変える（速さ制限つきで移る）。"""
+        self._g_to = gamma0_deg
+
+    def _turn_rate_dps(self) -> float:
+        period = gait_period_s(self.params) if self.params else math.inf
+        if not math.isfinite(period) or self._ramp_periods <= 0:
+            return math.inf
+        return self._full_scale / (self._ramp_periods * period)
 
     def stop(self) -> None:
         """振幅を blend_s かけて 0 にする。"""
@@ -137,9 +138,12 @@ class GaitEngine:
         self._last_t = t
         step = dt / self._blend_s if self._blend_s > 0 else 1.0
         self._gain += max(-step, min(step, self._target_gain - self._gain))
-        self._g_elapsed += dt
-        frac = 1.0 if self._g_ramp_s <= 0 else self._g_elapsed / self._g_ramp_s
-        self.gamma0 = self._g_from + (self._g_to - self._g_from) * _smoothstep(frac)
+        rate = self._turn_rate_dps()
+        if math.isinf(rate):
+            self.gamma0 = self._g_to          # 歩容が無いときは制限しない（inf × 0 = NaN を避ける）
+        else:
+            step_g = rate * dt
+            self.gamma0 += max(-step_g, min(step_g, self._g_to - self.gamma0))
         if self.params is None or self._gain <= 0.0:
             return {}
         self._phase += 2.0 * math.pi * self.params.temporal_freq_hz * dt

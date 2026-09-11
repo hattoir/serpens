@@ -156,7 +156,35 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\make_aruco.py            # → output/aruco_markers_A4.png を実寸で印刷
 .\.venv\Scripts\python.exe tools\calibrate_floor.py --source 0
 .\.venv\Scripts\python.exe tools\perception_live.py --source 0
+# STEP 6: 人の座標を動かして一連の振る舞いを見る → output/step6_behavior.gif と内部状態の時系列
+.\.venv\Scripts\python.exe tools\behavior_demo.py
 ```
+
+### 行動の設計（STEP 6）
+
+毎制御周期（50Hz）の流れ（`behavior/brain.py`）:
+
+```
+知覚（ヘビの位置姿勢・追跡中の1人・タッチ・サーボ最高温度）
+ → 刺激（presence / proximity / approach / touch / novelty / looking / alone）
+ → 内部状態（Curiosity / Affection / Stress / Attention = 一次遅れ、Energy = サーボ温度から）
+ → 効用（9状態、±8% の乱数）→ 状態機械（ヒステリシス 1.15 倍・最小継続 4 秒）
+ → 状態ごとの動作（移動 controller.py / しぐさ expression.py）→ アニメーター → サーボ
+```
+
+- `internal_state.py` … dx/dt = −(x−x0)/τ + Σ gain×刺激。係数は `behavior.internal`。
+  Energy は最高温度 `temp_fresh_c`（=1）〜`temp_tired_c`（=0）の直線。熱い = 疲れている
+- `utility.py` … 手書きの効用（式は docstring）。係数は `behavior.utility.weights`。
+  GUI の「いま何を考えているか」は `thought_line()`（例: `Curiosity 0.82 > Rest 0.31 → 接近`）
+- `fsm.py` … 最小継続時間（状態ごとに上書き可: PETTED 2s / ALERT 2s / COIL_REST 20s / SLEEP 8s）、
+  割り込みは PETTED だけ。ALERT は「新しい人に気づいた瞬間」に直接切り替える
+- `controller.py` … 目標点 → γ0（向きの誤差 × ゲイン）と周波数（速さ ÷ 1周期の前進量）。
+  周期は遅くするときだけ延ばす（速くするために短くしない）。1m 以内 8cm/s（**気づく前でも必ず**）、
+  頭先端から 400mm で停止（歩容が止まるまでの惰性ぶん早めに止める）。
+  マット端では後退しながら中央へ向き直る。マットの外の人へ近づくときは、人の方を向いて端に着いたら止まる
+- `expression.py` … 生き物らしさ a〜j（数値はすべて `behavior.expression`）
+- `sim/session.py` … 実機なしで全部をつないだもの（GUI の `--sim` もこれを使う予定）
+- 目の色・明るさは状態ごと（`behavior.eyes`）。ESP32 のフェイルセーフ（3 秒）より短い間隔で送り直す
 
 ### 知覚の設計（STEP 5）
 
@@ -295,6 +323,6 @@ serpens/
 | 4 | 2D シミュレータ | ✅ |
 | 4.5 | Sim-to-Real 校正の器（fit_sim.py） | ✅ |
 | 5 | 知覚（ArUco・ホモグラフィ・人の追跡） | ✅（YOLO は重みを置いてから確認） |
-| 6 | 内部状態と行動 | – |
+| 6 | 内部状態と行動 | ✅ |
 | 7 | GUI | – |
 | 8 | 実機用ツール | – |
