@@ -157,6 +157,12 @@ sim:
   # 小径受動輪の転がり抵抗係数 0.01〜0.05 の下寄りとして 0.02。
   # 要実機校正。STEP 4.5 の fit_sim.py で実測から同定する
   tangential_drag_ratio: 0.02
+  # Sim-to-Real 校正（tools/fit_sim.py）: tangential_drag_ratio をこの範囲でスイープして実測に合わせる
+  fit_ratio_min: 0.0
+  fit_ratio_max: 0.2
+  fit_ratio_steps: 21
+  fit_warmup_cycles: 2.0
+  fit_measure_cycles: 3.0
   start_tail_x_mm: 150.0      # 初期姿勢（尾端の位置と、尾→頭の向き）
   start_tail_y_mm: 600.0
   start_theta_deg: 0.0

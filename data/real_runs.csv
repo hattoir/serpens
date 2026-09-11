@@ -1,0 +1,2 @@
+gait,period_s,cycles,distance_mm,floor,date,note
+forward,2.0,5,1500,dummy,2026-09-12,ダミーデータ（実機が届いたらこの行を消して実測を入れる）
