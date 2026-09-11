@@ -34,7 +34,7 @@ def s(cfg: dict) -> dict:
 
 
 def joint(direction: int = 1, offset: float = 0.0) -> JointSpec:
-    return JointSpec("JX", 1, "yaw", 0.0, direction, offset, -180.0, 180.0)
+    return JointSpec("JX", 1, "yaw", 0.0, direction, offset, -170.0, 170.0, -180.0, 180.0, 240.0)
 
 
 @pytest.fixture()
@@ -72,6 +72,22 @@ def test_speed_and_accel_registers(s: dict) -> None:
     assert dps2_to_accel_reg(0.0, s) == 1
 
 
+def test_load_sign_hypothesis(s: dict) -> None:
+    """【仮説】下位10bit = 大きさ、bit10 = 方向。null なら生値のまま。"""
+    from serpens.hw.feetech_bus import decode_load
+
+    assert decode_load(500, s) == pytest.approx(0.5)
+    assert decode_load(0x400 | 500, s) == pytest.approx(-0.5)
+    assert decode_load(0x400 | 500, {**s, "load_sign_bit": None}) == pytest.approx(1.524)
+
+
+def test_joint_spec_rejects_soft_limit_outside_mech() -> None:
+    d = {"name": "JX", "servo_id": 1, "axis": "yaw", "x_mm": 0, "direction": 1, "horn_offset_deg": 0,
+         "mech_min_deg": -90, "mech_max_deg": 90, "min_deg": -95, "max_deg": 85, "max_speed_dps": 240}
+    with pytest.raises(ValueError):
+        JointSpec.from_cfg(d)
+
+
 def test_sign_magnitude_and_torque_limit(s: dict) -> None:
     assert decode_sign_magnitude(0x8000 | 100, 15) == -100
     assert decode_sign_magnitude(100, 15) == 100
@@ -104,8 +120,8 @@ def test_set_goal_packet_layout(bus: tuple[FeetechServoBus, FakePort]) -> None:
     """set_goal → 41番地から [加速度, 位置L, 位置H, 時間L, 時間H, 速度L, 速度H]（リトルエンディアン）。"""
     b, port = bus
     port.queue_hex("FF FF 01 02 00 FC")
-    b.set_goal(1, 90.0, 87.890625, 8.7890625 * 20)   # 3071 step, 1000 step/s, 加速度 20
-    body = [0x01, 0x0A, 0x03, 0x29, 20, 0xFF, 0x0B, 0x00, 0x00, 0xE8, 0x03]
+    b.set_goal(1, 45.0, 87.890625, 8.7890625 * 20)   # 2559 step, 1000 step/s, 加速度 20
+    body = [0x01, 0x0A, 0x03, 0x29, 20, 0xFF, 0x09, 0x00, 0x00, 0xE8, 0x03]
     assert port.written[-1] == [0xFF, 0xFF, *body, checksum(body)]
 
 

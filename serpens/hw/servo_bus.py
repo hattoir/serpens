@@ -41,19 +41,27 @@ class JointSpec:
     axis: str
     x_mm: float
     direction: int
-    offset_deg: float
-    min_deg: float
+    horn_offset_deg: float   # サーボホーン取付角のずれ（サーボ角 = direction×関節角 + これ）
+    min_deg: float           # ソフトリミット
     max_deg: float
+    mech_min_deg: float      # 機械リミット
+    mech_max_deg: float
+    max_speed_dps: float
 
     @staticmethod
     def from_cfg(d: dict[str, Any]) -> "JointSpec":
-        """config の joints 要素から生成する。"""
-        return JointSpec(
+        """config の joints 要素から生成する。ソフトリミットが機械リミットの内側か確認する。"""
+        j = JointSpec(
             name=str(d["name"]), servo_id=int(d["servo_id"]), axis=str(d["axis"]),
             x_mm=float(d["x_mm"]), direction=int(d["direction"]),
-            offset_deg=float(d["offset_deg"]),
+            horn_offset_deg=float(d["horn_offset_deg"]),
             min_deg=float(d["min_deg"]), max_deg=float(d["max_deg"]),
+            mech_min_deg=float(d["mech_min_deg"]), mech_max_deg=float(d["mech_max_deg"]),
+            max_speed_dps=float(d["max_speed_dps"]),
         )
+        if not j.mech_min_deg <= j.min_deg < j.max_deg <= j.mech_max_deg:
+            raise ValueError(f"{j.name}: ソフトリミットが機械リミットの外にあります")
+        return j
 
 
 class ServoCommError(RuntimeError):
@@ -106,6 +114,15 @@ class ServoBus(ABC):
     def sync_read_states(self, ids: list[int] | None = None) -> dict[int, ServoState]:
         """複数軸の状態を読む。読めなかった軸は結果に含まれない。"""
         return self._read_states(list(ids) if ids is not None else self.ids)
+
+    def read_positions(self, ids: list[int] | None = None) -> dict[int, float]:
+        """位置だけを読む [deg]。実装によってはこちらの方が速い。"""
+        return {sid: st.pos_deg for sid, st in self.sync_read_states(ids).items()}
+
+    @property
+    def fast_reads(self) -> bool:
+        """一括読み出しが使えるなら True（読み出し頻度の選択に使う）。"""
+        return True
 
     # ---- 実装が必要なもの ----------------------------------------------------
     @abstractmethod

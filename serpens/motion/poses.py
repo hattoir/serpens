@@ -56,15 +56,24 @@ class Poses:
         """とぐろ（J1〜J6 で平面の渦）。"""
         return self._from_cfg(self._p["coil"])
 
-    def rear_up(self, angle_deg: float | None = None) -> Pose:
-        """鎌首。J7 = angle_deg、胴体は横倒れしにくい S 字。
+    def coil_sequence(self) -> dict[str, Any]:
+        """とぐろへの移り方（順番・遅れ・各関節の時間）。"""
+        return dict(self._p["coil_sequence"])
+
+    @property
+    def rear_up_bases(self) -> list[str]:
+        """鎌首の土台の種類（s_curve / partial_coil）。"""
+        return list(self._p["rear_up"]["bases"])
+
+    def rear_up(self, angle_deg: float | None = None, base: str | None = None) -> Pose:
+        """鎌首。J7 = angle_deg、胴体は横倒れしにくい土台姿勢（base）。
 
         J7 は 0〜full_rear_max_deg にクランプする。人を見る用途では head_look の neck_deg を使うこと。
         """
         r = self._p["rear_up"]
         a = float(r["default_angle_deg"]) if angle_deg is None else float(angle_deg)
         a = min(max(a, 0.0), float(self._neck["full_rear_max_deg"]))
-        pose = self._from_cfg(r["body"])
+        pose = self._from_cfg(r["bases"][base or r["default_base"]])
         pose[NECK] = self._clamp(NECK, a)
         return pose
 
@@ -101,3 +110,8 @@ class Poses:
     def head_height_mm(self, pose: Pose) -> float:
         """頭先端の床からの高さ [mm]（尾端の高さを 0 とする）。"""
         return float(self.points(pose)[-1][2])
+
+    def neck_lift_height_mm(self, pose: Pose) -> float:
+        """J7 から頭先端までの持ち上げ高さ [mm]（J7 による分だけ）。"""
+        pts = self.points(pose)
+        return float(pts[-1][2] - pts[self._chain.names.index(NECK) + 1][2])

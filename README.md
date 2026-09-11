@@ -144,31 +144,46 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 
 ### シミュレータの設計（STEP 4）
 
-- `sim/world.py` … 受動輪のあるリンク（`sim.wheel_links`）は横滑りしない、という拘束を
-  全リンク分まとめて最小二乗で解き、胴体全体の剛体速度 (vx, vy, ω) を毎ステップ求める。物理エンジンなし。
-- 床から浮いたリンク（鎌首の頭側）は拘束に入れない。マットからはみ出したら全体を内側へ押し戻す。
-- ヘビの (x, y, θ) = 首（J7）の位置と、尾端→首の向き（ArUco を首と尾に貼る前提と同じ定義）。
-- **1周期あたりの前進量（滑りなしの理想値）**: forward 約 500mm、turn_left/right 約 320mm で ±52°/周期。
-  実機では車輪の滑りでこれより小さくなる。実機で測った値と比べて `sim.tangential_drag_ratio` を合わせる。
+- `sim/world.py` … 車輪のあるリンク（`sim.wheel_links` = 尾端〜J7 の7リンク × 2輪 = 14輪）は横滑りしない、
+  という拘束を全リンク分まとめて最小二乗で解き、胴体全体の剛体速度 (vx, vy, ω) を毎ステップ求める。物理エンジンなし。
+  - 車輪の進行方向には転がり抵抗の重み `sim.tangential_drag_ratio`（推定値 0.02。**要実機校正**）
+  - J7 より先は車輪なし。頭部が床にあるときは PTFE / フェルトのパッド（`sim.pad_links`、等方の軽い摩擦）
+  - 床から浮いたリンク（鎌首の頭側）は拘束に入れない。マットからはみ出したら全体を内側へ押し戻す
+- ヘビの位置姿勢（`perception/snake_pose.py`。ArUco でもシミュレータでも同じ処理）
+  - 位置 = 首マーカ。**首マーカは J7 より胴体側（J6-J7 リンク上）に貼る**（J7 より先だと鎌首で傾いて見えない）。
+    尾マーカは尾端-J1 リンク上。どちらも上面
+  - θ_body = 尾マーカ → 首マーカ。蛇行で振れるので、時定数 = 歩容1周期のローパス後の値を移動制御に使う（生値も保持）
+  - θ_head = θ_body + J8（「人を見ているか」の判定用）
+- **1周期あたりの前進量（シミュレータ, 転がり抵抗 0.02）**: forward 約 384mm。
+  実機では 200〜300mm/周期（周期2秒で 10〜15cm/s）と予想。**速度のために周期を短くしない**（静粛性優先）。
+- 旋回は γ（オフセット）だけ。`gait.turn_profile: head_weighted`（γ(n) = γ0·n/N）が既定で、
+  γ0 = ±20° で半径 約480mm。γ0 は1周期かけてランプする。
+  - uniform と head_weighted を同じ旋回率で比べると半径は同じで、尾が頭の軌跡をなぞる精度が head_weighted の方が上
+    （ずれ平均 91mm vs 115mm）。
+- とぐろは**尾から順に巻き、頭を最後に引き込む**（`poses.coil_sequence`）。全関節同時より滑走が少ない。
 
 ### モーション層の設計（STEP 3）
 
 - 関節角の符号: yaw + = 上から見て左、pitch + = 頭が上がる、roll + = 右に傾く（`motion/kinematics.py`）
-- `motion/gait.py` … α(n,t) = A_n·sin(Ω·n + ω·t) + γ。n=0 が J1（尾側）。ω>0 で前進、ω<0 で後退。
-  旋回は γ（`turn_bias_deg`）と振幅勾配（`amp_gradient`）の2つを持たせてある。
-- `motion/poses.py` … home / coil / rear_up / full_rear_up / head_look / relax。
+- `motion/gait.py` … α(n,t) = A·sin(Ω·n + ω·t) + γ(n)。n=0 が J1（尾側）。ω>0 で前進、ω<0 で後退。
+  旋回入力は γ だけ（振幅勾配は平面の蛇行では旋回しないことを確認して削除）。
+- `motion/poses.py` … home（J7 = +8°：頭をわずかに浮かせる）/ coil / rear_up（土台 s_curve / partial_coil）/
+  full_rear_up / head_look / relax。
   head_look で J7 を指定すると「人を見る」範囲（`neck.look_min_deg`〜`look_max_deg`）に制限される。
 - `motion/animator.py` … 出力 = キーフレーム + 歩容（加算）+ 呼吸（加算）。
-  キーフレームが `animator.max_joint_speed_dps` を超える速さを要求したら、自動で時間を延ばす。
+  キーフレームがその軸の `max_speed_dps`（胴体 240 / J7 120 / J8・J9 90 °/s）を超える速さを要求したら、
+  自動で時間を延ばす。`order` と `stagger_s` で関節ごとに時間差をつけられる（とぐろを尾から順に）。
   `freeze()` で呼吸も含めて全停止し、`unfreeze()` で続きから再開する。
 
 ### ハードウェア層の設計（STEP 2）
 
 - `serpens/hw/servo_bus.py` … 抽象クラス `ServoBus`。角度は**関節角 [deg]**（0° = まっすぐ）。
-  ソフトウェアリミット（config の `min_deg` / `max_deg`）でのクランプはここで共通に行う。
+  ソフトリミット（config の `min_deg` / `max_deg`）でのクランプはここで共通に行う。
+  機械リミット（`mech_min_deg` / `mech_max_deg`）は別に持ち、ソフトリミットがその内側かを起動時に確認する。
 - `serpens/hw/mock_bus.py` … 一次遅れ追従。温度は一次系で、時定数 `mock_servo.heat_tau_s` を変えられる。
 - `serpens/hw/feetech_bus.py` … 実機用。根拠は [docs/sts3215_registers.md](docs/sts3215_registers.md)。
-  取り付け向き（`direction`）と組立オフセット（`offset_deg`）は config で関節ごとに設定する。
+  取り付け向き（`direction`）とホーン取付角オフセット（`horn_offset_deg`）は config で関節ごとに設定する。
+- `serpens/hw/state_poller.py` … 位置と熱系（負荷・電圧・温度）を別頻度で読む。SYNC READ 非対応なら位置の頻度を落とす。
 - `serpens/hw/head_io.py` … 頭部 XIAO ESP32S3。`SerialHeadIO`（自動再接続）と `MockHeadIO`（同じ行形式を生成）。
 - 切り替えは `make_bus("mock" | "feetech", cfg, port)`。
 
@@ -185,7 +200,28 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 
 ---
 
-## 4. ディレクトリ構成
+## 4. トラブルシュート
+
+### サーボが PING に応答するのに、まったく動かない
+
+**まず最高入力電圧（EEPROM 14番地）を疑ってください。** Waveshare のメモリテーブル（7.4V 版の表）では
+初期値が **80 = 8.0V** です。12V 版のサーボでも同じ値のままだと、12V を入れた時点で過電圧になり、
+一切動かない可能性があります（「実機を繋いだ初日に全部動かず数時間溶かす」タイプの罠）。
+
+1. `tools/servo_setup.py`（STEP 8）で 13〜16 番地（最高温度・最高/最低入力電圧・最大トルク）と
+   65 番地（サーボ状態。bit0 = 電圧エラー）を読む
+2. 最高入力電圧が電源電圧より低ければ書き換える（EEPROM のロック解除 → 書き込み → ロック）
+3. EEPROM 書き込み時にトルク OFF が必要な機種があるので、ツールは書き込み前にトルクを切る
+
+### その他の実機確認事項（届いたら）
+- 現在負荷の符号: 「下位10bit = 大きさ、bit10 = 方向」は**仮説**（`servo.load_sign_bit: 10`）。手で押して符号を確認する
+- SYNC READ に応答するか（しなければ自動で個別 READ に切り替わり、位置の読み出しは 10Hz に落ちる）
+- **TODO: 外皮ニットを着せたら可動範囲を再測定し、`joints[].mech_*` / `min_deg` / `max_deg` を更新する**
+- サーボホーンの取付角を測り、`joints[].horn_offset_deg` に入れる
+
+---
+
+## 5. ディレクトリ構成
 
 ```
 serpens/
@@ -205,7 +241,7 @@ serpens/
 
 ---
 
-## 5. 進捗
+## 6. 進捗
 
 | STEP | 内容 | 状態 |
 |---|---|---|

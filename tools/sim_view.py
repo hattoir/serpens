@@ -24,7 +24,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter  # noqa: E402
 
 from serpens.config import load_config  # noqa: E402
 from serpens.hw.mock_bus import MockServoBus  # noqa: E402
-from serpens.motion.animator import Animator, Keyframe  # noqa: E402
+from serpens.motion.animator import Animator, Keyframe, coil_keyframe  # noqa: E402
 from serpens.motion.gait import GaitEngine, gait_period_s  # noqa: E402
 from serpens.motion.poses import Poses  # noqa: E402
 from serpens.sim.world import BodyPose, World  # noqa: E402
@@ -32,6 +32,7 @@ from serpens.sim.world import BodyPose, World  # noqa: E402
 CTRL_DT = 0.02          # 制御周期 50Hz（アニメーター → サーボ）
 FAR = 1.0e5             # 推進量測定用の広いマット
 START_TAIL_X, START_TAIL_Y = 60.0, 200.0   # デモの初期位置（尾端）
+COIL_S = 6.0            # とぐろ（尾から順）を見せる時間
 
 
 class SimClock:
@@ -95,7 +96,7 @@ def demo_script(cfg: dict) -> list:
         ("前進", lambda a, p, t: a.gait.start("forward"), 1.5 * T),
         ("左旋回", lambda a, p, t: a.gait.start("turn_left"), 3.0 * T),
         ("停止", lambda a, p, t: a.gait.stop(), 1.5),
-        ("とぐろ", lambda a, p, t: a.play(Keyframe(p.coil(), 2.0), t), 3.0),
+        ("とぐろ", lambda a, p, t: a.play(coil_keyframe(p), t), COIL_S),
     ]
 
 
@@ -119,7 +120,7 @@ def main() -> None:
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    print("=== 1周期あたりの推進量（滑りなしの理想値。実機はこれより小さくなる）")
+    print(f"=== 1周期あたりの推進量（横滑りなし・転がり抵抗 {cfg['sim']['tangential_drag_ratio']} のシミュレータ値）")
     print(f"{'歩容':<11}{'指令角のまま':>16}{'モックサーボ経由':>20}")
     for g in cfg["gait"]["presets"]:
         a = measure_per_cycle(cfg, g, via_servo=False)
@@ -132,7 +133,7 @@ def main() -> None:
          BodyPose(40.0, 600.0, 0.0), 0.5),
         ("左旋回 4周期", [("左旋回", lambda a, p, t: a.gait.start("turn_left"), 4 * T)],
          BodyPose(250.0, 250.0, 0.0), 1.0),
-        ("停止姿勢 → とぐろ", [("とぐろ", lambda a, p, t: a.play(Keyframe(p.coil(), 2.0), t), 3.0)],
+        ("停止姿勢 → とぐろ", [("とぐろ", lambda a, p, t: a.play(coil_keyframe(p), t), COIL_S)],
          BodyPose(200.0, 400.0, 0.0), 0.5),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(18, 6.6))

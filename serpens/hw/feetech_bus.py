@@ -28,6 +28,7 @@ ADDR_TORQUE_LIMIT = 48          # トルク制限 2byte, 0〜1000
 # 状態の一括読み出し: 56〜63 = 位置2, 速度2, 負荷2, 電圧1, 温度1
 READ_BLOCK_START = SMS_STS_PRESENT_POSITION_L
 READ_BLOCK_LEN = 8
+POSITION_LEN = 2
 OFS_POS, OFS_SPEED, OFS_LOAD, OFS_VOLT, OFS_TEMP = 0, 2, 4, 6, 7
 # 現在位置の符号ビット（SDK の ReadPos と同じ扱い。docs §5）
 POSITION_SIGN_BIT = 15
@@ -37,8 +38,8 @@ POSITION_SIGN_BIT = 15
 # 単位変換（純粋関数。実機なしでテストできる）
 # =============================================================================
 def deg_to_step(deg: float, joint: JointSpec, s: dict[str, Any]) -> int:
-    """関節角 [deg] → 目標位置 [step]。servo角 = direction × 関節角 + offset。"""
-    servo_deg = joint.direction * deg + joint.offset_deg
+    """関節角 [deg] → 目標位置 [step]。servo角 = direction × 関節角 + ホーン取付角オフセット。"""
+    servo_deg = joint.direction * deg + joint.horn_offset_deg
     step = int(s["center_step"]) + round(servo_deg * int(s["steps_per_rev"]) / 360.0)
     return min(max(step, int(s["step_min"])), int(s["step_max"]))
 
@@ -46,7 +47,7 @@ def deg_to_step(deg: float, joint: JointSpec, s: dict[str, Any]) -> int:
 def step_to_deg(step: int, joint: JointSpec, s: dict[str, Any]) -> float:
     """現在位置 [step] → 関節角 [deg]。deg_to_step の逆変換。"""
     servo_deg = (step - int(s["center_step"])) * 360.0 / int(s["steps_per_rev"])
-    return (servo_deg - joint.offset_deg) / joint.direction
+    return (servo_deg - joint.horn_offset_deg) / joint.direction
 
 
 def dps_to_step_s(speed_dps: float, s: dict[str, Any]) -> int:
@@ -71,9 +72,17 @@ def decode_sign_magnitude(raw: int, sign_bit: int) -> int:
 
 
 def decode_load(raw: int, s: dict[str, Any]) -> float:
-    """現在負荷 → 負荷率。符号ビットは未確認なので config が null なら生値のまま。"""
+    """現在負荷 → サーボ座標での負荷率（符号付き）。
+
+    【仮説・実機で要検証】公式資料に符号の記載はない。SCS/STS 系で一般的な
+    「下位 load_sign_bit ビット = 大きさ、bit load_sign_bit = 方向（0=CW / 1=CCW）」と仮定する。
+    CW/CCW と正負の対応も未確認。config の load_sign_bit が null なら生値をそのまま使う。
+    """
     bit = s.get("load_sign_bit")
-    value = raw if bit is None else decode_sign_magnitude(raw, int(bit))
+    if bit is None:
+        return raw * float(s["load_unit"])
+    mag = raw & ((1 << int(bit)) - 1)
+    value = -mag if raw & (1 << int(bit)) else mag
     return value * float(s["load_unit"])
 
 
@@ -91,7 +100,7 @@ def le_word(lo: int, hi: int) -> int:
 def decode_state_block(block: list[int], joint: JointSpec, s: dict[str, Any]) -> ServoState:
     """56 番地から読んだ 8 バイトを ServoState にする。"""
     pos = decode_sign_magnitude(le_word(block[OFS_POS], block[OFS_POS + 1]), POSITION_SIGN_BIT)
-    load = decode_load(le_word(block[OFS_LOAD], block[OFS_LOAD + 1]), s)
+    load = joint.direction * decode_load(le_word(block[OFS_LOAD], block[OFS_LOAD + 1]), s)
     volt = block[OFS_VOLT] * float(s["voltage_unit_v"])
     return ServoState(step_to_deg(pos, joint, s), load, volt, float(block[OFS_TEMP]))
 
@@ -194,18 +203,38 @@ class FeetechServoBus(ServoBus):
                         blocks[sid] = list(data)
         return {sid: decode_state_block(b, self.joints[sid], self._s) for sid, b in blocks.items()}
 
-    def _sync_read_blocks(self, ids: list[int]) -> dict[int, list[int]]:
-        """SYNC READ で 56〜63 番地を一括取得する。取れた軸だけ返す。"""
-        g = GroupSyncRead(self._handler(), READ_BLOCK_START, READ_BLOCK_LEN)
+    def read_positions(self, ids: list[int] | None = None) -> dict[int, float]:
+        """現在位置（56 番地 2 バイト）だけを読む。"""
+        ids = list(ids) if ids is not None else self.ids
+        raw: dict[int, list[int]] = {}
+        with self._lock:
+            if self._use_sync_read and len(ids) > 1:
+                raw = self._sync_read_blocks(ids, POSITION_LEN)
+            for sid in ids:
+                if sid not in raw:
+                    data, result, _err = self._handler().readTxRx(sid, READ_BLOCK_START, POSITION_LEN)
+                    if result == COMM_SUCCESS:
+                        raw[sid] = list(data)
+        return {sid: step_to_deg(decode_sign_magnitude(le_word(b[0], b[1]), POSITION_SIGN_BIT),
+                                 self.joints[sid], self._s) for sid, b in raw.items()}
+
+    @property
+    def fast_reads(self) -> bool:
+        """SYNC READ が使えていれば True。"""
+        return self._use_sync_read
+
+    def _sync_read_blocks(self, ids: list[int], length: int = READ_BLOCK_LEN) -> dict[int, list[int]]:
+        """SYNC READ で 56 番地から length バイトを一括取得する。取れた軸だけ返す。"""
+        g = GroupSyncRead(self._handler(), READ_BLOCK_START, length)
         for sid in ids:
             g.addParam(sid)
         g.txRxPacket()
         out: dict[int, list[int]] = {}
         for sid in ids:
-            ok, _err = g.isAvailable(sid, READ_BLOCK_START, READ_BLOCK_LEN)
+            ok, _err = g.isAvailable(sid, READ_BLOCK_START, length)
             if ok:
                 # data_dict[sid] は [ERROR, データ…]（SDK group_sync_read.readRx）
-                out[sid] = list(g.data_dict[sid][1:1 + READ_BLOCK_LEN])
+                out[sid] = list(g.data_dict[sid][1:1 + length])
         return out
 
     # ---- 内部 -----------------------------------------------------------------

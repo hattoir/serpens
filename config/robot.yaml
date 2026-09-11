@@ -15,18 +15,23 @@ body:
   head_tip_x_mm: 850
 
 # 関節。x_mm は尾端からの位置。axis は yaw(水平) / pitch(持ち上げ) / roll(かしげ)。
-# servo_id はバス上の ID、direction は取り付け向き(+1/-1)、offset_deg は組立誤差の補正。
-# min_deg / max_deg はソフトウェアリミット（仮。機構干渉を実機で確認すること）。
+#   servo_id        バス上の ID
+#   direction       取り付け向き（+1 / -1）
+#   horn_offset_deg サーボホーン取付角のずれ（実機で測って吸収する。既定 0）
+#   mech_min/max    機械リミット（確定）   min/max_deg  ソフトリミット（確定。指令はここでクランプ）
+#   max_speed_dps   その軸の最高角速度（頭部は丁寧に動かすため遅い）
+# ±85° の根拠: リンク 95mm で隣接関節 85° のとき曲率半径 R = 95 / (2·tan42.5°) = 51.8mm（内径 約104mm）
+# TODO: 外皮ニット装着後に可動範囲を再測定する（README 参照）
 joints:
-  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, offset_deg: 0.0, min_deg: 0.0,   max_deg: 90.0}
-  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, offset_deg: 0.0, min_deg: -90.0, max_deg: 90.0}
-  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, offset_deg: 0.0, min_deg: -30.0, max_deg: 30.0}
+  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
+  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
+  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
+  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
+  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
+  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
+  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -10.0, mech_max_deg: 95.0, min_deg: -8.0,  max_deg: 90.0, max_speed_dps: 120.0}
+  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -85.0, mech_max_deg: 85.0, min_deg: -80.0, max_deg: 80.0, max_speed_dps: 90.0}
+  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -40.0, mech_max_deg: 40.0, min_deg: -35.0, max_deg: 35.0, max_speed_dps: 90.0}
 
 # 首（J7）の使い分け
 neck:
@@ -41,47 +46,79 @@ mass_budget_g:
   servo_count: 9
   segment_frame_each: 30
   segment_frame_count: 8
-  passive_wheels_total: 60      # 受動輪16個 + ベアリング
+  passive_wheels_total: 60      # 受動輪 + ベアリング
   head_total: 90                # シェル + XIAO + ToF + LED
   skin_and_wiring: 115
   neck_lifted_mass: 200         # J7 が持ち上げる質量
   neck_lifted_cog_mm: 104       # J7 から重心までの距離
 
+# ArUco マーカ（DICT_4X4_50, 40mm）。位置は尾端からの距離（胴体に沿って）
+# 首マーカは J7 より胴体側（J6-J7 リンク上）。J7 より先だと鎌首でマーカが傾いて検出できない
+markers:
+  dictionary: DICT_4X4_50
+  size_mm: 40.0
+  tail_id: 0
+  neck_id: 1
+  tail_x_mm: 50.0             # 尾端-J1 リンクの中央（仮）
+  neck_x_mm: 640.0            # J7 の 30mm 手前（マーカ半幅 20mm + 余裕 10mm）（仮）
+
+# ヘビの位置姿勢推定（位置 = 首マーカ、θ_body = 尾→首、θ_head = θ_body + J8）
+snake_pose:
+  reference_gait: forward     # ローパスの時定数の基準にする歩容
+  heading_tau_periods: 1.0    # θ_body のローパス時定数（上の歩容の周期単位）
+  stale_after_s: 1.0          # マーカがこれ以上見えなければ「位置不明」扱い
+
 # 自己干渉チェック（とぐろ等のポーズ検証）
 self_collision:
   arc_skip_mm: 100.0          # 胴体に沿ってこれ以上離れた点どうしだけを比べる
   sample_mm: 5.0              # 中心線のサンプリング間隔
-  min_clearance_mm: 55.0      # 中心線間の最短距離の下限（直径 50mm + 余裕 5mm）
+  min_clearance_mm: 60.0      # 中心線間の最短距離の下限（直径 50mm + 余裕 10mm）
 
 # ---------------------------------------------------------------------------
-# 歩容（gait equation: α(n,t) = A_n·sin(Ω·n + ω·t) + γ、J1〜J6 の水平ヨーのみ）
-#   n = 0(J1, 尾側) … 5(J6, 頭側)。Ω>0, ω>0 で波は頭→尾へ伝わり、前進する
-#   A_n = A·(1 + amp_gradient·(n - 2.5)/5)   … 胴体方向の振幅勾配（+ で頭側ほど大きい）
-#   γ = turn_bias_deg                        … 旋回用のオフセット（+ で左）
+# 歩容（gait equation: α(n,t) = A·sin(Ω·n + ω·t) + γ(n)、J1〜J6 の水平ヨーのみ）
+#   n = 0(J1, 尾側) … N=5(J6, 頭側)。Ω>0, ω>0 で波は頭→尾へ伝わり、前進する
+#   旋回入力はオフセット γ だけ（+ で左）。turn_profile で関節への配り方を選ぶ:
+#     uniform       γ(n) = γ0          胴体全体が均一な円弧
+#     head_weighted γ(n) = γ0·n/N      頭で舵を切って胴がついてくる
+#   速度を上げるために周期を短くしないこと（展示機は静粛性優先）
 # ---------------------------------------------------------------------------
 gait:
   presets:
-    forward:    {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, amp_gradient: 0.0, turn_bias_deg: 0.0}
-    slow:       {amplitude_deg: 20.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.3, amp_gradient: 0.0, turn_bias_deg: 0.0}
-    backward:   {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: -0.5, amp_gradient: 0.0, turn_bias_deg: 0.0}
-    turn_left:  {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, amp_gradient: 0.0, turn_bias_deg: 10.0}
-    turn_right: {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, amp_gradient: 0.0, turn_bias_deg: -10.0}
+    forward:    {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 0.0}
+    slow:       {amplitude_deg: 20.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.3, turn_bias_deg: 0.0}
+    backward:   {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: -0.5, turn_bias_deg: 0.0}
+    # head_weighted は平均の重みが 1/2 なので、uniform と同じ半径には γ0 が 2 倍要る（γ0=20 で R≈480mm）
+    turn_left:  {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 20.0}
+    turn_right: {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: -20.0}
+  # uniform / head_weighted。同じ旋回率で比べると半径は同じ（約480mm）で、
+  # 尾が頭の軌跡をなぞる精度は head_weighted が上（ずれ平均 91mm vs 115mm）→ 既定
+  turn_profile: head_weighted
+  turn_ramp_periods: 1.0      # γ0 を変えるときにかける時間（歩容の周期単位）
   blend_s: 1.0                # 歩容の開始・停止時に振幅を 0↔1 でなめらかに変える時間
 
 # ---------------------------------------------------------------------------
 # 姿勢プリセット（関節角 deg。書いていない関節は変えない）
 # ---------------------------------------------------------------------------
 poses:
-  home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 0, J8: 0, J9: 0}
-  # とぐろ: J1〜J6 のみで平面の渦（尾側ほど強く曲げる）。自己干渉なしを tests で確認済み
-  coil: {J1: 87.5, J2: 72.2, J3: 59.6, J4: 49.1, J5: 40.5, J6: 33.4, J7: 0, J8: 0, J9: 0}
-  # 鎌首: J7 で頭を持ち上げる。胴体は S 字にして横倒れしにくくする（仮）
+  # J7 = +8°: 頭をわずかに浮かせる（呼吸が下限で切れず、上下にゆっくり揺れて生きて見える）
+  home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 8, J8: 0, J9: 0}
+  # とぐろ: J1〜J6 のみで平面の渦（329°巻き、中心線間隔 69mm）。呼吸 ±2° を足してもソフトリミット内
+  coil: {J1: 83.0, J2: 68.9, J3: 57.2, J4: 47.5, J5: 39.4, J6: 32.7, J7: 8, J8: 0, J9: 0}
+  # とぐろへの移り方: 尾から順に巻き、頭（J7 以降）を最後に引き込む
+  coil_sequence:
+    order: [J1, J2, J3, J4, J5, J6, J7, J8, J9]
+    stagger_s: 0.5            # 隣の関節が動き始めるまでの遅れ
+    per_joint_s: 1.5          # 各関節の補間時間
+  # 鎌首: J7 で頭を持ち上げる。胴体の土台は2種類（実機で安定な方を選ぶ）
   rear_up:
     default_angle_deg: 60.0
-    body: {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}
+    default_base: s_curve
+    bases:
+      s_curve:      {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}   # 仮
+      partial_coil: {J1: 60, J2: 50, J3: 40, J4: 0, J5: 0, J6: 0}    # 後方を軽く巻く（仮）
   # 脱力（タッチ時）: 首を下げ、トルクを落とす
   relax:
-    neck_deg: 0.0             # J7 を下げきる
+    neck_deg: 0.0             # J7 を下げる
     head_roll_deg: 0.0
     torque_ratio: 0.6
     duration_s: 2.0
@@ -90,10 +127,9 @@ poses:
 # アニメーション
 # ---------------------------------------------------------------------------
 animator:
-  default_speed_dps: 150.0    # キーフレーム中のサーボ指令速度
   default_accel_dps2: 2000.0
   overshoot_peak_ratio: 0.75  # オーバーシュート付き ease-out: 全体のこの割合で行き過ぎの頂点
-  max_joint_speed_dps: 240.0  # キーフレームの最高角速度。これを超える指定は時間を自動で延ばす（サーボ上限 約299°/s の8割）
+  # キーフレームが joints[].max_speed_dps を超える速さを要求したら、時間を自動で延ばす
 # 呼吸オーバーレイ（全軸に常時加算）
 breath:
   amplitude_deg: 2.0
@@ -110,13 +146,17 @@ mat:
   depth_mm: 1200              # Y 方向
 sim:
   dt_s: 0.01                  # 積分刻み
-  # 受動輪があるリンクの番号（0 = 尾端→J1, 1 = J1→J2, …, 7 = J7→J8）。8リンク × 2輪 = 16輪（仮）
-  wheel_links: [0, 1, 2, 3, 4, 5, 6, 7]
+  # 受動輪があるリンク（0 = 尾端→J1, …, 6 = J6→J7）。7リンク × 2輪 = 14輪。J7 より先は車輪なし
+  wheel_links: [0, 1, 2, 3, 4, 5, 6]
+  # 頭部の接地パッド（PTFE / フェルト、等方摩擦）。9 = J9→頭先端。横方向も拘束しない
+  pad_links: [9]
+  pad_drag_ratio: 0.05        # パッドの等方摩擦 / 車輪の横拘束 の重み比（推定値。要実機校正）
   contact_height_mm: 10.0     # リンク中点がこれより高ければ床から浮いている（鎌首の頭側）
   lstsq_rcond: 1.0e-6         # 最小二乗の打ち切り（まっすぐな胴体で前後が不定のとき 0 にする）
-  # 接線方向（進行方向）の転がり抵抗 / 横方向の拘束 の重み比。0 = 指定どおり「接線方向は完全に自由」。
-  # 0.01 で「とぐろ化の暴れ」が 2.3m → 0.37m、前進は 499 → 454 mm/周期（STEP 4 の測定）。実機で合わせる
-  tangential_drag_ratio: 0.0
+  # 車輪の接線方向（進行方向）の転がり抵抗 / 横方向の拘束 の重み比。
+  # 小径受動輪の転がり抵抗係数 0.01〜0.05 の下寄りとして 0.02。
+  # 要実機校正。STEP 4.5 の fit_sim.py で実測から同定する
+  tangential_drag_ratio: 0.02
   start_tail_x_mm: 150.0      # 初期姿勢（尾端の位置と、尾→頭の向き）
   start_tail_y_mm: 600.0
   start_theta_deg: 0.0
@@ -137,12 +177,20 @@ servo:
   accel_reg_max: 254
   voltage_unit_v: 0.1
   load_unit: 0.001           # 現在負荷 1 あたり（デューティ比）
-  load_sign_bit: null        # 現在負荷の符号ビット。公式資料に記載なし → 実機で確認して設定
+  # 現在負荷の符号ビット。公式資料に記載なし。SCS/STS 系で一般的な
+  # 「下位10bit = 大きさ、bit10 = 方向（0=CW / 1=CCW）」を【仮説】として採用。実機で要検証
+  load_sign_bit: 10
   torque_limit_full: 1000    # トルク制限 1000 = 100%
   temperature_limit_c: 70    # [M] 最高温度の初期値
   stall_torque_kgfcm: 30.0   # 12V 時
   continuous_torque_ratio: 0.333  # 連続実用トルク = ストールの 1/3
   sync_read: true            # SYNC READ を使う（非対応なら自動で個別 READ に落ちる）
+
+# 状態の読み出し頻度。SYNC READ 非対応（個別 READ）だと遅いので頻度を落とす
+servo_poll:
+  position_hz_sync: 50.0      # SYNC READ が使えるとき
+  position_hz_fallback: 10.0  # 個別 READ のとき
+  thermal_hz: 1.0             # 負荷・電圧・温度（Energy・GUI 用）
 
 # ---------------------------------------------------------------------------
 # モックサーボ（シミュレーション用の模擬値。実機の挙動に合わせて調整する）
@@ -159,7 +207,6 @@ mock_servo:
   holding_heat_c: 2.0        # トルク ON で静止しているときの温度上昇（平衡値）
   voltage_nominal_v: 12.0
   voltage_sag_v: 0.6         # 負荷率 1.0 あたりの電圧降下
-  model_number: 777          # ping() が返すダミー型番（実機の値とは無関係）
 
 # ---------------------------------------------------------------------------
 # 頭部 I/O（XIAO ESP32S3、USB CDC）

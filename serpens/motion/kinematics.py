@@ -70,6 +70,17 @@ def forward(chain: Chain, angles: dict[str, float]) -> tuple[np.ndarray, list[np
     return np.array(pts), frames
 
 
+def point_at_body_x(chain: Chain, points: np.ndarray, x_mm: float) -> np.ndarray:
+    """胴体に沿って尾端から x_mm の位置にある点（リンク上で線形補間）。"""
+    s0 = 0.0
+    for k, length in enumerate(chain.link_mm):
+        if x_mm <= s0 + length or k == len(chain.link_mm) - 1:
+            f = min(max((x_mm - s0) / length, 0.0), 1.0)
+            return points[k] + (points[k + 1] - points[k]) * f
+        s0 += length
+    return points[-1]
+
+
 def sample_centerline(points: np.ndarray, step_mm: float) -> tuple[np.ndarray, np.ndarray]:
     """折れ線の中心線を step_mm 間隔でサンプリングする。
 

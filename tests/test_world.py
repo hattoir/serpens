@@ -8,8 +8,8 @@ import numpy as np
 import pytest
 
 from serpens.config import load_config
-from serpens.motion.animator import Animator, Keyframe
-from serpens.motion.gait import GaitEngine, GaitParams, gait_period_s
+from serpens.motion.animator import Animator, coil_keyframe
+from serpens.motion.gait import GaitEngine, GaitParams, gait_period_s  # noqa: F401
 from serpens.motion.kinematics import min_self_clearance
 from serpens.motion.poses import Poses
 from serpens.sim.world import BodyPose, World
@@ -78,12 +78,6 @@ def test_turning(big: dict, gait: str, sign: int) -> None:
     assert sign * dth > 10.0
 
 
-def test_amplitude_gradient_alone_does_not_turn(big: dict) -> None:
-    """記録: 胴体方向の振幅勾配だけでは左右対称なので旋回しない（旋回はオフセット γ で行う）。"""
-    _, _, dth, _ = walk(big, GaitParams(30.0, 60.0, 0.5, amp_gradient=0.8), BodyPose(5e4, 5e4, 0.0))
-    assert abs(dth) < 0.5
-
-
 def test_stays_inside_mat(cfg: dict) -> None:
     """壁に向かって歩き続けても、胴体はマットの外に出ない。"""
     w, *_ = walk(cfg, "forward", BodyPose(200.0, 600.0, 0.0))
@@ -97,14 +91,14 @@ def test_stays_inside_mat(cfg: dict) -> None:
 
 
 def test_coil_in_sim(cfg: dict) -> None:
-    """まっすぐ → とぐろ。巻き終わった形は自己干渉がなく、マット内にある。"""
+    """まっすぐ → とぐろ（尾から順）。巻き終わった形は自己干渉がなく、マット内にある。"""
     dt = cfg["sim"]["dt_s"]
     w, anim, poses = World(cfg, BodyPose(350.0, 400.0, 0.0)), Animator(cfg), Poses(cfg)
     anim.set_breathing(False)
     anim._breath_env = 0.0
-    anim.play(Keyframe(poses.coil(), 2.0), 0.0)
+    dur = anim.play(coil_keyframe(poses), 0.0)
     t = 0.0
-    while t < 2.5:
+    while t < dur + 0.3:
         t += dt
         w.step(anim.update(t), dt)
     sc = cfg["self_collision"]
@@ -115,13 +109,13 @@ def test_coil_in_sim(cfg: dict) -> None:
 
 
 def test_tangential_drag_limits_gliding(big: dict) -> None:
-    """接線方向の転がり抵抗を入れると、とぐろ化での「滑走」が大きく減る（前進はほぼ保たれる）。"""
+    """転がり抵抗 0.02 で、全関節同時のとぐろ化による「滑走」が減り、前進の低下は 2 割未満。"""
     from serpens.motion.animator import ease_in_out
 
     coil = Poses(big).coil()
     dt = big["sim"]["dt_s"]
-    travel = []
-    for ratio in (0.0, 0.01):
+    travel, fwd = [], []
+    for ratio in (0.0, 0.02):
         c = copy.deepcopy(big)
         c["sim"]["tangential_drag_ratio"] = ratio
         w = World(c, BodyPose(5e4, 5e4, 0.0))
@@ -129,33 +123,37 @@ def test_tangential_drag_limits_gliding(big: dict) -> None:
         for k in range(301):
             w.step({j: v * ease_in_out(k / 300) for j, v in coil.items()}, dt)
         travel.append(float(np.linalg.norm(w.centroid() - c0)))
-    assert travel[1] < 0.3 * travel[0]
+        fwd.append(walk(c, "forward", BodyPose(5e4, 5e4, 0.0))[1])
+    assert big["sim"]["tangential_drag_ratio"] == 0.02
+    assert travel[1] < 0.7 * travel[0]       # 14輪+頭パッドでは 394mm → 226mm（2026-09-12 測定）
+    assert fwd[1] > 0.8 * fwd[0]
 
 
-def test_lifted_head_does_not_push_body(cfg: dict) -> None:
-    """鎌首中は頭側リンクが床から浮くので、頭を振っても胴体は動かない。床にあれば少し動く。
-
-    （J8 の先のリンク 8 にも車輪がある設定にして比べる）
-    """
+def test_head_pad_is_isotropic_and_lifts_off(cfg: dict) -> None:
+    """頭部はパッド（等方の軽い摩擦）。床にあれば頭を振ると胴体が少し動き、鎌首で浮けば動かない。"""
     dt = cfg["sim"]["dt_s"]
-    c = copy.deepcopy(cfg)
-    c["sim"]["wheel_links"] = list(cfg["sim"]["wheel_links"]) + [8]
+    assert 7 not in cfg["sim"]["wheel_links"] and cfg["sim"]["pad_links"] == [9]
     moved = []
     for neck in (60.0, 0.0):
-        w = World(c, BodyPose(200.0, 600.0, 0.0))
+        w = World(cfg, BodyPose(200.0, 600.0, 0.0))
         w.step({"J7": neck}, dt)
         p0 = w.pose
         for k in range(200):
             w.step({"J7": neck, "J8": 40.0 * math.sin(k * dt * 2 * math.pi)}, dt)
         moved.append(math.hypot(w.pose.x - p0.x, w.pose.y - p0.y) + abs(w.pose.theta - p0.theta) * 1000)
     assert moved[0] < 1e-6
-    assert moved[1] > 1.0
+    assert moved[1] > 0.1
 
 
 def test_snake_pose_definition(cfg: dict) -> None:
-    """(x, y, θ) = 首（J7）の位置と、尾端→首の向き。"""
+    """生の (x, y, θ_body) = 首マーカの位置と、尾マーカ→首マーカの向き。首マーカは J7 より胴体側。"""
     w = World(cfg, BodyPose(100.0, 200.0, math.radians(90)))
     x, y, th = w.snake_pose()
-    neck_x = [j["x_mm"] for j in cfg["joints"] if j["name"] == "J7"][0]
-    assert (x, y) == pytest.approx((100.0, 200.0 + neck_x))
+    m = cfg["markers"]
+    j7 = [j["x_mm"] for j in cfg["joints"] if j["name"] == "J7"][0]
+    assert m["neck_x_mm"] < j7
+    assert (x, y) == pytest.approx((100.0, 200.0 + m["neck_x_mm"]))
+    assert tuple(w.marker_xy("tail")) == pytest.approx((100.0, 200.0 + m["tail_x_mm"]))
     assert th == pytest.approx(math.radians(90))
+    w.step({"J7": 70.0}, cfg["sim"]["dt_s"])            # 鎌首を上げても首マーカは動かない
+    assert w.snake_pose()[:2] == pytest.approx((x, y))

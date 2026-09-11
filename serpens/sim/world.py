@@ -1,11 +1,11 @@
 """2D シミュレータ: 関節角の列から、ヘビの床上の位置姿勢を求める。
 
 物理エンジンは使わず、次の運動学だけで推進を再現する:
-  1. 受動輪のあるリンクは「自分の接線方向にしか動けない」（横滑りしない＝非ホロノミック拘束）
-  2. 全リンクの拘束をまとめて最小二乗で満たす、胴体全体の剛体速度 (vx, vy, ω) を毎ステップ解く
-  3. その速度で全体を並進・回転させる
-胴体の形の変化（関節角の変化）に対して横滑りしないように全体が動く結果、
-波が頭→尾へ伝わるとヘビは前へ進む。
+  1. 受動輪のあるリンク（sim.wheel_links）は横滑りしない（非ホロノミック拘束）。
+     進行方向には転がり抵抗ぶんの小さな重み（sim.tangential_drag_ratio）をかける
+  2. 頭部のパッド（sim.pad_links）は等方の軽い摩擦（sim.pad_drag_ratio）。横方向を拘束しない
+  3. これらをまとめて最小二乗で満たす胴体全体の剛体速度 (vx, vy, ω) を毎ステップ解き、全体を動かす
+床から浮いたリンク（鎌首の頭側）は何も拘束しない。
 
 座標:
   ボディ座標 … 尾端 = 原点、尾側リンクの向き = +x（kinematics.forward と同じ）
@@ -19,11 +19,8 @@ from typing import Any
 
 import numpy as np
 
-from serpens.motion.kinematics import Chain, forward
+from serpens.motion.kinematics import Chain, forward, point_at_body_x
 from serpens.motion.poses import Pose
-
-NECK_INDEX = 7    # points[7] = J7（首。ArUco マーカを貼る位置）
-TAIL_INDEX = 0    # points[0] = 尾端
 
 
 @dataclass
@@ -32,7 +29,7 @@ class BodyPose:
 
     x: float
     y: float
-    theta: float   # [rad]
+    theta: float   # [rad]（連続値。±π で折り返さない）
 
 
 def _rot2(theta: float) -> np.ndarray:
@@ -49,10 +46,14 @@ class World:
         self.mat_w = float(cfg["mat"]["width_mm"])
         self.mat_d = float(cfg["mat"]["depth_mm"])
         self.radius = float(cfg["body"]["diameter_mm"]) / 2.0
-        self.wheel_links = [int(k) for k in s["wheel_links"]]
+        # (リンク番号, 横方向の重み, 進行方向の重み)
+        tan = math.sqrt(float(s["tangential_drag_ratio"]))
+        pad = math.sqrt(float(s["pad_drag_ratio"]))
+        self._contacts = [(int(k), 1.0, tan) for k in s["wheel_links"]] + [(int(k), pad, pad) for k in s["pad_links"]]
         self.contact_h = float(s["contact_height_mm"])
         self.rcond = float(s["lstsq_rcond"])
-        self.tan_ratio = float(s["tangential_drag_ratio"])
+        m = cfg["markers"]
+        self._marker_x = {"tail": float(m["tail_x_mm"]), "neck": float(m["neck_x_mm"])}
         self.pose = pose or BodyPose(float(s["start_tail_x_mm"]), float(s["start_tail_y_mm"]),
                                      math.radians(float(s["start_theta_deg"])))
         self.angles: Pose = {}
@@ -66,7 +67,6 @@ class World:
         new_pts = forward(self.chain, angles)[0]
         c_before = self.centroid()
         vx, vy, om = self._solve_body_velocity(self._pts_body, new_pts, dt)
-        # ボディ座標で求めた速度を世界座標へ（形の変化の中点で回す）
         th_mid = self.pose.theta + 0.5 * om * dt
         v_world = _rot2(th_mid) @ np.array([vx, vy])
         self.pose = BodyPose(self.pose.x + v_world[0] * dt, self.pose.y + v_world[1] * dt,
@@ -77,14 +77,12 @@ class World:
         self.travel_mm += float(np.linalg.norm(self.centroid() - c_before))
 
     def _solve_body_velocity(self, before: np.ndarray, after: np.ndarray, dt: float) -> tuple[float, float, float]:
-        """横滑りしない条件 n_k·(V + ω×c_k + ċ_k) = 0 を最小二乗で解く。
+        """重み付き最小二乗: Σ w_n²(n·v_k)² + w_t²(u·v_k)² を最小にする (vx, vy, ω)。
 
-        tangential_drag_ratio > 0 のときは、接線方向の速度 u_k·v にも小さな重みで
-        「動きにくさ」を加える（転がり抵抗。0 なら接線方向は完全に自由）。
+        v_k = V + ω×c_k + ċ_k（リンク中点の速度。ċ_k は形の変化による速度）
         """
         rows, rhs = [], []
-        tan_w = math.sqrt(self.tan_ratio)
-        for k in self.wheel_links:
+        for k, w_n, w_t in self._contacts:
             a0, a1 = after[k], after[k + 1]
             mid = 0.5 * (a0 + a1)
             if mid[2] > self.contact_h:
@@ -97,8 +95,8 @@ class World:
             n = np.array([-u[1], u[0]])
             c = mid[:2]
             shape_vel = (mid[:2] - 0.5 * (before[k][:2] + before[k + 1][:2])) / dt
-            w = math.sqrt(length)                 # 長いリンクほど車輪の効きが強い（重み）
-            for vec, wt in ((n, w), (u, w * tan_w)):
+            w = math.sqrt(length)                 # 長いリンクほど接地の効きが強い
+            for vec, wt in ((n, w * w_n), (u, w * w_t)):
                 if wt > 0.0:
                     rows.append(wt * np.array([vec[0], vec[1], -vec[0] * c[1] + vec[1] * c[0]]))
                     rhs.append(-wt * float(vec @ shape_vel))
@@ -118,22 +116,28 @@ class World:
             self.pose = BodyPose(self.pose.x + dx, self.pose.y + dy, self.pose.theta)
 
     # ---- 取得 -----------------------------------------------------------------
+    def _to_world(self, pts_body: np.ndarray) -> np.ndarray:
+        R = _rot2(self.pose.theta)
+        return pts_body[..., :2] @ R.T + np.array([self.pose.x, self.pose.y])
+
     def world_points(self) -> np.ndarray:
         """尾端, J1…J9, 頭先端 の世界座標 [mm]。shape (12, 3)"""
-        R = _rot2(self.pose.theta)
-        xy = self._pts_body[:, :2] @ R.T + np.array([self.pose.x, self.pose.y])
-        return np.column_stack([xy, self._pts_body[:, 2]])
+        return np.column_stack([self._to_world(self._pts_body), self._pts_body[:, 2]])
 
     def centroid(self) -> np.ndarray:
-        """床に接しているリンク中点の平均（ヘビの「重心」代わり）[mm]。"""
+        """車輪リンク中点の平均（ヘビの「重心」代わり）[mm]。"""
         pts = self.world_points()
-        mids = [(pts[k] + pts[k + 1]) / 2 for k in self.wheel_links]
+        mids = [(pts[k] + pts[k + 1]) / 2 for k, w_n, _ in self._contacts if w_n == 1.0]
         return np.mean(np.array(mids)[:, :2], axis=0)
 
+    def marker_xy(self, which: str) -> np.ndarray:
+        """ArUco マーカ（"tail" / "neck"）の世界座標 [mm]。"""
+        p = point_at_body_x(self.chain, self._pts_body, self._marker_x[which])
+        return self._to_world(p)
+
     def snake_pose(self) -> tuple[float, float, float]:
-        """ヘビの (x, y, θ)。位置 = 首（J7）、向き = 尾端→首（ArUco 2枚で測るものと同じ定義）。"""
-        pts = self.world_points()
-        neck, tail = pts[NECK_INDEX, :2], pts[TAIL_INDEX, :2]
+        """生の (x, y, θ_body)。位置 = 首マーカ、向き = 尾マーカ→首マーカ（ローパス前）。"""
+        neck, tail = self.marker_xy("neck"), self.marker_xy("tail")
         d = neck - tail
         return float(neck[0]), float(neck[1]), math.atan2(float(d[1]), float(d[0]))
 

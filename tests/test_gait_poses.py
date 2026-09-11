@@ -1,13 +1,15 @@
 """STEP 3: 歩容と姿勢のテスト。"""
 from __future__ import annotations
 
+import copy
 import math
 
 import numpy as np
 import pytest
 
 from serpens.config import load_config
-from serpens.motion.gait import GaitEngine, GaitParams, body_joint_names, gait_angles, gait_period_s
+from serpens.motion.gait import (GaitEngine, GaitParams, body_joint_names, gait_angles,
+                                 gait_period_s, turn_weights)
 from serpens.motion.kinematics import min_self_clearance
 from serpens.motion.poses import Poses
 
@@ -28,10 +30,14 @@ def preset(cfg: dict, name: str) -> GaitParams:
     return GaitParams.from_cfg(cfg["gait"]["presets"][name])
 
 
-def sweep(p: GaitParams, names: list[str]) -> np.ndarray:
+def sweep(p: GaitParams, names: list[str], profile: str = "uniform") -> np.ndarray:
     """1周期ぶんの角度列。shape (SAMPLES, 6)"""
     T = gait_period_s(p)
-    return np.array([[gait_angles(p, T * k / SAMPLES, names)[n] for n in names] for k in range(SAMPLES)])
+    return np.array([[gait_angles(p, T * k / SAMPLES, names, profile)[n] for n in names] for k in range(SAMPLES)])
+
+
+def limits(cfg: dict) -> dict[str, tuple[float, float]]:
+    return {j["name"]: (j["min_deg"], j["max_deg"]) for j in cfg["joints"]}
 
 
 def test_body_joints_are_j1_to_j6(names: list[str]) -> None:
@@ -46,7 +52,7 @@ def test_forward_gait_shape(cfg: dict, names: list[str]) -> None:
     assert np.allclose(a.mean(axis=0), 0.0, atol=1e-6)
     T = gait_period_s(p)
     assert gait_angles(p, 0.3, names) == pytest.approx(gait_angles(p, 0.3 + T, names))
-    lim = {j["name"]: (j["min_deg"], j["max_deg"]) for j in cfg["joints"]}
+    lim = limits(cfg)
     assert all(lim[n][0] <= v <= lim[n][1] for row in a for n, v in zip(names, row))
 
 
@@ -59,17 +65,47 @@ def test_wave_travels_head_to_tail_when_forward(cfg: dict, names: list[str]) -> 
         now, later = gait_angles(p, t, names), gait_angles(p, t + lag, names)
         for n in range(len(names) - 1):
             assert later[names[n]] == pytest.approx(now[names[n + 1]], abs=1e-9)
-        assert (lag > 0) == (direction > 0)   # 後退では向きが逆
+        assert (lag > 0) == (direction > 0)
 
 
-def test_turn_bias_and_amplitude_gradient(cfg: dict, names: list[str]) -> None:
-    left, right = preset(cfg, "turn_left"), preset(cfg, "turn_right")
-    assert np.allclose(sweep(left, names).mean(axis=0), left.turn_bias_deg, atol=1e-6)
-    assert np.allclose(sweep(right, names).mean(axis=0), right.turn_bias_deg, atol=1e-6)
-    grad = GaitParams(30.0, 60.0, 0.5, amp_gradient=0.5)
-    amp = sweep(grad, names).max(axis=0)
-    assert amp[-1] > amp[0]                        # 頭側ほど大きい
-    assert amp[-1] / amp[0] == pytest.approx(1.25 / 0.75, rel=0.01)
+def test_turn_profiles(cfg: dict, names: list[str]) -> None:
+    """uniform: 全関節に γ0。head_weighted: γ(n) = γ0·n/N（尾 0 → 頭 γ0）。"""
+    p = GaitParams(30.0, 60.0, 0.5, 12.0)
+    assert np.allclose(sweep(p, names, "uniform").mean(axis=0), 12.0, atol=1e-6)
+    hw = sweep(p, names, "head_weighted").mean(axis=0)
+    assert np.allclose(hw, [12.0 * n / 5 for n in range(6)], atol=1e-6)
+    assert turn_weights(6, "head_weighted")[0] == 0.0 and turn_weights(6, "head_weighted")[-1] == 1.0
+    with pytest.raises(ValueError):
+        turn_weights(6, "gradient")
+
+
+def test_turn_presets_within_limits(cfg: dict, names: list[str]) -> None:
+    lim = limits(cfg)
+    for g in ("turn_left", "turn_right"):
+        a = sweep(preset(cfg, g), names, cfg["gait"]["turn_profile"])
+        assert all(lim[n][0] <= v <= lim[n][1] for row in a for n, v in zip(names, row))
+
+
+def test_turn_offset_ramps_over_one_period(cfg: dict) -> None:
+    """γ0 はステップで変わらず、turn_ramp_periods 周期かけて移る。"""
+    eng = GaitEngine(cfg)
+    dt = 0.02
+    eng.start("forward")
+    t = 0.0
+    for _ in range(100):
+        t += dt
+        eng.update(t)
+    eng.set_turn(20.0)
+    T = gait_period_s(eng.params) * cfg["gait"]["turn_ramp_periods"]
+    seen = []
+    for _ in range(int(T / dt) + 5):
+        t += dt
+        eng.update(t)
+        seen.append(eng.gamma0)
+    assert seen[0] < 1.0                                  # 急には曲がらない
+    assert seen[len(seen) // 2] == pytest.approx(10.0, abs=2.0)
+    assert seen[-1] == pytest.approx(20.0)
+    assert all(b >= a for a, b in zip(seen, seen[1:]))
 
 
 def test_engine_blends_in_and_out(cfg: dict) -> None:
@@ -78,16 +114,14 @@ def test_engine_blends_in_and_out(cfg: dict) -> None:
     blend = cfg["gait"]["blend_s"]
     dt = 0.02
     eng.start("forward")
-    trace = []
-    t = 0.0
+    trace, t = [], 0.0
     for _ in range(int(6 / dt)):
         trace.append(eng.update(t))
         t += dt
-    first = max(abs(v) for v in trace[1].values())
-    assert first < 1.0
+    assert max(abs(v) for v in trace[1].values()) < 1.0
     full = max(abs(v) for tr in trace[int(blend / dt) + 10:] for v in tr.values())
     assert full == pytest.approx(preset(cfg, "forward").amplitude_deg, abs=1.0)
-    eng.start("turn_left")                           # 途中で切替
+    eng.start("turn_left")
     prev = eng.update(t)
     nxt = eng.update(t + dt)
     assert max(abs(nxt[k] - prev[k]) for k in prev) < 5.0
@@ -99,37 +133,54 @@ def test_engine_blends_in_and_out(cfg: dict) -> None:
 
 
 # ---- 姿勢 ------------------------------------------------------------------------
-def test_presets_within_limits(cfg: dict) -> None:
+def test_presets_within_soft_limits(cfg: dict) -> None:
     poses = Poses(cfg)
-    lim = {j["name"]: (j["min_deg"], j["max_deg"]) for j in cfg["joints"]}
-    for pose in (poses.home(), poses.coil(), poses.rear_up(), poses.full_rear_up(),
-                 poses.head_look(80, 50, 90), poses.relax().angles):
+    lim = limits(cfg)
+    all_poses = [poses.home(), poses.coil(), poses.full_rear_up(), poses.head_look(80, 50, 90),
+                 poses.relax().angles] + [poses.rear_up(60, b) for b in poses.rear_up_bases]
+    for pose in all_poses:
         for n, v in pose.items():
             assert lim[n][0] <= v <= lim[n][1], (n, v)
-    assert all(v == 0 for v in poses.home().values())
+    assert poses.home()["J7"] == 8 and all(v == 0 for k, v in poses.home().items() if k != "J7")
+
+
+def test_coil_leaves_room_for_breathing(cfg: dict) -> None:
+    """とぐろ ± 呼吸振幅 でもソフトリミット内。"""
+    amp = cfg["breath"]["amplitude_deg"]
+    lim = limits(cfg)
+    for n, v in Poses(cfg).coil().items():
+        assert lim[n][0] <= v - amp and v + amp <= lim[n][1], n
 
 
 def test_coil_has_no_self_intersection(cfg: dict) -> None:
-    """とぐろ: J1〜J6 だけで 300° 以上巻き、胴体どうしが直径以上離れている。"""
+    """とぐろ: J1〜J6 で 300° 以上巻き、呼吸で ±振れても中心線間隔が下限以上。"""
     poses = Poses(cfg)
     sc = cfg["self_collision"]
     coil = poses.coil()
-    assert all(coil[n] == 0 for n in ("J7", "J8", "J9"))
     assert sum(coil[f"J{k}"] for k in range(1, 7)) > 300
-    pts = poses.points(coil)
-    assert np.allclose(pts[:, 2], 0.0)             # 平面
-    clr = min_self_clearance(pts[:, :2], sc["arc_skip_mm"], sc["sample_mm"])
-    assert clr >= sc["min_clearance_mm"] >= cfg["body"]["diameter_mm"]
-    # 巻きすぎると干渉することも検出できる（チェック自体の検証）
+    for d in (-cfg["breath"]["amplitude_deg"], 0.0, cfg["breath"]["amplitude_deg"]):
+        pose = {k: v + d for k, v in coil.items()}
+        pts = poses.points(pose)
+        clr = min_self_clearance(pts[:, :2], sc["arc_skip_mm"], sc["sample_mm"])
+        assert clr >= sc["min_clearance_mm"] >= cfg["body"]["diameter_mm"], (d, clr)
     tight = {f"J{k}": 90.0 for k in range(1, 7)}
     assert min_self_clearance(poses.points(tight)[:, :2], sc["arc_skip_mm"], sc["sample_mm"]) < sc["min_clearance_mm"]
+
+
+def test_rear_up_bases_have_no_self_intersection(cfg: dict) -> None:
+    poses = Poses(cfg)
+    sc = cfg["self_collision"]
+    assert set(poses.rear_up_bases) == {"s_curve", "partial_coil"}
+    for b in poses.rear_up_bases:
+        pts = poses.points(poses.rear_up(60, b))
+        assert min_self_clearance(pts[:, :2], sc["arc_skip_mm"], sc["sample_mm"]) >= sc["min_clearance_mm"]
 
 
 @pytest.mark.parametrize("angle, height", [(55, 147), (65, 163), (85, 179)])
 def test_rear_up_height(cfg: dict, angle: float, height: float) -> None:
     """鎌首の高さ = (J7→頭先端 180mm) × sin(J7)。"""
-    h = Poses(cfg).head_height_mm(Poses(cfg).rear_up(angle))
-    assert h == pytest.approx(height, abs=1.0)
+    poses = Poses(cfg)
+    assert poses.head_height_mm(poses.rear_up(angle)) == pytest.approx(height, abs=1.0)
 
 
 def test_head_look_limits_neck_to_look_range(cfg: dict) -> None:
@@ -138,8 +189,8 @@ def test_head_look_limits_neck_to_look_range(cfg: dict) -> None:
     assert poses.head_look(10, 0, 90)["J7"] == nk["look_max_deg"]
     assert poses.head_look(10, 0, 20)["J7"] == nk["look_min_deg"]
     assert "J7" not in poses.head_look(10, 5)
-    look = poses.head_look(30, 15)
-    assert look == {"J8": 30, "J9": 15}
+    assert poses.head_look(30, 15) == {"J8": 30, "J9": 15}
+    assert poses.head_look(120, -60) == {"J8": 80, "J9": -35}      # ソフトリミット
     assert poses.full_rear_up()["J7"] == nk["full_rear_min_deg"]
 
 
@@ -148,3 +199,9 @@ def test_relax_command(cfg: dict) -> None:
     assert r.torque_ratio == cfg["poses"]["relax"]["torque_ratio"]
     assert r.duration_s == cfg["poses"]["relax"]["duration_s"]
     assert r.angles["J7"] == cfg["poses"]["relax"]["neck_deg"]
+
+
+def test_config_copy_is_independent(cfg: dict) -> None:
+    c = copy.deepcopy(cfg)
+    c["gait"]["turn_profile"] = "uniform"
+    assert GaitEngine(c).profile == "uniform" and GaitEngine(cfg).profile == cfg["gait"]["turn_profile"]

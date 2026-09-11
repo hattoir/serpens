@@ -1,20 +1,24 @@
 """歩容エンジン（serpenoid / gait equation）。
 
-  α(n, t) = A_n · sin(Ω·n + ω·t) + γ
-  A_n     = A · (1 + g · (n − n_c) / (N − 1))
+  α(n, t) = A · sin(Ω·n + ω·t) + γ(n)
 
-n は胴体ヨー関節の番号（0 = J1 = 尾側 … N−1 = J6 = 頭側）、n_c は中央。
+n は胴体ヨー関節の番号（0 = J1 = 尾側 … N = J6 = 頭側）。
 Ω > 0, ω > 0 のとき位相一定の点は n が減る向き（頭 → 尾）へ動き、ヘビは前進する。
-旋回は γ（オフセット）と g（胴体方向の振幅勾配）の2つで試せるようにしてある。
+
+旋回入力は オフセット γ だけ。関節への配り方（gait.turn_profile）は2種類:
+  uniform       γ(n) = γ0              … 胴体全体が均一な円弧
+  head_weighted γ(n) = γ0 · n / N      … 頭で舵を切って胴がついてくる
+γ0 はステップで変えず、gait.turn_ramp_periods 周期かけてなめらかに変える。
 """
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import Any
 
 BODY_AXIS = "yaw"
 NECK_JOINT = "J7"
+TURN_PROFILES = ("uniform", "head_weighted")
 
 
 @dataclass(frozen=True)
@@ -24,8 +28,7 @@ class GaitParams:
     amplitude_deg: float        # A
     spatial_freq_deg: float     # Ω [deg/関節]
     temporal_freq_hz: float     # ω/2π（負なら後退）
-    amp_gradient: float = 0.0   # g
-    turn_bias_deg: float = 0.0  # γ
+    turn_bias_deg: float = 0.0  # γ0（+ で左）
 
     @staticmethod
     def from_cfg(d: dict[str, Any]) -> "GaitParams":
@@ -34,14 +37,8 @@ class GaitParams:
             amplitude_deg=float(d["amplitude_deg"]),
             spatial_freq_deg=float(d["spatial_freq_deg"]),
             temporal_freq_hz=float(d["temporal_freq_hz"]),
-            amp_gradient=float(d.get("amp_gradient", 0.0)),
             turn_bias_deg=float(d.get("turn_bias_deg", 0.0)),
         )
-
-    def scaled(self, gain: float) -> "GaitParams":
-        """振幅と旋回オフセットを gain 倍したもの（開始・停止のブレンド用）。"""
-        return replace(self, amplitude_deg=self.amplitude_deg * gain,
-                       turn_bias_deg=self.turn_bias_deg * gain)
 
 
 def body_joint_names(cfg: dict[str, Any]) -> list[str]:
@@ -55,22 +52,28 @@ def body_joint_names(cfg: dict[str, Any]) -> list[str]:
     return names
 
 
-def angles_at_phase(p: GaitParams, phase_rad: float, joint_names: list[str]) -> dict[str, float]:
-    """時間位相 φ = ω·t [rad] における胴体関節角 [deg]。"""
-    n_joints = len(joint_names)
-    center = (n_joints - 1) / 2.0
-    span = max(n_joints - 1, 1)
+def turn_weights(n_joints: int, profile: str) -> list[float]:
+    """γ0 を各関節に配る重み。"""
+    if profile == "uniform":
+        return [1.0] * n_joints
+    if profile == "head_weighted":
+        top = max(n_joints - 1, 1)
+        return [n / top for n in range(n_joints)]
+    raise ValueError(f"未知の turn_profile: {profile}（{TURN_PROFILES}）")
+
+
+def angles_at_phase(p: GaitParams, phase_rad: float, joint_names: list[str],
+                    gamma0_deg: float, profile: str, gain: float = 1.0) -> dict[str, float]:
+    """時間位相 φ = ω·t [rad] における胴体関節角 [deg]。gain は振幅・γ の倍率。"""
     big_omega = math.radians(p.spatial_freq_deg)
-    out: dict[str, float] = {}
-    for n, name in enumerate(joint_names):
-        amp = p.amplitude_deg * (1.0 + p.amp_gradient * (n - center) / span)
-        out[name] = amp * math.sin(big_omega * n + phase_rad) + p.turn_bias_deg
-    return out
+    w = turn_weights(len(joint_names), profile)
+    return {name: gain * (p.amplitude_deg * math.sin(big_omega * n + phase_rad) + gamma0_deg * w[n])
+            for n, name in enumerate(joint_names)}
 
 
-def gait_angles(p: GaitParams, t: float, joint_names: list[str]) -> dict[str, float]:
-    """時刻 t [s] における胴体関節角 [deg]（周波数一定のとき）。"""
-    return angles_at_phase(p, 2.0 * math.pi * p.temporal_freq_hz * t, joint_names)
+def gait_angles(p: GaitParams, t: float, joint_names: list[str], profile: str = "uniform") -> dict[str, float]:
+    """時刻 t [s] における胴体関節角 [deg]（周波数・γ 一定のとき）。"""
+    return angles_at_phase(p, 2.0 * math.pi * p.temporal_freq_hz * t, joint_names, p.turn_bias_deg, profile)
 
 
 def gait_period_s(p: GaitParams) -> float:
@@ -78,19 +81,30 @@ def gait_period_s(p: GaitParams) -> float:
     return 1.0 / abs(p.temporal_freq_hz) if p.temporal_freq_hz else math.inf
 
 
+def _smoothstep(x: float) -> float:
+    x = min(max(x, 0.0), 1.0)
+    return x * x * (3.0 - 2.0 * x)
+
+
 class GaitEngine:
-    """歩容の再生器。プリセット切替と、開始・停止時の振幅ブレンドを行う。"""
+    """歩容の再生器。開始・停止時の振幅ブレンドと、γ のランプを行う。"""
 
     def __init__(self, cfg: dict[str, Any]) -> None:
         g = cfg["gait"]
         self.presets: dict[str, GaitParams] = {k: GaitParams.from_cfg(v) for k, v in g["presets"].items()}
         self.joint_names = body_joint_names(cfg)
+        self.profile = str(g["turn_profile"])
         self._blend_s = float(g["blend_s"])
+        self._ramp_periods = float(g["turn_ramp_periods"])
         self.params: GaitParams | None = None
         self._phase = 0.0            # 時間位相 [rad] の積分（周波数を変えても位相が飛ばない）
         self._gain = 0.0
         self._target_gain = 0.0
         self._last_t: float | None = None
+        # γ0 のランプ: from → to を ramp_s かけて smoothstep で
+        self.gamma0 = 0.0
+        self._g_from = self._g_to = 0.0
+        self._g_elapsed = self._g_ramp_s = 0.0
 
     @property
     def active(self) -> bool:
@@ -98,10 +112,20 @@ class GaitEngine:
         return self._gain > 0.0 or self._target_gain > 0.0
 
     def start(self, preset_or_params: str | GaitParams) -> None:
-        """歩容を開始（または別の歩容へ切替）。"""
+        """歩容を開始（または別の歩容へ切替）。プリセットの γ0 へランプする。"""
         p = self.presets[preset_or_params] if isinstance(preset_or_params, str) else preset_or_params
         self.params = p
         self._target_gain = 1.0
+        self.set_turn(p.turn_bias_deg)
+
+    def set_turn(self, gamma0_deg: float) -> None:
+        """旋回オフセット γ0 の目標を変える（turn_ramp_periods 周期かけて移る）。"""
+        if gamma0_deg == self._g_to:
+            return
+        self._g_from, self._g_to = self.gamma0, gamma0_deg
+        period = gait_period_s(self.params) if self.params else 0.0
+        self._g_ramp_s = self._ramp_periods * period if math.isfinite(period) else 0.0
+        self._g_elapsed = 0.0
 
     def stop(self) -> None:
         """振幅を blend_s かけて 0 にする。"""
@@ -112,13 +136,12 @@ class GaitEngine:
         dt = 0.0 if self._last_t is None else max(t - self._last_t, 0.0)
         self._last_t = t
         step = dt / self._blend_s if self._blend_s > 0 else 1.0
-        if self._gain < self._target_gain:
-            self._gain = min(self._gain + step, self._target_gain)
-        elif self._gain > self._target_gain:
-            self._gain = max(self._gain - step, self._target_gain)
+        self._gain += max(-step, min(step, self._target_gain - self._gain))
+        self._g_elapsed += dt
+        frac = 1.0 if self._g_ramp_s <= 0 else self._g_elapsed / self._g_ramp_s
+        self.gamma0 = self._g_from + (self._g_to - self._g_from) * _smoothstep(frac)
         if self.params is None or self._gain <= 0.0:
             return {}
         self._phase += 2.0 * math.pi * self.params.temporal_freq_hz * dt
-        # 振幅ブレンドは smoothstep でなめらかに
-        g = self._gain * self._gain * (3.0 - 2.0 * self._gain)
-        return angles_at_phase(self.params.scaled(g), self._phase, self.joint_names)
+        return angles_at_phase(self.params, self._phase, self.joint_names, self.gamma0,
+                               self.profile, _smoothstep(self._gain))
