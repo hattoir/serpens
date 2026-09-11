@@ -1,6 +1,6 @@
 # Serpens EX-1 — 展示用ヘビ型ロボット 制御ソフトウェア
 
-9軸（胴体ヨー×6 + 首ピッチ + 頭ヨー + 頭ピッチ）のヘビ型ロボットを、Python だけで動かすための
+9軸（胴体ヨー×6 + 首ピッチ J7 + 頭ヨー J8 + 頭ロール J9）のヘビ型ロボットを、Python だけで動かすための
 ソフトウェアです。**モックファースト**で作っており、実機が1台もなくてもシミュレータ上で全機能が動きます。
 
 - ROS 2 不使用 / LLM 不使用（行動選択は手書きの効用関数）
@@ -37,6 +37,13 @@ ArUco を使うので **`opencv-contrib-python` だけ**を入れます。とこ
 2. `requirements-nodeps.txt` … ultralytics 本体を `--no-deps` で入れる
 
 `pip check` は「ultralytics requires opencv-python」と警告しますが、**想定どおりなので無視**してください。
+万一 `opencv-python` が入ってしまったら:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python
+.\.venv\Scripts\python.exe -m pip install opencv-contrib-python
+```
+
 
 ### サーボ SDK について
 
@@ -46,13 +53,6 @@ Sync Read / Sync Write が揃っています。
 よく似た名前の `feetech-servo-sdk` は機能削減版（`sms_sts` が無い）で、しかも同じ `scservo_sdk` という
 名前でインストールされて上書きし合うので、**入れないでください**（`tools/check_env.py` が検出します）。
 なお `scservo-sdk` という名前のパッケージは PyPI にありません。
-万一 `opencv-python` が入ってしまったら:
-
-```powershell
-.\.venv\Scripts\python.exe -m pip uninstall -y opencv-python opencv-python-headless opencv-contrib-python
-.\.venv\Scripts\python.exe -m pip install opencv-contrib-python
-```
-
 ultralytics は実行時に足りないパッケージを勝手に pip install する機能があります。
 本プロジェクトではこれを環境変数 `YOLO_AUTOINSTALL=false` で無効化してから import します（STEP 5 で実装）。
 
@@ -125,6 +125,8 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 
 ### 2.5 その他
 - ユーザー名に日本語が含まれていても動作は確認済み（venv / pip / pytest）。
+- **`cv2.imread` / `cv2.imwrite` は日本語を含むパスを開けません**（Windows 版 OpenCV の制限）。
+  画像の読み書きは `np.fromfile` + `cv2.imdecode` か PIL を使うこと（`perception/camera.py` の ImageSource 参照）。
 - COM ポートは同時に1プロセスしか開けません。Arduino IDE や別のシリアルモニタを閉じてから起動すること。
 
 ---

@@ -17,3 +17,4 @@ runs/
 output/
 recordings/
 config/floor_homography.json
+models/

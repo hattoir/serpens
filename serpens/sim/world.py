@@ -135,6 +135,15 @@ class World:
         p = point_at_body_x(self.chain, self._pts_body, self._marker_x[which])
         return self._to_world(p)
 
+    def marker_tangent(self, which: str) -> np.ndarray:
+        """マーカが貼ってあるリンクの向き（世界座標の単位ベクトル、尾→頭）。"""
+        x = self._marker_x[which]
+        step = min(self.chain.link_mm) / 4
+        a = point_at_body_x(self.chain, self._pts_body, x - step)
+        b = point_at_body_x(self.chain, self._pts_body, x + step)
+        d = self._to_world(b) - self._to_world(a)
+        return d / np.linalg.norm(d)
+
     def snake_pose(self) -> tuple[float, float, float]:
         """生の (x, y, θ_body)。位置 = 首マーカ、向き = 尾マーカ→首マーカ（ローパス前）。"""
         neck, tail = self.marker_xy("neck"), self.marker_xy("tail")

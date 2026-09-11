@@ -65,7 +65,10 @@ markers:
 # ヘビの位置姿勢推定（位置 = 首マーカ、θ_body = 尾→首、θ_head = θ_body + J8）
 snake_pose:
   reference_gait: forward     # ローパスの時定数の基準にする歩容
-  heading_tau_periods: 1.0    # θ_body のローパス時定数（上の歩容の周期単位）
+  heading_tau_periods: 1.0    # θ_body のローパス時定数・窓の長さ（上の歩容の周期単位）
+  # moving_average: 1周期の移動平均（蛇行の振れを打ち消し、遅れ τ/2）
+  # lowpass: 一次遅れ（定常旋回で ω·τ 遅れる。旋回中は 40° 近く遅れた = STEP 5 の測定）
+  heading_filter: moving_average
   stale_after_s: 1.0          # マーカがこれ以上見えなければ「位置不明」扱い
 
 # 自己干渉チェック（とぐろ等のポーズ検証）
@@ -166,6 +169,55 @@ sim:
   start_tail_x_mm: 150.0      # 初期姿勢（尾端の位置と、尾→頭の向き）
   start_tail_y_mm: 600.0
   start_theta_deg: 0.0
+
+# ---------------------------------------------------------------------------
+# 知覚（STEP 5）
+# ---------------------------------------------------------------------------
+camera:
+  index: 0
+  # 40mm マーカは 1280x720 だとマット奥で 11〜20px しかなく、仮想カメラでも検出率 93〜98%。
+  # 1920x1080 なら 100%（STEP 5 の測定）。カメラが対応していれば 1080p で使う
+  width_px: 1920
+  height_px: 1080
+  use_dshow: true             # Windows: DirectShow の方が起動が速い
+  # カメラのレンズ位置 [x_mm, y_mm, 高さ_mm]（世界座標）。与えると、マーカ面の高さによる視差を補正する。
+  # null なら補正しない（高さ 1.5m・水平 1m の位置なら誤差 約33mm）
+  position_mm: null
+homography:
+  file: config/floor_homography.json
+  # 四隅のクリック順（世界座標）: 左手前 → 右手前 → 右奥 → 左奥
+  corner_order: ["左手前 (0,0)", "右手前 (W,0)", "右奥 (W,D)", "左奥 (0,D)"]
+aruco:
+  marker_height_mm: 50.0      # マーカ面の床からの高さ（胴体の直径）
+  max_marker_gap_mm: 650.0    # 尾↔首マーカの距離がこれを超えたら誤検出（胴体に沿って 590mm）
+  print_dpi: 300              # tools/make_aruco.py の印刷解像度
+  print_margin_mm: 10.0       # マーカの周りの白い余白（検出に必要）
+  # 小さいマーカ向けに調整した検出パラメータ（cv2.aruco.DetectorParameters の属性名そのまま）
+  detector_params:
+    cornerRefinementMethod: 1           # CORNER_REFINE_SUBPIX
+    adaptiveThreshWinSizeMin: 3
+    adaptiveThreshWinSizeStep: 4
+    minMarkerPerimeterRate: 0.01
+    polygonalApproxAccuracyRate: 0.05
+    perspectiveRemovePixelPerCell: 8
+person:
+  model_path: models/yolo11n.pt   # 自動ダウンロードはしない（README 参照）
+  imgsz: 640
+  conf_threshold: 0.4
+  person_class_id: 0          # COCO の person
+  max_range_mm: 1500.0        # マット中心からこの半径の外にいる人は無視
+  association_gate_mm: 400.0  # 前フレームの同じ人とみなす距離
+  switch_hysteresis_s: 2.0    # 別の人の方が近い状態がこれだけ続いたら追跡を切り替える
+  hold_s: 3.0                 # 検出0人になっても前回値を保持する時間
+# 実機なしで知覚を試すための仮想カメラ（シミュレータの世界を斜め上から撮った絵を作る）
+virtual_camera:
+  width_px: 1920
+  height_px: 1080
+  # マット四隅（左手前, 右手前, 右奥, 左奥）が写る画素位置。斜め上から見た台形
+  mat_corners_px: [[360, 1035], [1560, 1035], [1350, 375], [570, 375]]
+  position_mm: [600.0, -900.0, 1500.0]   # 仮想カメラの位置（視差の再現用）
+  person_height_mm: 1650.0
+  person_width_mm: 450.0
 
 # ---------------------------------------------------------------------------
 # サーボ STS3215（出典は docs/sts3215_registers.md）

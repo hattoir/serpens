@@ -13,10 +13,14 @@
 from __future__ import annotations
 
 import math
+from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
+
+
+HEADING_FILTERS = ("moving_average", "lowpass")
 
 
 @dataclass(frozen=True)
@@ -48,6 +52,10 @@ class SnakePoseTracker:
         period = 1.0 / abs(float(ref["temporal_freq_hz"]))
         self.tau_s = float(sp["heading_tau_periods"]) * period
         self.stale_after_s = float(sp["stale_after_s"])
+        self.method = str(sp["heading_filter"])
+        if self.method not in HEADING_FILTERS:
+            raise ValueError(f"snake_pose.heading_filter: {self.method}（{HEADING_FILTERS}）")
+        self._window: deque[tuple[float, np.ndarray]] = deque()   # 移動平均用 (時刻, 単位ベクトル)
         self._vec: np.ndarray | None = None      # ローパス中の単位ベクトル（cos, sin）
         self._last_t: float | None = None
         self._span_mm: float | None = None       # 尾→首マーカ間距離の最新値
@@ -83,8 +91,19 @@ class SnakePoseTracker:
         return self.pose
 
     def _lowpass(self, raw: float, t: float) -> float:
-        """単位ベクトルで一次ローパス（±π の折り返しで暴れない）。"""
+        """単位ベクトルでフィルタする（±π の折り返しで暴れない）。
+
+        moving_average … 直近 tau_s 秒（= 1周期）の平均。蛇行の振れを周期ごと打ち消し、遅れは τ/2
+        lowpass       … 一次遅れ。定常旋回（角速度 ω）では ω·τ だけ遅れる
+        """
         v = np.array([math.cos(raw), math.sin(raw)])
+        if self.method == "moving_average":
+            self._window.append((t, v))
+            while self._window and self._window[0][0] < t - self.tau_s:
+                self._window.popleft()
+            m = np.mean([w for _, w in self._window], axis=0)
+            self._last_t = t
+            return math.atan2(float(m[1]), float(m[0]))
         if self._vec is None or self._last_t is None:
             self._vec = v
         else:
