@@ -53,8 +53,16 @@ Sync Read / Sync Write が揃っています。
 よく似た名前の `feetech-servo-sdk` は機能削減版（`sms_sts` が無い）で、しかも同じ `scservo_sdk` という
 名前でインストールされて上書きし合うので、**入れないでください**（`tools/check_env.py` が検出します）。
 なお `scservo-sdk` という名前のパッケージは PyPI にありません。
-ultralytics は実行時に足りないパッケージを勝手に pip install する機能があります。
-本プロジェクトではこれを環境変数 `YOLO_AUTOINSTALL=false` で無効化してから import します（STEP 5 で実装）。
+
+### YOLO の重み（人物検出に必要。自動ダウンロードはしない）
+
+ultralytics は、足りないパッケージの pip install や重みのダウンロードを勝手に行う機能があります。
+本プロジェクトは `YOLO_AUTOINSTALL=false` / `YOLO_OFFLINE=true` にしてから import するので、**重みは手で置きます**。
+
+1. ultralytics の公式リリース（GitHub `ultralytics/assets` の Releases）から `yolo11n.pt`（約 5MB）を取得
+2. `models/yolo11n.pt` に置く（場所は config の `person.model_path`。`models/` と `*.pt` は git に入れない）
+3. 動作確認（同梱のサンプル画像）:
+   `.\.venv\Scripts\python.exe tools\perception_live.py --source .venv\Lib\site-packages\ultralytics\assets\bus.jpg --homography output\_test_h.json --frames 1 --no-window`
 
 ---
 
@@ -142,7 +150,28 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\plot_motion.py
 # STEP 4: シミュレータを上から見た図（+GIF）と、歩容ごとの「1周期あたりの前進量」
 .\.venv\Scripts\python.exe tools\sim_view.py --gif
+# STEP 5: 仮想カメラで知覚を試す（本物の ArUco 検出、人は仮想の検出器）→ GIF と時系列グラフ
+.\.venv\Scripts\python.exe tools\perception_demo.py
+# STEP 5: 実写（印刷したマーカ）。先に四隅をクリックして床の校正
+.\.venv\Scripts\python.exe tools\make_aruco.py            # → output/aruco_markers_A4.png を実寸で印刷
+.\.venv\Scripts\python.exe tools\calibrate_floor.py --source 0
+.\.venv\Scripts\python.exe tools\perception_live.py --source 0
 ```
+
+### 知覚の設計（STEP 5）
+
+- `perception/homography.py` … マット四隅4点 → 画像↔床の射影変換（JSON 保存）。胴体上面のマーカ（高さ 50mm）は
+  `camera.position_mm` を与えると視差補正する（高さ 1.5m・水平 1m で約 33mm のずれ）。広角レンズの歪みは取れない
+- `perception/aruco_locator.py` … DICT_4X4_50 の ID0（尾）/ ID1（首）。小さいマーカ向けに検出パラメータを調整済み
+  （`aruco.detector_params`）。2枚の距離が `aruco.max_marker_gap_mm` を超えたら誤検出として尾を捨てる
+- `perception/snake_pose.py` … θ_body は1周期の移動平均（`snake_pose.heading_filter`）。一次ローパスは
+  定常旋回で ω·τ（約 40°）遅れるため。移動平均の遅れは τ/2
+- `perception/person_detector.py` … YOLO（CPU、person のみ）→ bbox 下辺中央を足元として床座標へ。
+  追跡は「ヘビの首に最も近い1人」だけ、切替は 2 秒ヒステリシス、0人でも 3 秒保持、マット中心から 1.5m の外は無視
+- `sim/virtual_camera.py` … カメラ無しでも知覚を通しで試せる仮想カメラ（マーカは本物の画像を貼って描く）
+- **マーカの大きさ**: 40mm は 1280×720 だとマット奥で 11〜20px しかなく、仮想カメラでも検出率 93〜98%。
+  1920×1080 なら 100%。**カメラは 1080p で使う**（`camera.width_px`）
+- **カメラとマットの間に人が立つと、マーカが隠れる**（仮想カメラで確認）。カメラの置き場所に注意
 
 ### シミュレータの設計（STEP 4）
 
@@ -265,7 +294,7 @@ serpens/
 | 3 | 歩容エンジン・姿勢・アニメーター | ✅ |
 | 4 | 2D シミュレータ | ✅ |
 | 4.5 | Sim-to-Real 校正の器（fit_sim.py） | ✅ |
-| 5 | 知覚 | – |
+| 5 | 知覚（ArUco・ホモグラフィ・人の追跡） | ✅（YOLO は重みを置いてから確認） |
 | 6 | 内部状態と行動 | – |
 | 7 | GUI | – |
 | 8 | 実機用ツール | – |
