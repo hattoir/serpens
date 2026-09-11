@@ -136,7 +136,20 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 ```powershell
 # STEP 2: モックサーボの追従・負荷・温度変化をコンソールに表示
 .\.venv\Scripts\python.exe tools\demo_mock_servo.py --heat-tau 60
+# STEP 3: 9軸の角度列と、姿勢（home / とぐろ / 鎌首）の形を図にする → output/step3_motion.png
+.\.venv\Scripts\python.exe tools\plot_motion.py
 ```
+
+### モーション層の設計（STEP 3）
+
+- 関節角の符号: yaw + = 上から見て左、pitch + = 頭が上がる、roll + = 右に傾く（`motion/kinematics.py`）
+- `motion/gait.py` … α(n,t) = A_n·sin(Ω·n + ω·t) + γ。n=0 が J1（尾側）。ω>0 で前進、ω<0 で後退。
+  旋回は γ（`turn_bias_deg`）と振幅勾配（`amp_gradient`）の2つを持たせてある。
+- `motion/poses.py` … home / coil / rear_up / full_rear_up / head_look / relax。
+  head_look で J7 を指定すると「人を見る」範囲（`neck.look_min_deg`〜`look_max_deg`）に制限される。
+- `motion/animator.py` … 出力 = キーフレーム + 歩容（加算）+ 呼吸（加算）。
+  キーフレームが `animator.max_joint_speed_dps` を超える速さを要求したら、自動で時間を延ばす。
+  `freeze()` で呼吸も含めて全停止し、`unfreeze()` で続きから再開する。
 
 ### ハードウェア層の設計（STEP 2）
 
@@ -187,7 +200,7 @@ serpens/
 |---|---|---|
 | 1 | 環境構築 | ✅ |
 | 2 | サーボ抽象層とモック / 頭部 I/O | ✅（実機テストは未実施） |
-| 3 | 歩容エンジン | – |
+| 3 | 歩容エンジン・姿勢・アニメーター | ✅ |
 | 4 | 2D シミュレータ | – |
 | 5 | 知覚 | – |
 | 6 | 内部状態と行動 | – |

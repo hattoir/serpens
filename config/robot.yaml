@@ -47,6 +47,60 @@ mass_budget_g:
   neck_lifted_mass: 200         # J7 が持ち上げる質量
   neck_lifted_cog_mm: 104       # J7 から重心までの距離
 
+# 自己干渉チェック（とぐろ等のポーズ検証）
+self_collision:
+  arc_skip_mm: 100.0          # 胴体に沿ってこれ以上離れた点どうしだけを比べる
+  sample_mm: 5.0              # 中心線のサンプリング間隔
+  min_clearance_mm: 55.0      # 中心線間の最短距離の下限（直径 50mm + 余裕 5mm）
+
+# ---------------------------------------------------------------------------
+# 歩容（gait equation: α(n,t) = A_n·sin(Ω·n + ω·t) + γ、J1〜J6 の水平ヨーのみ）
+#   n = 0(J1, 尾側) … 5(J6, 頭側)。Ω>0, ω>0 で波は頭→尾へ伝わり、前進する
+#   A_n = A·(1 + amp_gradient·(n - 2.5)/5)   … 胴体方向の振幅勾配（+ で頭側ほど大きい）
+#   γ = turn_bias_deg                        … 旋回用のオフセット（+ で左）
+# ---------------------------------------------------------------------------
+gait:
+  presets:
+    forward:    {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, amp_gradient: 0.0, turn_bias_deg: 0.0}
+    slow:       {amplitude_deg: 20.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.3, amp_gradient: 0.0, turn_bias_deg: 0.0}
+    backward:   {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: -0.5, amp_gradient: 0.0, turn_bias_deg: 0.0}
+    turn_left:  {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, amp_gradient: 0.0, turn_bias_deg: 10.0}
+    turn_right: {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, amp_gradient: 0.0, turn_bias_deg: -10.0}
+  blend_s: 1.0                # 歩容の開始・停止時に振幅を 0↔1 でなめらかに変える時間
+
+# ---------------------------------------------------------------------------
+# 姿勢プリセット（関節角 deg。書いていない関節は変えない）
+# ---------------------------------------------------------------------------
+poses:
+  home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 0, J8: 0, J9: 0}
+  # とぐろ: J1〜J6 のみで平面の渦（尾側ほど強く曲げる）。自己干渉なしを tests で確認済み
+  coil: {J1: 87.5, J2: 72.2, J3: 59.6, J4: 49.1, J5: 40.5, J6: 33.4, J7: 0, J8: 0, J9: 0}
+  # 鎌首: J7 で頭を持ち上げる。胴体は S 字にして横倒れしにくくする（仮）
+  rear_up:
+    default_angle_deg: 60.0
+    body: {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}
+  # 脱力（タッチ時）: 首を下げ、トルクを落とす
+  relax:
+    neck_deg: 0.0             # J7 を下げきる
+    head_roll_deg: 0.0
+    torque_ratio: 0.6
+    duration_s: 2.0
+
+# ---------------------------------------------------------------------------
+# アニメーション
+# ---------------------------------------------------------------------------
+animator:
+  default_speed_dps: 150.0    # キーフレーム中のサーボ指令速度
+  default_accel_dps2: 2000.0
+  overshoot_peak_ratio: 0.75  # オーバーシュート付き ease-out: 全体のこの割合で行き過ぎの頂点
+  max_joint_speed_dps: 240.0  # キーフレームの最高角速度。これを超える指定は時間を自動で延ばす（サーボ上限 約299°/s の8割）
+# 呼吸オーバーレイ（全軸に常時加算）
+breath:
+  amplitude_deg: 2.0
+  period_s: 4.0
+  phase_step_deg: 0.0         # 関節ごとの位相ずれ（0 = 全軸同位相）
+  fade_s: 0.5                 # ON/OFF を切り替えたときに振幅をなめらかに変える時間
+
 # ---------------------------------------------------------------------------
 # サーボ STS3215（出典は docs/sts3215_registers.md）
 # ---------------------------------------------------------------------------
