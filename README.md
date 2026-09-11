@@ -138,7 +138,18 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\demo_mock_servo.py --heat-tau 60
 # STEP 3: 9軸の角度列と、姿勢（home / とぐろ / 鎌首）の形を図にする → output/step3_motion.png
 .\.venv\Scripts\python.exe tools\plot_motion.py
+# STEP 4: シミュレータを上から見た図（+GIF）と、歩容ごとの「1周期あたりの前進量」
+.\.venv\Scripts\python.exe tools\sim_view.py --gif
 ```
+
+### シミュレータの設計（STEP 4）
+
+- `sim/world.py` … 受動輪のあるリンク（`sim.wheel_links`）は横滑りしない、という拘束を
+  全リンク分まとめて最小二乗で解き、胴体全体の剛体速度 (vx, vy, ω) を毎ステップ求める。物理エンジンなし。
+- 床から浮いたリンク（鎌首の頭側）は拘束に入れない。マットからはみ出したら全体を内側へ押し戻す。
+- ヘビの (x, y, θ) = 首（J7）の位置と、尾端→首の向き（ArUco を首と尾に貼る前提と同じ定義）。
+- **1周期あたりの前進量（滑りなしの理想値）**: forward 約 500mm、turn_left/right 約 320mm で ±52°/周期。
+  実機では車輪の滑りでこれより小さくなる。実機で測った値と比べて `sim.tangential_drag_ratio` を合わせる。
 
 ### モーション層の設計（STEP 3）
 
@@ -201,7 +212,7 @@ serpens/
 | 1 | 環境構築 | ✅ |
 | 2 | サーボ抽象層とモック / 頭部 I/O | ✅（実機テストは未実施） |
 | 3 | 歩容エンジン・姿勢・アニメーター | ✅ |
-| 4 | 2D シミュレータ | – |
+| 4 | 2D シミュレータ | ✅ |
 | 5 | 知覚 | – |
 | 6 | 内部状態と行動 | – |
 | 7 | GUI | – |
