@@ -1,0 +1,31 @@
+# Serpens EX-1 依存パッケージ（1段目）
+# 注意: opencv-python は絶対に入れない。ArUco のため opencv-contrib-python のみ。
+# ultralytics 本体は opencv-python に依存しているため requirements-nodeps.txt で
+# --no-deps インストールする（README「インストール」参照）。
+
+# --- 本体 ---
+opencv-contrib-python>=4.10,<5
+numpy>=1.26
+pyserial>=3.5
+PySide6>=6.7
+pyyaml>=6.0
+pytest>=8.0
+
+# --- 実機サーボ（Feetech 公式リポジトリ由来の SDK, モジュール名 scservo_sdk） ---
+# feetech-servo-sdk は機能削減版（sms_sts / WritePosEx が無い）なので使わない。
+# 両者は同じ scservo_sdk モジュール名を使うため、同時に入れないこと。
+ftservo-python-sdk==2.0.0
+
+# --- ultralytics の依存（opencv-python を除いたもの。ultralytics 8.4 の METADATA より） ---
+torch>=1.8.0,!=2.4.0
+torchvision>=0.9.0
+matplotlib>=3.3.0
+pillow>=7.1.2
+requests>=2.23.0
+psutil>=5.8.0
+polars>=0.20.0
+cloudpickle>=3.1.1
+filelock>=3.16.1
+ultralytics-thop>=2.1.6
+ultralytics-platform>=0.1.32
+nvidia-ml-py>=12.0.0

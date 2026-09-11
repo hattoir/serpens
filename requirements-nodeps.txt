@@ -1,0 +1,4 @@
+# 2段目: 依存を解決させずに入れるパッケージ
+#   pip install --no-deps -r requirements-nodeps.txt
+# ultralytics は opencv-python を要求するが、opencv-contrib-python が同じ cv2 を提供するので不要。
+ultralytics>=8.3,<9

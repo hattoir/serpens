@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+*.egg-info/
+
+# エディタ / OS
+.vscode/*
+!.vscode/settings.json
+Thumbs.db
+desktop.ini
+
+# 生成物
+*.pt
+runs/
+output/
+recordings/
+config/floor_homography.json
