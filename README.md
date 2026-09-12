@@ -246,16 +246,44 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 - `serpens/hw/head_io.py` … 頭部 XIAO ESP32S3。`SerialHeadIO`（自動再接続）と `MockHeadIO`（同じ行形式を生成）。
 - 切り替えは `make_bus("mock" | "feetech", cfg, port)`。
 
-### アプリ（予定）
+### アプリ（STEP 7）
 
 ```powershell
-# シミュレータのみ（実機なし）
+# シミュレータのみ（実機なし）。GUI が開く
 .\.venv\Scripts\python.exe -m serpens.app --sim
+# 人の出入りを自動で再現（展示のリハーサル）
+.\.venv\Scripts\python.exe -m serpens.app --sim --demo
 # Webカメラで人検出 + シミュレータのヘビ
-.\.venv\Scripts\python.exe -m serpens.app --camera 0 --sim-robot
-# 実機
+.\.venv\Scripts\python.exe -m serpens.app --sim --camera 0
+# 実機（実機テストは未実施）
 .\.venv\Scripts\python.exe -m serpens.app --bus feetech --port COM5
+# GUI 無しで動作だけ確認 / GUI を GIF に記録
+.\.venv\Scripts\python.exe -m serpens.app --sim --no-gui --seconds 10
+.\.venv\Scripts\python.exe -m serpens.app --sim --demo --seconds 40 --record output\step7_gui.gif
 ```
+
+キーボード: **R** ホーム復帰 / **D** デモ開始・人を消す / **S** 全停止・解除 / **H** ホーム姿勢 /
+**C** カメラ再校正 / **T** タッチ / **Q** 終了
+
+### GUI の設計（STEP 7）
+
+- 4分割。左上 カメラ映像（`--sim` では仮想カメラ）、右上 俯瞰マップ、左下 内部状態、右下「いま何を考えているか」
+- 文字は大きく（状態名 26pt / 本文 20pt）、細いグレー文字は使わない（`gui/style.py`）
+- 右下の1行は効用の数値をそのまま出さず、日本語の文にする（`gui/wording.py`）
+  - 例: 「好奇心 0.78 が 注意 0.38 を上回ったので、近づくことにした（人まで約 886mm、400mm 手前で止まる）」
+  - 例: 「撫でられている。力を抜いて、じっとしている」「サーボが58℃。冷えるまで休む」
+- **制御と描画を分ける**: 制御は専用スレッドで 50Hz（`serpens/runner.py`）、GUI は 10fps で最新値を読むだけ。
+  Windows ではタイマ分解能を 1ms にし、制御スレッドの優先度を上げている
+- **制御周期の実測**（30秒、この PC）
+
+  | 条件 | 平均 | 最悪 | 20%以上の遅延 |
+  |---|---|---|---|
+  | GUI なし | 19.99ms | 20.78ms | 0 / 1505 |
+  | GUI あり | 19.99ms | 58.1ms | 5 / 1512（0.3%） |
+  | GUI あり + GIF 記録 | 20.01ms | 64.7ms | 135 / 2999（4.5%） |
+
+  GUI ありで時々跳ねるのは Python の GIL（描画中は制御スレッドが待たされる）。
+  サーボへは「目標角」を送るので、数周期の遅れは動きの途切れにはならない。GIF 記録は開発用で、展示では使わない。
 
 ---
 
@@ -324,5 +352,5 @@ serpens/
 | 4.5 | Sim-to-Real 校正の器（fit_sim.py） | ✅ |
 | 5 | 知覚（ArUco・ホモグラフィ・人の追跡） | ✅（YOLO は重みを置いてから確認） |
 | 6 | 内部状態と行動 | ✅ |
-| 7 | GUI | – |
+| 7 | 展示用 GUI | ✅ |
 | 8 | 実機用ツール | – |
