@@ -56,13 +56,51 @@ Sync Read / Sync Write が揃っています。
 
 ### YOLO の重み（人物検出に必要。自動ダウンロードはしない）
 
-ultralytics は、足りないパッケージの pip install や重みのダウンロードを勝手に行う機能があります。
-本プロジェクトは `YOLO_AUTOINSTALL=false` / `YOLO_OFFLINE=true` にしてから import するので、**重みは手で置きます**。
+**展示会場にネットは無い前提**です。ultralytics は重みのダウンロードや更新確認で勝手に外へ出るので、
+`serpens/app.py` の先頭で次を設定してから import しています（import より前でないと効きません）。
 
-1. ultralytics の公式リリース（GitHub `ultralytics/assets` の Releases）から `yolo11n.pt`（約 5MB）を取得
-2. `models/yolo11n.pt` に置く（場所は config の `person.model_path`。`models/` と `*.pt` は git に入れない）
-3. 動作確認（同梱のサンプル画像）:
-   `.\.venv\Scripts\python.exe tools\perception_live.py --source .venv\Lib\site-packages\ultralytics\assets\bus.jpg --homography output\_test_h.json --frames 1 --no-window`
+```
+YOLO_AUTOINSTALL=false   足りないパッケージを勝手に pip install しない
+YOLO_OFFLINE=true        オンライン判定を常に false にする（重みの取得・更新確認をしない）
+YOLO_HUB_OFFLINE=true    Ultralytics HUB へ通信しない
+```
+
+**置いてある重み**（取得済み。git には入れない）
+
+| 項目 | 値 |
+|---|---|
+| ファイル | `models/yolo11n.pt`（場所は config の `person.model_path`） |
+| 取得元 | https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt |
+| サイズ | 5,613,764 バイト |
+| SHA256 | `0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1` |
+| 取得日 | 2026-09-12 |
+
+置き直すときは上の URL から取得し、SHA256 が一致することを確認してください。
+
+```powershell
+.\.venv\Scripts\python.exe -c "import hashlib,pathlib;print(hashlib.sha256(pathlib.Path('models/yolo11n.pt').read_bytes()).hexdigest())"
+```
+
+**動作確認**（ultralytics 同梱の bus.jpg。4人写っています）
+
+```powershell
+.\.venv\Scripts\python.exe tools\perception_live.py --source .venv\Lib\site-packages\ultralytics\assets\bus.jpg --homography output\_test_h.json --frames 1 --no-window
+# → [  0.00s] markers=[]  人=4
+```
+
+**オフライン起動の確認（展示前に必ず実行）**
+
+ネットワークを遮断した状態で最後まで動くことを、次のツールで確認できます（外へ出ようとした瞬間にエラーになります）。
+
+```powershell
+.\.venv\Scripts\python.exe tools\offline_check.py --camera 0 --gui --seconds 12
+# → [オフライン検証] 最後まで動きました
+```
+
+`pytest tests/test_offline.py` でも、遮断下で重みの読み込みと推論ができることを確認しています。
+
+**注意**: YOLO の CPU 推論中は Python の GIL を握るため、制御周期が跳ねます（実測: 最悪 96ms、12秒で11回）。
+`person.detect_hz`（既定 5Hz）と `person.imgsz`（既定 480）で調整できます。
 
 ---
 

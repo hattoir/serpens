@@ -215,7 +215,8 @@ aruco:
     perspectiveRemovePixelPerCell: 8
 person:
   model_path: models/yolo11n.pt   # 自動ダウンロードはしない（README 参照）
-  imgsz: 640
+  imgsz: 480                  # 小さいほど速い（CPU 推論。制御周期への影響が減る）
+  detect_hz: 5.0              # 人物検出の頻度（推論中は制御スレッドが待たされるので上げすぎない）
   conf_threshold: 0.4
   person_class_id: 0          # COCO の person
   max_range_mm: 1500.0        # マット中心からこの半径の外にいる人は無視

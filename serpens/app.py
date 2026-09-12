@@ -30,7 +30,6 @@ os.environ.setdefault("YOLO_AUTOINSTALL", "false")
 os.environ.setdefault("YOLO_OFFLINE", "true")
 os.environ.setdefault("YOLO_HUB_OFFLINE", "true")
 
-PERCEPTION_HZ = 10.0
 FRAME_HZ = 5.0          # 表示用の映像を作る頻度（重いので制御より遅くする）
 DISPLAY_WIDTH_PX = 960
 
@@ -80,6 +79,7 @@ class RealCamera(threading.Thread):
         from serpens.perception.camera import open_source
 
         self.cfg, self.session = cfg, session
+        self.hz = float(cfg["person"]["detect_hz"])
         self.src = open_source(cfg, source)
         self.frame: np.ndarray | None = None
         self.notes: list[str] = []
@@ -107,7 +107,7 @@ class RealCamera(threading.Thread):
         self._stop_evt.set()
 
     def run(self) -> None:
-        period = 1.0 / PERCEPTION_HZ
+        period = 1.0 / self.hz
         while not self._stop_evt.is_set():
             t0 = time.perf_counter()
             ok, frame = self.src.read()
