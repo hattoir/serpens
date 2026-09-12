@@ -338,6 +338,34 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 **機体側の watchdog（heartbeat 途絶で ESP32 が単独で停止）が Phase 2 の必須項目。**
 現状の `head_io` のフェイルセーフは目の表示を戻すだけで、駆動には効かない。
 
+### 駆動リンク（Phase 2。PC ⇄ ESP32-S3）
+
+仕様は [`docs/link_protocol.md`](docs/link_protocol.md)、確認結果は
+[`docs/phase2_acceptance.md`](docs/phase2_acceptance.md)。
+
+- PC が送るのは**歩容のパラメータ（10 バイトの `DRIVE`）だけ**。9軸の角度は ESP32 が作る
+- **止まり方は二段構え。** `DRIVE` は期限（TTL 300ms）付きで、切れれば保持。
+  `heartbeat` が 400ms 途絶すれば待機まで落ちる。**PC が死んでも USB が抜けても機体が自分で止まる**
+- 緊急停止は**機体側でラッチ**。再接続でも `ARM` でも解除されず、`CLEAR_FAULT` は待機へ戻すだけ
+- 上限（振幅・周波数・旋回・頭部角・速度）は**機体が持つ**。PC の設定では緩められない
+
+```powershell
+# 完了条件 1〜12 の確認 + 時間の実測（模擬機体。実機は不要）
+.\.venv\Scripts\python.exe tools\link_check.py
+# ファームと突き合わせる参照角度列 → data/gait_reference.csv
+.\.venv\Scripts\python.exe tools\make_gait_reference.py
+```
+
+| 場所 | 中身 |
+|---|---|
+| `serpens/link/protocol.py` `messages.py` | フレームと payload（通信路を持たない） |
+| `serpens/link/device.py` `device_motion.py` | **機体側の参照実装**（ファームはこれを写す） |
+| `serpens/link/client.py` | PC 側。heartbeat・TTL・停止理由の履歴 |
+| `serpens/link/transport.py` `harness.py` | 偽経路（USB 抜去・PC 強制終了・再起動・重複・CRC 破損）と足場 |
+| `firmware/serpens_esp32/` | Arduino スケッチ。**未コンパイル・未書き込み**、配線が未確定 |
+
+⚠ **まだ `serpens.app`（GUI・行動）はこのリンクを使っていない。接続は Phase 3。**
+
 ### 実機経路の接続（Phase 1 で直した部分）
 
 ```powershell

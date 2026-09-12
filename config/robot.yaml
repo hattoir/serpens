@@ -430,3 +430,30 @@ head_io:
   mock:
     fw_version: "mock-0.1"
     tof_idle_mm: 1500         # 何も無いときの ToF 距離
+
+# ---------------------------------------------------------------------------
+# 駆動リンク（PC ⇄ ESP32-S3）。仕様は docs/link_protocol.md
+# 機体側（ファーム）の watchdog と絶対上限。**PC 側の設定でこれを緩められない**
+# 時間の既定値は暫定。Phase 2 完了条件 13/14 の実測で確定する（要実測）
+# ---------------------------------------------------------------------------
+link:
+  heartbeat_hz: 10.0            # PC → 機体。100ms 周期
+  heartbeat_timeout_ms: 400     # 取りこぼし3回まで許す。要実測
+  drive_ttl_ms: 300             # DRIVE の既定 TTL（PC が付ける）。要実測
+  drive_ttl_max_ms: 1000        # 機体が受け付ける TTL の上限（長い TTL を拒否する）
+  drive_disarm_ms: 2000         # DRIVE 途絶がこれを超えたら ARMED → DISARMED
+  telemetry_hz: 10.0
+  control_hz: 100.0             # 機体の制御周期（歩容生成・補間）
+  stop_ramp_s: 0.0              # 停止時の振幅の落とし方。0 = 即時（安全側）
+  clear_nonce_history: 16       # CLEAR_FAULT の nonce 再利用を弾くために覚える個数
+  # 機体が受け付ける指令値の絶対上限（これを外れたら NACK。状態も出力も変えない）
+  limits:
+    amplitude_deg: 40.0         # 胴体ヨーのソフトリミット 85° より十分内側
+    spatial_freq_deg: 150.0     # Ω。隣接関節の位相差
+    temporal_freq_hz: 1.0       # |ω/2π|。負は後退
+    gamma_deg: 30.0             # 旋回オフセット γ0
+    head_speed_dps: 120.0       # HEAD 指令の速度上限（J7 の max_speed_dps と同じ）
+  # 機体が自分で緊急停止する条件（サーボの読み値。実機未検証）
+  faults:
+    temp_limit_c: 60            # behavior.safety.overheat_c(55) より上。機体側の最後の砦
+    current_limit_ma: 0         # 0 = 無効（電流の実測値が無いため既定では使わない）

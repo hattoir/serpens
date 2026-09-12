@@ -1,0 +1,107 @@
+"""機体側の出力生成（歩容・補間・呼吸）と、指令値の上限検査。
+
+device.py（通信と状態機械）から切り離してある。**ここは PC の設定では緩められない上限**を持ち、
+通信を一切知らないので、数値としてそのまま試験できる（完了条件 1/11）。
+
+歩容は serpens/motion/gait.py と同じ式:  α(n,t) = A·sin(Ω·n + ω·t) + γ0·n/N
+"""
+from __future__ import annotations
+
+import math
+from typing import Any
+
+from serpens.link.messages import Drive, Head
+from serpens.motion.gait import body_joint_names
+
+HEAD_JOINTS = ("J7", "J8", "J9")
+
+
+class DeviceMotion:
+    """機体が実際にサーボへ書く角度を作る。"""
+
+    def __init__(self, cfg: dict[str, Any]) -> None:
+        self.joints = {j["name"]: j for j in cfg["joints"]}
+        self.body = body_joint_names(cfg)
+        self.limits = cfg["link"]["limits"]
+        self.ttl_max_ms = int(cfg["link"]["drive_ttl_max_ms"])
+        self.breath = cfg["breath"]
+        home = cfg["poses"]["home"]
+        self.goals = {n: float(home.get(n, 0.0)) for n in self.joints}
+        self.target = dict(self.goals)
+        self.speed = {n: float(j["max_speed_dps"]) for n, j in self.joints.items()}
+        self.phase = 0.0                     # 時間位相 [rad]（周波数を変えても飛ばない）
+
+    def clamp(self, name: str, deg: float) -> float:
+        """ソフトリミットへ収める（上限検査を通った後の最後の砦）。"""
+        j = self.joints[name]
+        return min(max(deg, float(j["min_deg"])), float(j["max_deg"]))
+
+    # ---- 上限の強制 -------------------------------------------------------------------
+    def drive_ok(self, d: Drive) -> bool:
+        """DRIVE の値が機体の絶対上限に収まっているか。"""
+        lim = self.limits
+        body_max = min(float(self.joints[n]["max_deg"]) for n in self.body)
+        return bool(1 <= d.ttl_ms <= self.ttl_max_ms
+                    and 0.0 <= d.amplitude_deg <= float(lim["amplitude_deg"])
+                    and 0.0 < d.spatial_freq_deg <= float(lim["spatial_freq_deg"])
+                    and abs(d.temporal_freq_hz) <= float(lim["temporal_freq_hz"])
+                    and abs(d.gamma_deg) <= float(lim["gamma_deg"])
+                    and d.amplitude_deg + abs(d.gamma_deg) <= body_max)   # 合成しても範囲内
+
+    def head_ok(self, h: Head) -> bool:
+        """HEAD の角度・速度が各軸のソフトリミット内か。"""
+        if not 1 <= h.ttl_ms <= self.ttl_max_ms:
+            return False
+        if not 0.0 < h.speed_dps <= float(self.limits["head_speed_dps"]):
+            return False
+        for name, deg in zip(HEAD_JOINTS, (h.j7_deg, h.j8_deg, h.j9_deg)):
+            j = self.joints[name]
+            if not float(j["min_deg"]) <= deg <= float(j["max_deg"]):
+                return False
+        return True
+
+    # ---- 出力 -----------------------------------------------------------------------
+    def set_head(self, h: Head) -> None:
+        """頭部の目標角と速度を入れる（検査済みの値だけ渡すこと）。"""
+        for name, deg in zip(HEAD_JOINTS, (h.j7_deg, h.j8_deg, h.j9_deg)):
+            self.target[name], self.speed[name] = deg, h.speed_dps
+
+    def set_pose(self, pose: dict[str, Any]) -> None:
+        """姿勢プリセットを目標にする（各軸の max_speed_dps で移る）。"""
+        for n, j in self.joints.items():
+            if n in pose:
+                self.target[n] = self.clamp(n, float(pose[n]))
+                self.speed[n] = float(j["max_speed_dps"])
+
+    def hold(self) -> None:
+        """いまの角度で保持する（停止時。ホーム姿勢へは動かさない）。"""
+        self.target = dict(self.goals)
+
+    def stop_head(self) -> None:
+        """頭部だけ目標を現在角にする（HEAD の期限切れ）。"""
+        for n in HEAD_JOINTS:
+            self.target[n] = self.goals[n]
+
+    def step(self, dt: float, drive: Drive | None) -> None:
+        """制御1周期ぶん進める。drive があれば胴体は歩容、それ以外は速度制限つきで目標へ。"""
+        if drive is not None:
+            self.phase += 2.0 * math.pi * drive.temporal_freq_hz * dt
+            big = math.radians(drive.spatial_freq_deg)
+            top = max(len(self.body) - 1, 1)
+            for n, name in enumerate(self.body):          # γ(n) = γ0·n/N（head_weighted）
+                a = drive.amplitude_deg * math.sin(big * n + self.phase) + drive.gamma_deg * n / top
+                self.goals[name] = self.clamp(name, a)
+        for name in self.goals:
+            if drive is not None and name in self.body:
+                continue
+            step = self.speed[name] * dt
+            diff = self.clamp(name, self.target[name]) - self.goals[name]
+            self.goals[name] += max(-step, min(step, diff))
+
+    def output(self, t: float, breathing: bool) -> dict[str, float]:
+        """サーボへ書く角度。呼吸（J7 の小さな上下）はここで足す。"""
+        out = dict(self.goals)
+        if breathing:
+            a = float(self.breath["amplitude_deg"])
+            out["J7"] = self.clamp("J7", out["J7"] + a * math.sin(2.0 * math.pi * t / float(self.breath["period_s"])))
+        return out
