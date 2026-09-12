@@ -11,7 +11,8 @@
             （near: 頭先端から engage_distance 以内、またはマット端でこれ以上近づけない）
   PETTED    = W · touch
   RETREAT   = W · p · s
-  COIL_REST = W · (1−e) · (1 − 0.5p)
+  COIL_REST_MOOD = W · (1−e) · (1 − 0.5p)
+  COIL_REST_HEAT … 効用では選ばない。過熱の安全割り込みでのみ入る（最小60秒・割り込み不可）
 最後に各効用へ ±noise_ratio の乱数を掛ける（noise_period_s ごとに引き直す）。
 """
 from __future__ import annotations
@@ -22,13 +23,16 @@ from typing import Any
 
 from serpens.behavior.internal_state import InternalState
 
-STATES = ("SLEEP", "PATROL", "ALERT", "OBSERVE", "APPROACH", "ENGAGE", "PETTED", "RETREAT", "COIL_REST")
+STATES = ("SLEEP", "PATROL", "ALERT", "OBSERVE", "APPROACH", "ENGAGE", "PETTED", "RETREAT",
+          "COIL_REST_MOOD", "COIL_REST_HEAT")
 STATE_LABELS_JA = {"SLEEP": "眠る", "PATROL": "巡回", "ALERT": "警戒", "OBSERVE": "観察", "APPROACH": "接近",
-                   "ENGAGE": "かかわる", "PETTED": "撫でられ", "RETREAT": "退避", "COIL_REST": "とぐろで休む"}
+                   "ENGAGE": "かかわる", "PETTED": "撫でられ", "RETREAT": "退避",
+                   "COIL_REST_MOOD": "とぐろで休む", "COIL_REST_HEAT": "熱いので休む"}
+COIL_STATES = ("COIL_REST_MOOD", "COIL_REST_HEAT")
 # 「いま何を考えているか」に出す、各状態の主な理由（内部状態の名前）
 DRIVER_NAMES = {"SLEEP": "Sleepy", "PATROL": "Curiosity", "ALERT": "Novelty", "OBSERVE": "Attention",
                 "APPROACH": "Curiosity", "ENGAGE": "Affection", "PETTED": "Touch", "RETREAT": "Stress",
-                "COIL_REST": "Rest"}
+                "COIL_REST_MOOD": "Rest", "COIL_REST_HEAT": "Heat"}
 
 
 @dataclass(frozen=True)
@@ -70,7 +74,7 @@ class UtilityModel:
         close = ctx.head_dist_mm is not None and ctx.head_dist_mm <= self.engage_mm
         near = 1.0 if (ctx.person and (close or ctx.at_limit)) else 0.0
         drv = {"SLEEP": (1 - c) * (1 - n), "PATROL": c, "ALERT": ctx.novelty, "OBSERVE": n, "APPROACH": c,
-               "ENGAGE": a, "PETTED": ctx.touch, "RETREAT": s, "COIL_REST": 1 - e}
+               "ENGAGE": a, "PETTED": ctx.touch, "RETREAT": s, "COIL_REST_MOOD": 1 - e, "COIL_REST_HEAT": 1 - e}
         raw = {
             "SLEEP": (1 - p) * (1 - c) * (1 - n) * (0.5 + 0.5 * (1 - e)),
             "PATROL": (1 - p) * c * e,
@@ -80,7 +84,8 @@ class UtilityModel:
             "ENGAGE": p * near * (0.5 + 0.5 * a) * (0.3 + 0.7 * n) * (1 - s),
             "PETTED": ctx.touch,
             "RETREAT": p * s,
-            "COIL_REST": (1 - e) * (1 - 0.5 * p),
+            "COIL_REST_MOOD": (1 - e) * (1 - 0.5 * p),
+            "COIL_REST_HEAT": 0.0,
         }
         raw = {k: self.w[k] * v for k, v in raw.items()}
         if t >= self._next_noise_t:

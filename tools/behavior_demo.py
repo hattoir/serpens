@@ -2,7 +2,7 @@
 
 シナリオ（シミュレーション時間）:
    0 s  誰もいない → 巡回（時々よそ見）
-  12 s  人 A がマットの右外に現れる → 0.4〜0.9 s 後に驚いて全停止 → 警戒 → 2段階で接近 → かかわる（かしげ・見つめる）
+  12 s  人 A が来場者側（y<0）に現れる → 0.4〜0.9 s 後に驚いて全停止 → 警戒 → 2段階で接近 → かかわる（かしげ・見つめる）
   50 s  頭をタッチ → 脱力（トルク 60%・首を下げる・目を暗く 2 s）
   62 s  A が急に近づく → ストレス → 退避（速く離れる）
   78 s  A が去る（範囲外）→ 3 s 保持 → 巡回
@@ -33,7 +33,7 @@ from serpens.sim.virtual_camera import SimPerson  # noqa: E402
 from serpens.sim.world import BodyPose  # noqa: E402
 
 GIF_FPS = 5
-VIEW_MM = (-700.0, 1900.0)
+VIEW_MM = (-1100.0, 1700.0)
 VIEW_PX = 520
 PANEL_W = 560
 FONT = "C:/Windows/Fonts/YuGothM.ttc"
@@ -41,16 +41,17 @@ FONT = "C:/Windows/Fonts/YuGothM.ttc"
 HOT = {"mock_servo": {"ambient_c": 28.0, "heat_tau_s": 25.0, "heat_gain_c": 300.0}}
 TOUCH_S = (50.0, 50.4)            # この間、頭のタッチセンサを押す
 COLORS = {"SLEEP": "#6c7a89", "PATROL": "#4caf50", "ALERT": "#ffb300", "OBSERVE": "#29b6f6", "APPROACH": "#26a69a",
-          "ENGAGE": "#ec407a", "PETTED": "#f8bbd0", "RETREAT": "#ff5722", "COIL_REST": "#7e57c2"}
+          "ENGAGE": "#ec407a", "PETTED": "#f8bbd0", "RETREAT": "#ff5722",
+          "COIL_REST_MOOD": "#7e57c2", "COIL_REST_HEAT": "#d84315"}
 
 
 def person_at(t: float) -> list[SimPerson]:
     if t < 12.0 or t >= 78.0:
         return []
     if t < 62.0:
-        return [SimPerson(1500.0, 750.0)]
+        return [SimPerson(700.0, -600.0)]
     k = min((t - 62.0) / 2.0, 1.0)                      # 2 秒で 500mm 近づく
-    return [SimPerson(1500.0 - 500.0 * k, 750.0)]
+    return [SimPerson(700.0, -600.0 + 500.0 * k)]
 
 
 def draw_top(s: SimSession) -> np.ndarray:

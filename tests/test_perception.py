@@ -63,7 +63,7 @@ def test_aruco_locates_markers_on_virtual_camera(cfg: dict, pose: BodyPose) -> N
     assert np.linalg.norm(obs.neck_mm - w.marker_xy("neck")) < 5.0
     assert np.linalg.norm(obs.tail_mm - w.marker_xy("tail")) < 5.0
     assert snake is not None and abs(wrap_pi(snake.theta_body_raw - w.snake_pose()[2])) < math.radians(2)
-    assert snake.theta_head == pytest.approx(snake.theta_body + math.radians(10.0))
+    assert abs(wrap_pi(snake.theta_head - snake.theta_body - math.radians(10.0))) < 1e-9
 
 
 def test_aruco_rejects_impossible_gap(cfg: dict) -> None:
@@ -83,7 +83,8 @@ def test_make_aruco_sheet_is_detectable(tmp_path: Path) -> None:
     corners, ids, _ = d.detectMarkers(g)
     assert sorted(ids.flatten().tolist()) == [0, 1]
     side_px = np.linalg.norm(corners[0].reshape(4, 2)[0] - corners[0].reshape(4, 2)[1])
-    assert side_px == pytest.approx(40 / 25.4 * 300, rel=0.02)            # 40mm @ 300dpi
+    size_mm = load_config()["markers"]["size_mm"]
+    assert side_px == pytest.approx(size_mm / 25.4 * 300, rel=0.02)       # 50mm @ 300dpi
 
 
 # ---- 人 ----------------------------------------------------------------------------
@@ -93,21 +94,28 @@ def det(x: float, y: float) -> PersonDetection:
 
 def test_sim_person_detector_foot_to_floor(cfg: dict) -> None:
     cam = VirtualCamera(cfg)
-    cam.render(World(cfg), [SimPerson(1500.0, 900.0), SimPerson(-400.0, 700.0)])
+    cam.render(World(cfg), [SimPerson(500.0, -400.0), SimPerson(1100.0, -250.0)])   # 来場者は y<0 側
     found = SimPersonDetector(cam, cam.homography).detect(np.zeros(1))
     assert len(found) == 2
-    assert min(np.linalg.norm(d.floor_mm - [1500, 900]) for d in found) < 2.0
+    assert min(np.linalg.norm(d.floor_mm - [500, -400]) for d in found) < 2.0
+
+
+def test_tracker_ignores_people_behind_the_mat(cfg: dict) -> None:
+    """来場者は y < 0 側の1辺からだけ。奥（スタッフ・背面パネル側）にいる人は追わない。"""
+    tr = PersonTracker(cfg)
+    assert tr.update(0.0, [det(600.0, 400.0)], np.array([600.0, 600.0])) is None      # マットの奥
+    assert tr.update(0.1, [det(600.0, -300.0)], np.array([600.0, 600.0])) is not None  # 来場者側
 
 
 def test_tracker_nearest_hysteresis_hold_and_range(cfg: dict) -> None:
     tr = PersonTracker(cfg)
-    snake = np.array([600.0, 600.0])
+    snake = np.array([600.0, 300.0])
     sw, hold = cfg["person"]["switch_hysteresis_s"], cfg["person"]["hold_s"]
-    far_away = det(600.0, 600.0 + cfg["person"]["max_range_mm"] + 700)
+    far_away = det(600.0, -(cfg["person"]["max_range_mm"] + 700))
     assert tr.update(0.0, [far_away], snake) is None                    # 範囲外は無視
-    a, b = (1500.0, 600.0), (600.0, 1500.0)
-    assert np.allclose(tr.update(0.1, [det(*a), det(*b)], snake).floor_mm, a)   # 同距離 → 先に見つけた方
-    near_b = (600.0, 1100.0)                                            # B が近づく
+    a, b = (1500.0, -300.0), (-300.0, -300.0)
+    assert np.allclose(tr.update(0.1, [det(*a), det(*b)], snake).floor_mm, a)   # 近い方
+    near_b = (600.0, -200.0)                                            # B が近づく
     t = 0.2
     while t < 0.2 + sw - 0.1:
         assert np.allclose(tr.update(t, [det(*a), det(*near_b)], snake).floor_mm, a)   # まだ切り替えない
@@ -125,5 +133,5 @@ def test_tracker_nearest_hysteresis_hold_and_range(cfg: dict) -> None:
 def test_tracker_follows_moving_target(cfg: dict) -> None:
     tr = PersonTracker(cfg)
     for k in range(20):
-        p = tr.update(k * 0.1, [det(1500.0 - 20 * k, 600.0)], None)
+        p = tr.update(k * 0.1, [det(1500.0 - 20 * k, -300.0)], None)
     assert p.floor_mm[0] == pytest.approx(1500.0 - 20 * 19)

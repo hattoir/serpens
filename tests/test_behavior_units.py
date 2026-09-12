@@ -78,9 +78,9 @@ def test_utility_picks_sensible_states(cfg: dict) -> None:
     assert best(Context(True, 900.0, 0.0, 0.0)) == "APPROACH"
     assert best(Context(True, 420.0, 0.0, 0.0)) == "ENGAGE"
     st.energy = 0.0
-    assert best(Context(False, None, 0.0, 0.0)) == "COIL_REST"
+    assert best(Context(False, None, 0.0, 0.0)) == "COIL_REST_MOOD"
     ev = u.evaluate(st, Context(False, None, 0.0, 0.0), 0.0)
-    assert "→ とぐろで休む" in thought_line(ev, "COIL_REST")
+    assert "→ とぐろで休む" in thought_line(ev, "COIL_REST_MOOD")
 
 
 # ---- 状態機械 --------------------------------------------------------------------
@@ -112,26 +112,31 @@ def test_controller_speed_limit_stop_and_no_faster_period(cfg: dict) -> None:
     ctrl = Controller(cfg)
     base_f = cfg["gait"]["presets"][c["gait"]]["temporal_freq_hz"]
     p = pose(600.0, 600.0, 0.0)
-    far = ctrl.drive_to(p, np.array([1100.0, 600.0]), 10_000.0)
+    far = ctrl.drive_to(0.0, p, np.array([1100.0, 600.0]), 10_000.0)
     assert far.params.temporal_freq_hz == pytest.approx(base_f)           # 周期は短くしない
     near_person = np.array([600.0 + c["near_person_mm"] - 50, 600.0])
-    cmd = ctrl.drive_to(p, near_person, c["speed_retreat_mm_s"], near_person)
+    cmd = ctrl.drive_to(0.0, p, near_person, c["speed_retreat_mm_s"], near_person)
     assert cmd.speed_mm_s == c["near_speed_limit_mm_s"]                  # 1m 以内は 8cm/s
-    approach = ctrl.drive_to(p, np.array([900.0, 900.0]), c["speed_approach_mm_s"])
-    retreat = ctrl.drive_to(p, np.array([900.0, 900.0]), c["speed_retreat_mm_s"])
+    approach = ctrl.drive_to(0.0, p, np.array([900.0, 900.0]), c["speed_approach_mm_s"])
+    retreat = ctrl.drive_to(0.0, p, np.array([900.0, 900.0]), c["speed_retreat_mm_s"])
     assert approach.params.temporal_freq_hz < retreat.params.temporal_freq_hz   # h.
     person = np.array([600.0 + c["head_reach_mm"] + c["stop_distance_mm"] - 1, 600.0])
-    stop = ctrl.drive_to(p, person, c["speed_approach_mm_s"], person, stop_at_person=True)
+    stop = ctrl.drive_to(0.0, p, person, c["speed_approach_mm_s"], person, stop_at_person=True)
     assert not stop.moving and stop.blocked
 
 
 def test_controller_edge_recovery_and_edge_goal(cfg: dict) -> None:
+    """マット端では後退しながら中央へ向き直る。人へ近づく場合は端に着いたら止まる。"""
+    c = cfg["behavior"]["controller"]
     ctrl = Controller(cfg)
-    p = pose(cfg["mat"]["width_mm"] - 150.0, 600.0, 0.0)                  # 右端へ向かっている
-    rec = ctrl.drive_to(p, np.array([2000.0, 600.0]), 100.0)
+    # 頭先端が端から mat_margin 以内で、外を向いている姿勢
+    x = cfg["mat"]["width_mm"] - c["head_reach_mm"] - c["mat_margin_mm"] + 20.0
+    p = pose(x, 600.0, 0.0)
+    rec = ctrl.drive_to(c["forward_min_s"] + 0.1, p, np.array([3000.0, 600.0]), 100.0)
     assert rec.moving and rec.params.temporal_freq_hz < 0                  # 後退しながら向き直る
+    assert ctrl.phase == "back"
     ctrl2 = Controller(cfg)
-    goal = ctrl2.drive_to(p, np.array([2000.0, 600.0]), 100.0, edge_is_goal=True)
+    goal = ctrl2.drive_to(0.0, p, np.array([3000.0, 600.0]), 100.0, edge_is_goal=True)
     assert not goal.moving and goal.blocked                                # 人の方を向いて端に着いた
 
 

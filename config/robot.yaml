@@ -52,11 +52,15 @@ mass_budget_g:
   neck_lifted_mass: 200         # J7 が持ち上げる質量
   neck_lifted_cog_mm: 104       # J7 から重心までの距離
 
-# ArUco マーカ（DICT_4X4_50, 40mm）。位置は尾端からの距離（胴体に沿って）
+# ArUco マーカ（DICT_4X4_50, 50mm）。位置は尾端からの距離（胴体に沿って）
 # 首マーカは J7 より胴体側（J6-J7 リンク上）。J7 より先だと鎌首でマーカが傾いて検出できない
+# 台座: 60×60×厚さ3mm の平板（50mm マーカ + 周囲 5mm 余白）。外皮の上に載せる着脱式（マジックテープ/薄型磁石）
+# 「装甲板・背中の鱗模様のパッチ」として意匠に組み込む。印刷は必ず艶消し（光沢は照明で反射して検出率が落ちる）
 markers:
   dictionary: DICT_4X4_50
-  size_mm: 40.0
+  size_mm: 50.0
+  plate_mm: 60.0              # 台座の一辺
+  plate_thickness_mm: 3.0
   tail_id: 0
   neck_id: 1
   tail_x_mm: 50.0             # 尾端-J1 リンクの中央（仮）
@@ -148,6 +152,14 @@ breath:
 mat:
   width_mm: 1200              # X 方向
   depth_mm: 1200              # Y 方向
+# 展示レイアウト（vol.3 からの変更: 床置きをやめ、高さ600mm の台に載せる）
+#   y = 0 の辺 … 来場者側（ここだけ開放）   y = 1200 … 背面パネル（カメラはこちら側）
+#   x = 0 / 1200 … モニターとスタッフ
+exhibit:
+  table_height_mm: 600        # 台の高さ（立ったまま見て、撫でられる高さ）
+  rim_height_mm: 20           # マットの縁（落下防止 + 「世界の境界」）
+  rim_inner_radius_mm: 10     # 縁の内側の角の R（垂直だと引っかかる）
+  visitor_side: front         # 来場者は y = 0 側だけ
 sim:
   dt_s: 0.01                  # 積分刻み
   # 受動輪があるリンク（0 = 尾端→J1, …, 6 = J6→J7）。7リンク × 2輪 = 14輪。J7 より先は車輪なし
@@ -174,16 +186,16 @@ sim:
 # ---------------------------------------------------------------------------
 # 知覚（STEP 5）
 # ---------------------------------------------------------------------------
+# 購入要件: 1080p以上・広角90°以上が必須。720p は不可（40mm マーカで検出率 93〜98%。STEP 5 で検証）
 camera:
   index: 0
-  # 40mm マーカは 1280x720 だとマット奥で 11〜20px しかなく、仮想カメラでも検出率 93〜98%。
-  # 1920x1080 なら 100%（STEP 5 の測定）。カメラが対応していれば 1080p で使う
   width_px: 1920
   height_px: 1080
   use_dshow: true             # Windows: DirectShow の方が起動が速い
-  # カメラのレンズ位置 [x_mm, y_mm, 高さ_mm]（世界座標）。与えると、マーカ面の高さによる視差を補正する。
-  # null なら補正しない（高さ 1.5m・水平 1m の位置なら誤差 約33mm）
-  position_mm: null
+  # レンズ位置 [x_mm, y_mm, 高さ_mm]（マット台面基準）。奥（背面パネル側）から見下ろす
+  # 床からの高さ = exhibit.table_height_mm + 1100 = 1700mm
+  position_mm: [600.0, 1370.0, 1100.0]
+  target_mm: [600.0, 600.0, 0.0]   # 注視点（マット中心）。俯角 約55°
 homography:
   file: config/floor_homography.json
   # 四隅のクリック順（世界座標）: 左手前 → 右手前 → 右奥 → 左奥
@@ -192,7 +204,7 @@ aruco:
   marker_height_mm: 50.0      # マーカ面の床からの高さ（胴体の直径）
   max_marker_gap_mm: 650.0    # 尾↔首マーカの距離がこれを超えたら誤検出（胴体に沿って 590mm）
   print_dpi: 300              # tools/make_aruco.py の印刷解像度
-  print_margin_mm: 10.0       # マーカの周りの白い余白（検出に必要）
+  print_margin_mm: 5.0        # マーカの周りの白い余白（台座 60mm − マーカ 50mm の半分）
   # 小さいマーカ向けに調整した検出パラメータ（cv2.aruco.DetectorParameters の属性名そのまま）
   detector_params:
     cornerRefinementMethod: 1           # CORNER_REFINE_SUBPIX
@@ -207,6 +219,7 @@ person:
   conf_threshold: 0.4
   person_class_id: 0          # COCO の person
   max_range_mm: 1500.0        # マット中心からこの半径の外にいる人は無視
+  visitor_side_y_max_mm: 0.0  # これより奥（y が大きい）にいる人は無視（来場者は y<0 側だけ）
   association_gate_mm: 400.0  # 前フレームの同じ人とみなす距離
   switch_hysteresis_s: 2.0    # 別の人の方が近い状態がこれだけ続いたら追跡を切り替える
   hold_s: 3.0                 # 検出0人になっても前回値を保持する時間
@@ -214,9 +227,10 @@ person:
 virtual_camera:
   width_px: 1920
   height_px: 1080
-  # マット四隅（左手前, 右手前, 右奥, 左奥）が写る画素位置。斜め上から見た台形
-  mat_corners_px: [[360, 1035], [1560, 1035], [1350, 375], [570, 375]]
-  position_mm: [600.0, -900.0, 1500.0]   # 仮想カメラの位置（視差の再現用）
+  # カメラは奥（背面パネル側）から手前を見下ろす。マット四隅（左手前, 右手前, 右奥, 左奥）が写る画素位置。
+  # 奥から見るので世界の +x は画面の左向きになり、手前（y=0）の辺が画面の上に写る
+  mat_corners_px: [[1350, 375], [570, 375], [360, 1035], [1560, 1035]]
+  position_mm: [600.0, 1370.0, 1100.0]   # 仮想カメラの位置（実カメラと同じ。視差の再現用）
   person_height_mm: 1650.0
   person_width_mm: 450.0
 
@@ -244,17 +258,29 @@ behavior:
     novelty_decay_s: 3.0
     looking_tolerance_deg: 15.0
     touch_hold_s: 0.5         # タッチ刺激を保つ時間
+  # 安全割り込み（最優先。他のすべてを中断する）
+  safety:
+    overheat_c: 55.0            # サーボ最高温度がこれを超えたら強制休憩（COIL_REST_HEAT）
+    overheat_resume_c: 45.0     # これ以下に下がるまで強制休憩を続ける
+    grab_load_ratio: 0.75       # どれかの軸の負荷率がこれを超え
+    grab_hold_s: 0.8            # この時間続いたら「掴まれた」とみなして脱力（PETTED）
+    fence_stop_reason: "安全: マット端。停止して中央へ向き直る"
   # 効用（utility.py の式の係数）
   utility:
     noise_ratio: 0.08         # 効用に ±8% の乱数
     noise_period_s: 2.0       # 乱数を引き直す間隔（毎周期だとチラつく）
     hysteresis: 1.15          # 今の状態の効用 × これ を超えないと切り替えない
     min_dwell_s: 4.0          # 最小継続時間
-    interrupt_states: [PETTED]   # 最小継続時間を待たずに割り込める状態（先に書いた方が優先）
-    # ALERT は「新しい人に気づいた瞬間」に brain が直接切り替える（効用では選ばない）
-    # 状態ごとの最小継続時間（PETTED は i. の 2 秒。休むときは短く切り上げない）
-    min_dwell_overrides: {PETTED: 2.0, ALERT: 2.0, COIL_REST: 20.0, SLEEP: 8.0}
-    weights: {SLEEP: 0.9, PATROL: 1.0, ALERT: 1.6, OBSERVE: 0.9, APPROACH: 1.4, ENGAGE: 1.3, PETTED: 3.0, RETREAT: 1.8, COIL_REST: 1.1}
+    # 割り込みの優先度: safety（brain が force）> PETTED > ALERT（brain が force）> 効用で選択
+    interrupt_states: [PETTED]
+    # 割り込まれない状態（安全のため。人が来ても抜けない）
+    uninterruptible_states: [COIL_REST_HEAT]
+    # 状態ごとの最小継続時間
+    #   COIL_REST_HEAT … 過熱の強制休憩。60 秒、人が来ても割り込めない
+    #   COIL_REST_MOOD … 気分の休憩。20 秒、人が来たら ALERT へ抜ける
+    min_dwell_overrides: {PETTED: 2.0, ALERT: 2.0, COIL_REST_MOOD: 20.0, COIL_REST_HEAT: 60.0, SLEEP: 8.0}
+    weights: {SLEEP: 0.9, PATROL: 1.0, ALERT: 1.6, OBSERVE: 0.9, APPROACH: 1.4, ENGAGE: 1.3, PETTED: 3.0, RETREAT: 1.8,
+              COIL_REST_MOOD: 1.1, COIL_REST_HEAT: 0.0}   # HEAT は効用では選ばれない（安全割り込みでのみ入る）
     engage_distance_mm: 450.0 # 頭先端から人までこれ以内なら「近い」（ENGAGE）。停止距離 400mm より少し外側
   # 移動（controller.py）
   controller:
@@ -267,12 +293,27 @@ behavior:
     near_person_mm: 1000.0        # 人のこの距離以内では
     near_speed_limit_mm_s: 80.0   #   最高速度 8cm/s
     stop_distance_mm: 400.0       # 頭先端から人までこの距離で必ず停止
-    coast_ratio: 0.5              # 歩容を止めてからの惰性 = 速さ × gait.blend_s × これ（早めに止める量）
+    # 歩容を止めてからの惰性 = 速さ × gait.blend_s × これ。
+    # 実測: 50mm/s で指令して停止 → 1秒のブレンド中に約80mm 進む（= 1.6）
+    coast_ratio: 1.6
     head_reach_mm: 210.0          # 首マーカ → 頭先端の距離（停止判定用）
     heading_gain: 0.4             # γ0 = gain × 向きの誤差[deg]
     max_turn_deg: 20.0            # γ0 の上限
     arrive_mm: 120.0              # 巡回の目標点に着いたとみなす距離
-    mat_margin_mm: 120.0          # マット端からこれ以内に首の先読み点が出たら停止して向き直る
+    mat_margin_mm: 120.0          # 仮想フェンス（硬）: ここに首の先読み点が入ったら前進をやめて向き直る
+    # 仮想フェンス（柔）: 端からこの距離に入ったら、目標の方位を中央の方位へ少しずつ寄せる。
+    # 旋回半径が約480mm あるので、硬いフェンスに来てから曲がったのでは間に合わない
+    fence_soft_mm: 300.0
+    forward_min_s: 1.5            # 前進に戻ってから、次に後退へ入るまでの最小時間
+    back_min_s: 2.0               # 後退の最小継続時間（すぐ切り替えると往復して動けなくなる）
+    turn_min_s: 2.0               # 向き直りの最小継続時間
+    back_exit_mm: 250.0           # 後退をやめる距離（頭先端から端まで）。マットが 1.2m なので最大でも 390mm
+    tail_margin_mm: 60.0          # 後退するとき、尾に必要なマット上の余裕（胴体半径 25mm + 余裕）
+    # 巡回: 中央の円（半径 patrol_radius_mm）の上に目標点を置いて追う。
+    # 目標点は中央 400×400mm の中に収まる。端へ寄らないので、フェンスからの復帰がほぼ起きない
+    patrol_radius_mm: 200.0
+    patrol_lead_deg: 50.0         # 現在位置より何度先に目標点を置くか
+    patrol_flip_s: [25.0, 60.0]   # この間隔で回る向きを変える（同じ向きに回り続けると単調）
     lookahead_mm: 250.0
     recover_heading_ok_deg: 45.0  # 中央を向いたとみなす誤差
     retreat_distance_mm: 900.0    # 逃げるときの目標: 人から離れた点までの距離
@@ -307,7 +348,8 @@ behavior:
     ENGAGE: [255, 120, 160, 200, 3]
     PETTED: [255, 150, 180, 30, 2]    # i. 目を暗く
     RETREAT: [255, 60, 0, 220, 1]
-    COIL_REST: [80, 80, 160, 25, 2]
+    COIL_REST_MOOD: [80, 80, 160, 25, 2]
+    COIL_REST_HEAT: [255, 80, 0, 60, 2]     # 過熱の強制休憩は分かる色にする
 
 # ---------------------------------------------------------------------------
 # サーボ STS3215（出典は docs/sts3215_registers.md）

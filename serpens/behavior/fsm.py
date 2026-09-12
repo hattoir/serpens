@@ -3,8 +3,9 @@
   - 効用最大の状態を候補にする
   - 最小継続時間（min_dwell_s、状態ごとの上書きあり）が過ぎるまでは切り替えない
   - 候補の効用が「今の状態の効用 × hysteresis」を超えたときだけ切り替える
-  - interrupt_states（PETTED, ALERT）は最小継続時間を待たずに割り込める。
-    割り込み状態どうしは、config で先に書いた方が優先（PETTED は ALERT にも割り込める）
+割り込みの優先度: safety（過熱・掴まれた・マット外。brain が force(safety=True)）
+                > PETTED（interrupt_states）> ALERT（brain が force）> 効用で選択
+uninterruptible_states（COIL_REST_HEAT）は、最小継続時間のあいだ safety 以外では抜けない。
 """
 from __future__ import annotations
 
@@ -33,8 +34,9 @@ class StateMachine:
         self.min_dwell = float(u["min_dwell_s"])
         self.dwell_overrides = {k: float(v) for k, v in u.get("min_dwell_overrides", {}).items()}
         self.interrupts = set(u["interrupt_states"])
+        self.uninterruptible = set(u["uninterruptible_states"])
         self._priority = {s: i for i, s in enumerate(u["interrupt_states"])}   # 先に書いた方が優先
-        unknown = (self.interrupts | set(self.dwell_overrides)) - set(STATES)
+        unknown = (self.interrupts | self.uninterruptible | set(self.dwell_overrides)) - set(STATES)
         if unknown:
             raise ValueError(f"behavior.utility: 未知の状態 {unknown}")
         self.state = initial
@@ -53,6 +55,8 @@ class StateMachine:
 
     def step(self, t: float, utilities: dict[str, float]) -> Transition | None:
         """効用を見て、必要なら切り替える。切り替えたら Transition を返す。"""
+        if self.state in self.uninterruptible and self.time_to_next(t) > 0.0:
+            return None                      # 安全のため、この状態は最小継続時間まで抜けない
         best = max(utilities, key=lambda k: utilities[k])
         if best == self.state:
             return None
@@ -66,9 +70,16 @@ class StateMachine:
             return None
         return self._switch(t, best, f"{utilities[best]:.2f} > {self.hysteresis}×{cur:.2f}")
 
-    def force(self, t: float, state: str, reason: str) -> Transition | None:
-        """ルールを無視して切り替える（安全停止など）。"""
+    def force(self, t: float, state: str, reason: str, safety: bool = False) -> Transition | None:
+        """ルールを無視して切り替える。
+
+        safety=True（過熱・掴まれた・マット外）は最優先で、割り込まれない状態からも抜ける。
+        safety=False（ALERT など）は、割り込まれない状態・最小継続中の割り込み状態からは抜けない。
+        """
         if state == self.state:
+            return None
+        if not safety and (self.state in self.uninterruptible or
+                           (self.state in self.interrupts and self.time_to_next(t) > 0.0)):
             return None
         return self._switch(t, state, reason)
 

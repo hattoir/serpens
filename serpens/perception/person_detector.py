@@ -3,6 +3,7 @@
 足元 = bbox 下辺の中央 → ホモグラフィで床座標へ。
 追跡（PersonTracker）:
   - マット中心から person.max_range_mm の外にいる人は無視
+  - 来場者は y < 0 側の 1 辺からしか近づけない配置なので、y > visitor_side_y_max_mm の人は無視
   - 追跡するのは「ヘビ（首）に最も近い1人」だけ
   - 別の人の方が近い状態が person.switch_hysteresis_s 続いたら切り替える
   - 検出0人（または追跡中の人を見失った）でも person.hold_s は前回値を保持
@@ -87,6 +88,7 @@ class PersonTracker:
         p = cfg["person"]
         self.center = np.array([float(cfg["mat"]["width_mm"]) / 2, float(cfg["mat"]["depth_mm"]) / 2])
         self.max_range = float(p["max_range_mm"])
+        self.visitor_y_max = float(p["visitor_side_y_max_mm"])
         self.gate = float(p["association_gate_mm"])
         self.switch_s = float(p["switch_hysteresis_s"])
         self.hold_s = float(p["hold_s"])
@@ -95,7 +97,9 @@ class PersonTracker:
         self.switches = 0
 
     def in_range(self, d: PersonDetection) -> bool:
-        return float(np.linalg.norm(d.floor_mm - self.center)) <= self.max_range
+        """追跡の対象にするか（来場者側 かつ マット中心から max_range 以内）。"""
+        return (float(np.linalg.norm(d.floor_mm - self.center)) <= self.max_range
+                and float(d.floor_mm[1]) <= self.visitor_y_max)
 
     def update(self, t: float, dets: list[PersonDetection], ref_mm: np.ndarray | None) -> TrackedPerson | None:
         """検出結果を取り込み、追跡中の1人（いなければ None）を返す。ref_mm はヘビの首の位置。"""

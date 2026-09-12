@@ -32,7 +32,7 @@ def test_reaction_delay_surprise_and_alert(cfg: dict) -> None:
     for seed in range(4):
         s = SimSession(cfg, BodyPose(200.0, 400.0, 0.0), seed=seed)
         run_until(s, 3.0)
-        s.people = [SimPerson(1500.0, 800.0)]
+        s.people = [SimPerson(900.0, -300.0)]
         t0 = s.t
         ev: list = []
         frozen_seen = []
@@ -48,8 +48,9 @@ def test_reaction_delay_surprise_and_alert(cfg: dict) -> None:
 def test_approach_two_stage_stops_short_and_slow_near_person(cfg: dict) -> None:
     """f. 2段階の接近、1m 以内は 8cm/s 以下、頭先端から 400mm 手前で停止（人がマットの上にいる場合）。"""
     c = cfg["behavior"]["controller"]
-    s = SimSession(cfg, BodyPose(60.0, 150.0, 0.0), seed=2)
-    person = np.array([1000.0, 1000.0])
+    # 尾をマット奥に置き、来場者（y<0）へ向かって十分な距離を進める配置にする
+    s = SimSession(cfg, BodyPose(300.0, 1150.0, -math.pi / 2), seed=2)
+    person = np.array([600.0, -500.0])
     s.people = [SimPerson(*person)]
     ev: list = []
     track: list[tuple[float, np.ndarray, float]] = []
@@ -111,23 +112,31 @@ def test_lonely_and_uncurious_goes_to_sleep(cfg: dict) -> None:
     assert s.head.eye_rgb_brightness[3] == cfg["behavior"]["eyes"]["SLEEP"][3]
 
 
-def test_patrol_keeps_off_the_mat_edge(cfg: dict) -> None:
-    """巡回中、マット端に押し付けられる（クランプされる）時間はわずか。"""
-    s = SimSession(cfg, BodyPose(300.0, 600.0, 0.0), seed=6)
-    clamped = []
-    run_until(s, 60.0, hook=lambda ss: clamped.append(ss.world.clamped))
-    assert np.mean(clamped) < 0.1
+@pytest.mark.parametrize("seed", [6, 3, 11])
+def test_patrol_keeps_off_the_mat_edge(cfg: dict, seed: int) -> None:
+    """巡回中、マット端に押し付けられる（クランプされる）時間は 1% 未満。
+
+    BodyPose は尾端の姿勢。尾を x=150 に置くと頭は x=1000 で、マット（1200）の内側に収まる。
+    """
+    s = SimSession(cfg, BodyPose(150.0, 600.0, 0.0), seed=seed)
+    clamped, moved = [], []
+    run_until(s, 90.0, hook=lambda ss: (clamped.append(ss.world.clamped),
+                                        moved.append((ss.snake.x, ss.snake.y) if ss.snake else None)))
+    assert np.mean(clamped) < 0.01
+    pts = np.array([m for m in moved if m is not None])
+    travel = float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)))
+    assert travel > 5000.0          # 止まって 0% になっていないこと（90秒で 5m 以上動く）
 
 
 def test_person_rushing_in_causes_retreat(cfg: dict) -> None:
     s = SimSession(cfg, BodyPose(200.0, 600.0, 0.0), seed=7)
-    s.people = [SimPerson(1800.0, 600.0)]
+    s.people = [SimPerson(600.0, -1000.0)]
     run_until(s, 12.0)
     ev: list = []
 
     def rush(ss: SimSession) -> None:
         k = min(max(ss.t - 12.0, 0.0), 2.0)
-        ss.people = [SimPerson(1800.0 - 450.0 * k, 600.0)]
+        ss.people = [SimPerson(600.0, -1000.0 + 450.0 * k)]
 
     run_until(s, 20.0, ev, hook=rush)
     assert any("→RETREAT" in e for _, e in ev)

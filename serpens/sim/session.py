@@ -95,7 +95,8 @@ class SimSession:
         frame = self.head.latest
         touch = bool(frame and (frame.touch_head or frame.touch_back))
         person_xy = None if self.target is None else self.target.floor_mm
+        loads = [abs(v.load) for v in self.poller.states.values()]
         self.status = self.brain.tick(t, Percept(self.snake, person_xy, self._serial, touch,
-                                                 self.poller.max_temperature_c()))
+                                                 self.poller.max_temperature_c(), max(loads, default=0.0)))
         self.anim.send(self.bus, self.anim.update(t))
         return self.status

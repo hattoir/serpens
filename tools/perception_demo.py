@@ -37,9 +37,9 @@ FRAME_DT = 0.1            # カメラ 10fps
 DURATION_S = 24.0
 START = BodyPose(380.0, 380.0, 0.0)
 # 人の経路: (時刻 s, x mm, y mm) の折れ線
-PATH_A = [(0.0, -450.0, 1500.0), (24.0, -450.0, 300.0)]   # マットの左側（カメラとマットの間に立つとマーカが隠れる）
-PATH_B = [(0.0, 2200.0, 2200.0), (6.0, 1500.0, 1500.0), (9.0, 1150.0, 1250.0), (14.0, 1150.0, 1250.0), (18.0, 2300.0, 2300.0), (24.0, 2400.0, 2400.0)]
-VIEW_MM = (-900.0, 2300.0)          # 俯瞰図の表示範囲（x, y 共通）
+PATH_A = [(0.0, -100.0, -500.0), (24.0, 1300.0, -500.0)]   # 来場者側（y<0）を横切る
+PATH_B = [(0.0, 700.0, -2200.0), (6.0, 700.0, -900.0), (9.0, 700.0, -350.0), (14.0, 700.0, -350.0), (18.0, 700.0, -2000.0), (24.0, 700.0, -2400.0)]
+VIEW_MM = (-1300.0, 1900.0)          # 俯瞰図の表示範囲（x, y 共通）
 VIEW_PX = 540
 GIF_SCALE = 0.5                     # カメラ画像を GIF 用に縮小
 
@@ -97,7 +97,6 @@ def main() -> None:
     plt.rcParams["font.family"] = ["Yu Gothic", "Meiryo", "MS Gothic", "sans-serif"]
     cfg = load_config()
     cam = VirtualCamera(cfg)
-    cfg["camera"]["position_mm"] = cfg["virtual_camera"]["position_mm"]   # 仮想カメラの位置は既知
     locator = ArucoLocator(cfg, cam.homography)
     people_det, tracker = SimPersonDetector(cam, cam.homography), PersonTracker(cfg)
     world, gait = World(cfg, START), GaitEngine(cfg)

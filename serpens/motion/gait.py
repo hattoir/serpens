@@ -128,9 +128,11 @@ class GaitEngine:
             return math.inf
         return self._full_scale / (self._ramp_periods * period)
 
-    def stop(self) -> None:
-        """振幅を blend_s かけて 0 にする。"""
+    def stop(self, immediate: bool = False) -> None:
+        """振幅を 0 にする。immediate=True なら即座に（安全停止用）、通常は blend_s かけて。"""
         self._target_gain = 0.0
+        if immediate:
+            self._gain = 0.0
 
     def update(self, t: float) -> dict[str, float]:
         """時刻 t の胴体関節角を返す。停止中は空 dict。"""
