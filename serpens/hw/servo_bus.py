@@ -124,6 +124,27 @@ class ServoBus(ABC):
         """一括読み出しが使えるなら True（読み出し頻度の選択に使う）。"""
         return True
 
+    # ---- レジスタ単位（実機のセットアップ用。docs/sts3215_registers.md を参照） ----
+    def read_register(self, servo_id: int, addr: int, size: int) -> int | None:
+        """レジスタを読む。読めなければ None。"""
+        raise NotImplementedError
+
+    def write_register(self, servo_id: int, addr: int, size: int, value: int, eeprom: bool = False) -> bool:
+        """レジスタを書く。eeprom=True なら書き込みロックを外してから書き、書いたら戻す。"""
+        raise NotImplementedError
+
+    def scan(self, ids: list[int] | None = None) -> list[int]:
+        """応答する ID を探す。"""
+        return [sid for sid in (ids if ids is not None else self.ids) if self.ping(sid)]
+
+    def set_servo_id(self, old_id: int, new_id: int) -> bool:
+        """ID を変更する（EEPROM）。"""
+        raise NotImplementedError
+
+    def supports_sync_read(self) -> bool:
+        """SYNC READ に応答するか実際に試す。"""
+        return len(self.sync_read_states(self.ids[:2])) == min(2, len(self.ids))
+
     # ---- 実装が必要なもの ----------------------------------------------------
     @abstractmethod
     def connect(self) -> None:

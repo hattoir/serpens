@@ -25,6 +25,8 @@ log = logging.getLogger(__name__)
 
 # --- レジスタ（docs/sts3215_registers.md §4）。SDK に定数が無いものだけ自前で定義 ---
 ADDR_TORQUE_LIMIT = 48          # トルク制限 2byte, 0〜1000
+ADDR_LOCK = 55                  # EEPROM 書き込みロック（0 = 保存する / 1 = 保存しない）
+ADDR_ID = 5
 # 状態の一括読み出し: 56〜63 = 位置2, 速度2, 負荷2, 電圧1, 温度1
 READ_BLOCK_START = SMS_STS_PRESENT_POSITION_L
 READ_BLOCK_LEN = 8
@@ -236,6 +238,47 @@ class FeetechServoBus(ServoBus):
                 # data_dict[sid] は [ERROR, データ…]（SDK group_sync_read.readRx）
                 out[sid] = list(g.data_dict[sid][1:1 + length])
         return out
+
+    # ---- レジスタ単位（tools/servo_setup.py 用） --------------------------------
+    def read_register(self, servo_id: int, addr: int, size: int) -> int | None:
+        """レジスタを読む（1 / 2 バイト。リトルエンディアン）。"""
+        with self._lock:
+            data, result, _err = self._handler().readTxRx(servo_id, addr, size)
+        if result != COMM_SUCCESS:
+            return None
+        return data[0] if size == 1 else le_word(data[0], data[1])
+
+    def write_register(self, servo_id: int, addr: int, size: int, value: int, eeprom: bool = False) -> bool:
+        """レジスタを書く。
+
+        EEPROM は書き込みロック（55番地）を 0 にしてから書き、書いたら 1 に戻す。
+        機種によっては EEPROM 書き込み時にトルク OFF が必要なので、念のため先にトルクを切る
+        （docs/sts3215_registers.md §6 の未確認事項。実機で確認すること）。
+        """
+        ph = self._handler()
+        with self._lock:
+            if eeprom:
+                ph.write1ByteTxRx(servo_id, SMS_STS_TORQUE_ENABLE, 0)
+                ph.write1ByteTxRx(servo_id, ADDR_LOCK, 0)
+            if size == 1:
+                result, _ = ph.write1ByteTxRx(servo_id, addr, int(value))
+            else:
+                result, _ = ph.write2ByteTxRx(servo_id, addr, int(value))
+            if eeprom:
+                ph.write1ByteTxRx(servo_id, ADDR_LOCK, 1)
+        return result == COMM_SUCCESS
+
+    def set_servo_id(self, old_id: int, new_id: int) -> bool:
+        """ID を変更する（EEPROM）。変更後は joints の対応も付け替える。"""
+        if not self.write_register(old_id, ADDR_ID, 1, new_id, eeprom=True):
+            return False
+        if old_id in self.joints:
+            self.joints[new_id] = self.joints.pop(old_id)
+        return True
+
+    def scan(self, ids: list[int] | None = None) -> list[int]:
+        """応答する ID を探す（既定は 1〜253）。"""
+        return [sid for sid in (ids if ids is not None else range(1, 254)) if self.ping(sid)]
 
     # ---- 内部 -----------------------------------------------------------------
     def _handler(self) -> Any:

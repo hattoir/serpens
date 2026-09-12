@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import math
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from serpens.hw import registers as reg
 from serpens.hw.servo_bus import Goal, ServoBus, ServoCommError, ServoState
 
 Clock = Callable[[], float]
@@ -29,6 +30,7 @@ class _AxisSim:
     goal: Goal
     temp_c: float
     torque_on: bool = False
+    registers: dict[int, int] = field(default_factory=dict)
     torque_ratio: float = 1.0
     external_load: float = 0.0
     load: float = 0.0
@@ -45,11 +47,15 @@ class MockServoBus(ServoBus):
         self._clock: Clock = clock or time.monotonic
         self._step_s = float(m["integration_step_s"])
         self._deg_per_step = 360.0 / float(s["steps_per_rev"])
+        self._center = int(s["center_step"])
+        self._load_sign_bit = s.get("load_sign_bit")
+        self._load_unit = s["load_unit"]
         self._vmax_dps = float(s["speed_max_step_s"]) * self._deg_per_step
         init = float(m["initial_deg"])
         hold = Goal(init, self._vmax_dps, math.inf)
         self._axes: dict[int, _AxisSim] = {
-            sid: _AxisSim(init, 0.0, hold, float(m["ambient_c"])) for sid in self.ids
+            sid: _AxisSim(init, 0.0, hold, float(m["ambient_c"]), registers=self._default_registers(sid))
+            for sid in self.ids
         }
         self._connected = False
         self._last_t = self._clock()
@@ -104,6 +110,66 @@ class MockServoBus(ServoBus):
             volt = float(self._m["voltage_nominal_v"]) - float(self._m["voltage_sag_v"]) * abs(ax.load)
             out[sid] = ServoState(ax.pos_deg, ax.load, volt, ax.temp_c)
         return out
+
+    # ---- レジスタ（実機セットアップのツールを、実機なしで試せるように） ----------------
+    @staticmethod
+    def _default_registers(servo_id: int) -> dict[int, int]:
+        """資料どおりの初期値。**最高入力電圧は 8.0V のまま**なので、12V の罠も再現できる。"""
+        d = {r.addr: int(r.default) for r in reg.STARTUP_CHECK if r.default is not None}
+        d[reg.ID.addr] = servo_id
+        d[reg.BAUD_RATE.addr] = int(reg.BAUD_RATE.default or 0)
+        d[reg.LOCK_ADDR] = 1
+        d[reg.STATUS.addr] = 0
+        return d
+
+    def read_register(self, servo_id: int, addr: int, size: int) -> int | None:
+        ax = self._axis(servo_id)
+        self._update()
+        live = {reg.PRESENT_VOLTAGE.addr: int(round((float(self._m["voltage_nominal_v"])
+                                                     - float(self._m["voltage_sag_v"]) * abs(ax.load)) * 10)),
+                reg.PRESENT_TEMPERATURE.addr: int(round(ax.temp_c)),
+                reg.PRESENT_LOAD.addr: self._encode_load(ax.load),
+                reg.PRESENT_POSITION.addr: int(round(ax.pos_deg / self._deg_per_step)) + self._center,
+                reg.TORQUE_ENABLE.addr: int(ax.torque_on)}
+        if addr in live:
+            return live[addr]
+        return ax.registers.get(addr, 0)
+
+    def _encode_load(self, load: float) -> int:
+        """負荷を「下位10bit = 大きさ、bit10 = 方向」の仮説どおりに符号化する（符号ビットの検証用）。"""
+        bit = self._load_sign_bit
+        mag = min(int(round(abs(load) / float(self._load_unit))), (1 << bit) - 1) if bit else 0
+        if bit is None:
+            return min(int(round(abs(load) / float(self._load_unit))), 0xFFFF)
+        return mag | ((1 << bit) if load < 0 else 0)
+
+    def write_register(self, servo_id: int, addr: int, size: int, value: int, eeprom: bool = False) -> bool:
+        """レジスタに書く。
+
+        eeprom=True は実機と同じ手順（トルクOFF → ロック解除 → 書く → ロック）を模す。
+        EEPROM 領域へ eeprom=False で書こうとすると、ロックされていて保存されない（実機と同じ失敗）。
+        """
+        ax = self._axis(servo_id)
+        if eeprom:
+            self.set_torque(servo_id, False)
+            ax.registers[reg.LOCK_ADDR] = 0
+        elif addr in reg.EEPROM_ADDRS and ax.registers.get(reg.LOCK_ADDR, 1) == 1:
+            return False
+        ax.registers[addr] = int(value)
+        if eeprom:
+            ax.registers[reg.LOCK_ADDR] = 1
+        if addr == reg.TORQUE_ENABLE.addr:
+            self.set_torque(servo_id, bool(value))
+        return True
+
+    def set_servo_id(self, old_id: int, new_id: int) -> bool:
+        if new_id in self._axes:
+            return False
+        ax = self._axes.pop(old_id)
+        ax.registers[reg.ID.addr] = new_id
+        self._axes[new_id] = ax
+        self.joints[new_id] = self.joints.pop(old_id)
+        return True
 
     # ---- 内部 -----------------------------------------------------------------
     def _axis(self, servo_id: int) -> _AxisSim:

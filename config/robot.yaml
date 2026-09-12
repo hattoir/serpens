@@ -373,6 +373,7 @@ servo:
   load_sign_bit: 10
   torque_limit_full: 1000    # トルク制限 1000 = 100%
   temperature_limit_c: 70    # [M] 最高温度の初期値
+  supply_voltage_v: 12.0     # 電源電圧（tools/servo_setup.py が EEPROM の電圧設定と比べる）
   stall_torque_kgfcm: 30.0   # 12V 時
   continuous_torque_ratio: 0.333  # 連続実用トルク = ストールの 1/3
   sync_read: true            # SYNC READ を使う（非対応なら自動で個別 READ に落ちる）
