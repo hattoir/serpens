@@ -160,7 +160,15 @@ def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, Control
         from serpens.hw.servo_bus import make_bus
 
         bus = make_bus("feetech", cfg, args.port)
-        bus.connect()
+        try:
+            bus.connect()
+        except Exception as e:                 # noqa: BLE001 - ポートが無い・使用中など何でも
+            raise SystemExit(
+                f"サーボバスに接続できません（{args.port}）: {e}\n"
+                "  1. USB が挿さっているか（ポート一覧: python tools/servo_setup.py → メニュー 1）\n"
+                "  2. 他のソフトが COM を掴んでいないか\n"
+                "  3. 12V 電源が入っているか\n"
+                "  実機が無いときは --sim で動かしてください") from e
         for sid in bus.ids:
             bus.set_torque(sid, True)
         session.bus = bus                      # 実機へ送る（シミュレータの世界はそのまま動かす）
