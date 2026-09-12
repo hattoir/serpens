@@ -6,10 +6,15 @@
 
 制御は 50Hz の専用スレッド（serpens/runner.py）、GUI の描画は 10fps。
 ネットワークには一切つながない（YOLO の自動ダウンロード・自動更新は無効化してある）。
+
+実機経路（--bus feetech）では、サーボバスと頭部 I/O を**セッションより先に作って注入**する。
+監視・指令・トルク操作が同じ接続先を参照することを、ここで確定させる。
+実機は待機（停止）から始まり、開始条件（実観測の自己位置・校正・駆動リンク）が揃うまで走らない。
 """
 from __future__ import annotations
 
 import argparse
+import math
 import os
 import sys
 import threading
@@ -67,6 +72,11 @@ class SimCamera(threading.Thread):
     def latest(self) -> np.ndarray | None:
         return self.frame
 
+    def release(self) -> None:
+        """スレッドを止める（仮想カメラは解放するものが無い）。"""
+        self.stop()
+        self.join(timeout=1.0)
+
 
 class RealCamera(threading.Thread):
     """実カメラを別スレッドで読み、ArUco と人を検出する。
@@ -108,14 +118,30 @@ class RealCamera(threading.Thread):
 
     def run(self) -> None:
         period = 1.0 / self.hz
+        hold_s = float(self.cfg["person"]["hold_s"])
+        last_ok = time.monotonic()
         while not self._stop_evt.is_set():
             t0 = time.perf_counter()
             ok, frame = self.src.read()
             if ok and frame is not None:
                 self.frame = frame
+                last_ok = time.monotonic()
                 if self.locator is not None:
                     self._process(frame)
+            elif time.monotonic() - last_ok > hold_s and self.session is not None:
+                # カメラが止まったら、古い人物座標を新しい検出として使わせない
+                self.session.people = []
+                self.frame = None
             time.sleep(max(period - (time.perf_counter() - t0), 0.0))
+
+    def release(self) -> None:
+        """スレッドを止めてカメラを解放する。"""
+        self.stop()
+        self.join(timeout=1.0)
+        try:
+            self.src.release()
+        except Exception as e:                    # noqa: BLE001 - 解放失敗も伝える
+            print(f"[注意] カメラの解放に失敗: {e}")
 
     def _process(self, frame: np.ndarray) -> None:
         import cv2
@@ -151,40 +177,65 @@ def _demo_script(loop: ControlLoop) -> None:
         fn()
 
 
-def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, ControlLoop, Any]:
-    """設定・セッション・制御ループ・映像ソースを作る。"""
-    cfg = load_config()
-    start = BodyPose(float(cfg["sim"]["start_tail_x_mm"]), float(cfg["sim"]["start_tail_y_mm"]), 0.0)
-    session = SimSession(cfg, start, seed=args.seed)
-    if args.bus == "feetech":
-        from serpens.hw.servo_bus import make_bus
+def _open_real_bus(cfg: dict[str, Any], port: str | None) -> Any:
+    """実機のサーボバスを開く（失敗したら原因の候補を出して終了）。"""
+    from serpens.hw.servo_bus import make_bus
 
-        bus = make_bus("feetech", cfg, args.port)
-        try:
-            bus.connect()
-        except Exception as e:                 # noqa: BLE001 - ポートが無い・使用中など何でも
-            raise SystemExit(
-                f"サーボバスに接続できません（{args.port}）: {e}\n"
-                "  1. USB が挿さっているか（ポート一覧: python tools/servo_setup.py → メニュー 1）\n"
-                "  2. 他のソフトが COM を掴んでいないか\n"
-                "  3. 12V 電源が入っているか\n"
-                "  実機が無いときは --sim で動かしてください") from e
-        for sid in bus.ids:
-            bus.set_torque(sid, True)
-        session.bus = bus                      # 実機へ送る（シミュレータの世界はそのまま動かす）
-        print(f"実機のサーボへ接続しました: {args.port}")
-    loop = ControlLoop(session, realtime=True)
-    if args.camera is not None:
-        cam: Any = RealCamera(cfg, args.camera, session)
+    bus = make_bus("feetech", cfg, port)
+    try:
+        bus.connect()
+    except Exception as e:                     # noqa: BLE001 - ポートが無い・使用中など何でも
+        raise SystemExit(
+            f"サーボバスに接続できません（{port}）: {e}\n"
+            "  1. USB が挿さっているか（ポート一覧: python tools/servo_setup.py → メニュー 1）\n"
+            "  2. 他のソフトが COM を掴んでいないか\n"
+            "  3. 12V 電源が入っているか\n"
+            "  実機が無いときは --sim で動かしてください") from e
+    for sid in bus.ids:
+        bus.set_torque(sid, True)
+    print(f"実機のサーボへ接続しました: {port}")
+    return bus
+
+
+def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, ControlLoop, Any]:
+    """設定・出力先・セッション・制御ループ・映像ソースを作る。
+
+    実機経路では**セッションより先に**バスと頭部を作り、注入する（参照を1つにそろえる）。
+    途中で失敗したら、そこまでに開いたものを閉じてから投げ直す。
+    """
+    cfg = load_config()
+    start = BodyPose(float(cfg["sim"]["start_tail_x_mm"]), float(cfg["sim"]["start_tail_y_mm"]),
+                     math.radians(float(cfg["sim"]["start_theta_deg"])))
+    real = args.bus == "feetech"
+    bus = _open_real_bus(cfg, args.port) if real else None
+    head: Any = None
+    try:
+        if args.head_port:
+            from serpens.hw.head_io import SerialHeadIO
+
+            head = SerialHeadIO(cfg, args.head_port)
+            print(f"頭部 I/O へ接続します: {args.head_port}")
+        elif real:
+            print("[注意] 頭部 I/O 未接続（--head-port 未指定）。ToF・タッチ・目は使えません。"
+                  "モックを実センサーとしては使いません")
+        session = SimSession(cfg, start, seed=args.seed, bus=bus, head=head, robot_is_real=real)
+        loop = ControlLoop(session, realtime=True)
+        cam: Any = RealCamera(cfg, args.camera, session) if args.camera is not None else SimCamera(cfg, session)
         cam.start()
-        for n in cam.notes:
+        for n in getattr(cam, "notes", []):
             print(f"[注意] {n}")
-        source = cam.latest
-    else:
-        cam = SimCamera(cfg, session)
-        cam.start()
-        source = cam.latest
-    return cfg, session, loop, (source, cam)
+    except BaseException:
+        if head is not None:
+            head.close()
+        if bus is not None:
+            bus.disconnect(torque_off=False)
+        raise
+    if real:
+        print(f"駆動状態: {session.stop.status_text()}")
+        for b in session.blockers():
+            print(f"[開始条件] {b}")
+        print("  ※ 上が解消されるまで実機の自律走行は開始できません（G を押しても動きません）")
+    return cfg, session, loop, (cam.latest, cam)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -194,6 +245,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--camera", default=None, help="カメラ番号 / 動画 / 画像")
     ap.add_argument("--bus", choices=["mock", "feetech"], default="mock", help="サーボバス")
     ap.add_argument("--port", default=None, help="実機のCOMポート（例: COM5）")
+    ap.add_argument("--head-port", default=None, help="頭部 XIAO ESP32S3 のCOMポート（例: COM6）")
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--seconds", type=float, default=None, help="この秒数で自動終了（動作確認用）")
     ap.add_argument("--record", default=None, help="GUI を GIF に記録する（--seconds と併用）")
@@ -218,13 +270,16 @@ def main(argv: list[str] | None = None) -> int:
 
             run_gui(loop, cfg, source, seconds=args.seconds, record=args.record)
     finally:
-        loop.stop()
+        errors = loop.shutdown()               # 停止を出力へ → join → 切断
         if cam is not None:
-            cam.stop()
+            cam.release()                      # カメラ解放（スレッド join 込み）
+        for msg in errors:
+            print(f"[終了時の問題] {msg}")
     s = loop.stats
     print(f"制御周期: 目標 {1000 / s.target_hz:.1f}ms / 実測 平均 {s.mean_ms:.2f}ms 最悪 {s.worst_ms:.2f}ms "
           f"（{s.count} 回、20%以上の遅延 {s.late_count} 回）")
-    return 0
+    print(f"終了時の駆動状態: {session.stop.status_text()}")
+    return 1 if errors else 0
 
 
 if __name__ == "__main__":

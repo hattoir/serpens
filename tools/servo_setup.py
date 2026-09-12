@@ -118,7 +118,15 @@ def assign_ids(bus: ServoBus, cfg: dict) -> None:
     targets = [int(j["servo_id"]) for j in cfg["joints"]]
     print(f"  {targets[0]}〜{targets[-1]} を順に振ります。**サーボは1個だけつないでください**")
     for target in targets:
-        if not ask(f"  ID {target} にするサーボを1個だけ繋いで Enter（s で飛ばす、q で中断）: ") in ("", "s", "q"):
+        ans = ask(f"  ID {target} にするサーボを1個だけ繋いで Enter（s で飛ばす、q で中断）: ").lower()
+        if ans == "q":
+            print("    中断しました（ID は書き換えていません）")
+            return
+        if ans == "s":
+            print(f"    ID {target} は飛ばしました")
+            continue
+        if ans != "":
+            print("    Enter / s / q のどれかを入れてください")
             continue
         found = bus.scan(list(range(1, 21)))
         if len(found) != 1:

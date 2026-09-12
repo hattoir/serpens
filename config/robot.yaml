@@ -266,6 +266,20 @@ behavior:
     grab_load_ratio: 0.75       # どれかの軸の負荷率がこれを超え
     grab_hold_s: 0.8            # この時間続いたら「掴まれた」とみなして脱力（PETTED）
     fence_stop_reason: "安全: マット端。停止して中央へ向き直る"
+    # 停止の種類（serpens/safety.py）。停止で勝手にホーム姿勢へ動かしたり脱力したりしない
+    stop:
+      emergency_action: hold        # hold（姿勢保持）/ disable_torque（脱力。**実機未検証**）
+      hold_resend_hz: 20.0          # 停止中に保持指令を送り直す頻度（最後の目標まで動き続けるのを止める）
+      disable_torque_on_exit: false # 終了時に脱力するか（既定は保持したまま切断。**実機未検証**）
+    # テレメトリの鮮度。これより古い値は「不明」として扱い、正常表示にしない
+    telemetry:
+      stale_after_s: 2.0
+    # 実機の自律走行を許可する条件（シミュレーションのデモには適用しない）
+    autonomy:
+      require_real_pose: true       # 実観測（ArUco）の自己位置が必要。仮想位置では走らせない
+      pose_max_age_s: 0.5
+      require_calibration: true     # 床の校正ファイルが必要
+      require_drive_link: true      # ESP32 駆動リンク（heartbeat）が必要。Phase 2 までは実機走行不可
   # 効用（utility.py の式の係数）
   utility:
     noise_ratio: 0.08         # 効用に ±8% の乱数

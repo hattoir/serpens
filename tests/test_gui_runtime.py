@@ -93,9 +93,17 @@ def test_keys(cfg: dict) -> None:
     assert session.brain.fsm.state == "PATROL"
     assert "デモ" in handle(loop, "d") and session.people
     assert "消した" in handle(loop, "d") and not session.people
-    assert handle(loop, "s") == "全停止" and loop.paused
-    assert handle(loop, "s") == "全停止を解除" and not loop.paused
+    # 停止は3種類。S は機体の通常停止（一時停止ではない）、P がシミュレーションの一時停止
+    assert "通常停止" in handle(loop, "s") and not session.stop.moving_allowed
+    assert not loop.paused, "S で制御ループを止めてはいけない（監視は続ける）"
+    assert "開始" in handle(loop, "g") and session.stop.moving_allowed
+    assert "一時停止" in handle(loop, "p") and loop.paused
+    assert "解除" in handle(loop, "p") and not loop.paused
+    assert "緊急停止" in handle(loop, "e") and session.stop.latched
+    assert "停止中" in handle(loop, "h"), "緊急停止中に姿勢を変えようとした"
+    assert "解除" in handle(loop, "u") and not session.stop.latched
     assert "tools" in handle(loop, "c")
+    handle(loop, "g")
     handle(loop, "t")
     session.step()
     assert session.head.touch_head

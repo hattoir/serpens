@@ -3,7 +3,8 @@
   左上 カメラ映像（人物枠 / ArUco 枠 / 追跡中の1人をハイライト）… gui/panes.py
   右上 俯瞰マップ（マット・仮想フェンス・9軸を反映したヘビの形・θ_body と θ_head・人・目標点）… gui/panes.py
   左下 内部状態（Curiosity / Affection / Energy / Heat(℃) / Stress）
-  右下 いま何を考えているか（日本語1行）＋ 状態 ＋ 次の遷移までの秒数 ＋ 各軸の負荷と温度
+  右下 駆動状態（走行 / 停止 / 緊急停止）＋ いま何を考えているか（日本語1行）
+       ＋ 状態 ＋ 次の遷移までの秒数 ＋ 各軸の負荷と温度（古い値は「—」で出す）
 
 描画は 10fps。制御ループは別スレッド（serpens/runner.py）なので、描画が重くても周期は乱れない。
 """
@@ -87,19 +88,33 @@ class ThoughtPane(QWidget):
             p.end()
             return
         dist = head_distance_mm(s.snake_xy, s.target_xy, self.cfg)
-        p.setFont(font(26))
-        p.setPen(ACCENT)
-        p.drawText(16, 40, f"{st.state_ja}")
-        p.setFont(font(16))
-        p.setPen(TEXT)
-        p.drawText(180, 40, f"次の切替まで {st.time_to_next_s:4.1f} 秒" + ("" if not st.safety else f"　安全: {st.safety}"))
+        # 駆動状態（走行 / 停止 / 緊急停止）を最初に、色を変えて出す
+        drive_col = {"RUN": BODY, "HOLD": ACCENT, "DISABLED": ACCENT, "EMERGENCY": WARN}.get(s.drive_state, TEXT)
+        p.setFont(font(24))
+        p.setPen(drive_col)
+        p.drawText(16, 34, s.drive_text or s.drive_state)
         p.setFont(font(20))
+        p.setPen(ACCENT)
+        p.drawText(16, 66, f"{st.state_ja}")
+        p.setFont(font(15))
         p.setPen(TEXT)
-        self._wrap(p, 16, 78, self.width() - 32, sentence(st, self.cfg, dist), 26)
+        p.drawText(150, 66, f"次の切替まで {st.time_to_next_s:4.1f} 秒" + ("" if not st.safety else f"　安全: {st.safety}"))
+        p.setFont(font(19))
+        p.setPen(TEXT if s.drive_state == "RUN" else SUBTEXT)
+        text = sentence(st, self.cfg, dist) if s.drive_state == "RUN" else "停止中（行動は止まっています）"
+        self._wrap(p, 16, 98, self.width() - 32, text, 24)
         p.setFont(font(14))
         p.setPen(SUBTEXT)
         p.drawText(16, 150, f"移動: {st.drive}")
-        y = 178
+        if s.fault:
+            p.setFont(font(15))
+            p.setPen(WARN)
+            self._wrap(p, 16, 170, self.width() - 32, f"異常: {s.fault}", 18)
+        elif s.blockers:
+            p.setFont(font(14))
+            p.setPen(WARN)
+            self._wrap(p, 16, 170, self.width() - 32, "開始条件: " + " / ".join(s.blockers), 18)
+        y = 206
         p.setFont(font(14))
         p.setPen(TEXT)
         p.drawText(16, y, "軸")
@@ -119,6 +134,11 @@ class ThoughtPane(QWidget):
                 hot = row == 1 and val >= float(self.cfg["behavior"]["safety"]["overheat_c"]) * 0.9
                 p.setPen(WARN if hot else TEXT)
                 p.drawText(60 + i * 58, yy, fmt.format(val))
+        p.setFont(font(13))
+        p.setPen(SUBTEXT)
+        src = s.telemetry_source or "—"
+        miss = "なし" if not s.missing_axes else " ".join(f"ID{i}" for i in s.missing_axes)
+        p.drawText(16, y + 74, f"テレメトリ: {src}　古い/未取得の軸: {miss}　頭部I/O: {s.head_link}")
         if s.stats is not None:
             p.setFont(font(13))
             p.setPen(SUBTEXT)

@@ -137,11 +137,11 @@ class FeetechServoBus(ServoBus):
         self._port, self._ph = port, sms_sts(port)
         log.info("connected %s", self._port_name)
 
-    def disconnect(self) -> None:
-        """全軸トルク OFF にしてポートを閉じる。"""
+    def disconnect(self, torque_off: bool = True) -> None:
+        """ポートを閉じる。torque_off=True のときだけ全軸のトルクを切る。"""
         if self._port is None:
             return
-        for sid in self.ids:
+        for sid in (self.ids if torque_off else []):
             try:
                 self.set_torque(sid, False)
             except ServoCommError as e:

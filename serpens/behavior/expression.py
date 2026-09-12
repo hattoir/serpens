@@ -54,6 +54,14 @@ class Expression:
     def pending(self, name: str) -> bool:
         return any(e[1] == name for e in self._events)
 
+    def clear(self) -> list[str]:
+        """予約済みの演出を全部捨てる（停止時。解除後に勝手に動き出さないようにする）。"""
+        names = [e[1] for e in self._events]
+        self._events.clear()
+        self.hold_until = self.busy_until = -1.0
+        self.next_tilt_t = float("inf")
+        return names
+
     def update(self, t: float) -> None:
         """時刻が来た予定を実行する。"""
         due = [e for e in self._events if e[0] <= t]

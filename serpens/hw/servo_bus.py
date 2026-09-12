@@ -151,8 +151,12 @@ class ServoBus(ABC):
         """バスに接続する。"""
 
     @abstractmethod
-    def disconnect(self) -> None:
-        """バスから切断する（可能ならトルクを切ってから）。"""
+    def disconnect(self, torque_off: bool = True) -> None:
+        """バスから切断する。
+
+        torque_off=False なら**トルクを入れたまま**閉じる（姿勢を保持して終わりたいとき）。
+        どちらが安全かは自重と頭部の支持で決まるので実機で確認すること（**未検証**）。
+        """
 
     @abstractmethod
     def ping(self, servo_id: int) -> bool:

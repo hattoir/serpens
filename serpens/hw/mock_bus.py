@@ -66,11 +66,12 @@ class MockServoBus(ServoBus):
         self._connected = True
         self._last_t = self._clock()
 
-    def disconnect(self) -> None:
-        """全軸トルク OFF にして切断。"""
+    def disconnect(self, torque_off: bool = True) -> None:
+        """切断する（torque_off=False ならトルクは入れたまま）。"""
         self._update()
-        for ax in self._axes.values():
-            ax.torque_on = False
+        if torque_off:
+            for ax in self._axes.values():
+                ax.torque_on = False
         self._connected = False
 
     def ping(self, servo_id: int) -> bool:

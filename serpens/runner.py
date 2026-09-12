@@ -1,5 +1,9 @@
 """制御ループ（別スレッド）と、GUI へ渡すスナップショット。
 
+制御スレッドで例外が起きたら、黙って死なせない。緊急停止をラッチして出力へ送り、
+`Snapshot.fault` に理由を載せて GUI とコンソールへ伝える。終了時は
+「停止を出力へ送る → スレッド join → 接続を閉じる」を必ず通り、失敗も報告する。
+
 GUI の描画が重くても制御周期が乱れないよう、制御は専用スレッドで一定周期（behavior.tick_hz）で回し、
 GUI は最新のスナップショットを 10fps で読むだけにする。実周期の平均・最悪値を測って表示する。
 
@@ -9,6 +13,7 @@ GUI は最新のスナップショットを 10fps で読むだけにする。実
 """
 from __future__ import annotations
 
+import logging
 import os
 import threading
 import time
@@ -19,9 +24,11 @@ import numpy as np
 
 from serpens.behavior.brain import BrainStatus
 from serpens.hw.servo_bus import ServoState
+from serpens.safety import DriveState
 from serpens.sim.session import SimSession
 from serpens.sim.virtual_camera import SimPerson
 
+log = logging.getLogger(__name__)
 THREAD_PRIORITY_ABOVE_NORMAL = 1
 
 
@@ -58,6 +65,15 @@ class Snapshot:
     target_xy: tuple[float, float] | None = None
     waypoint: tuple[float, float] | None = None
     servo: dict[int, ServoState] = field(default_factory=dict)
+    servo_age_s: dict[int, float | None] = field(default_factory=dict)   # 軸ごとの古さ（None = 未取得）
+    telemetry_source: str = ""          # 値の出どころ（MockServoBus / FeetechServoBus）
+    missing_axes: list[int] = field(default_factory=list)
+    drive_state: str = DriveState.HOLD.value
+    drive_text: str = ""                # 「停止（姿勢保持）: 理由」
+    latched: bool = False
+    blockers: list[str] = field(default_factory=list)      # 自律走行を許可できない理由
+    fault: str = ""                     # 制御スレッドの例外・停止失敗
+    head_link: str = "なし"
     frame: np.ndarray | None = None           # カメラ画像（BGR）
     detections: list[tuple[float, float, float, float]] = field(default_factory=list)
     tracked_bbox: tuple[float, float, float, float] | None = None
@@ -78,8 +94,10 @@ class ControlLoop(threading.Thread):
         self.snapshot = Snapshot(stats=self.stats)
         self._lock = threading.Lock()
         self._stop_evt = threading.Event()   # Thread._stop と名前が衝突しないように
-        self.paused = False
+        self.paused = False                  # **シミュレーションの一時停止だけ**（実機停止ではない）
         self.message = ""
+        self.fault = ""
+        self.shutdown_errors: list[str] = []
 
     def stop(self) -> None:
         self._stop_evt.set()
@@ -93,14 +111,70 @@ class ControlLoop(threading.Thread):
             if self.realtime and now < next_t:
                 time.sleep(min(next_t - now, self.dt))
                 continue
-            if not self.paused:
-                self.session.step()
+            try:
+                if self.paused:
+                    self.session.enforce_stop_output()   # 一時停止中も保持指令は出す
+                else:
+                    self.session.step()
+            except Exception as e:                       # noqa: BLE001 - 何が起きても機体を止める
+                self._on_fault(e)
+                break
             self.stats.add(now - last)
             last = now
             next_t += self.dt
             if self.realtime and next_t < now - self.dt:   # 大きく遅れたら追いつくのをあきらめる
                 next_t = now + self.dt
             self._publish()
+
+    def _on_fault(self, e: Exception) -> None:
+        """制御スレッドの例外: 緊急停止をラッチして出力へ送り、理由を残す。"""
+        self.fault = f"制御ループ例外: {type(e).__name__}: {e}"
+        log.exception("制御ループが例外で停止しました")
+        try:
+            self.session.request_emergency(self.fault, "system")
+            self.session.enforce_stop_output()
+        except Exception as e2:                          # noqa: BLE001 - 停止失敗も握りつぶさない
+            self.fault += f" / 停止要求も失敗: {e2}"
+            log.error("停止要求に失敗: %s", e2)
+        self._publish()
+
+    # ---- 停止・終了 --------------------------------------------------------------
+    def request_stop(self, reason: str, source: str = "操作") -> bool:
+        """通常停止（出力へ届く）。"""
+        ok = self.session.request_stop(reason, source)
+        self.session.enforce_stop_output()
+        return ok
+
+    def request_emergency(self, reason: str, source: str = "操作") -> bool:
+        """緊急停止（ラッチ・出力へ届く）。"""
+        ok = self.session.request_emergency(reason, source)
+        self.session.enforce_stop_output()
+        return ok
+
+    def shutdown(self, timeout_s: float = 2.0) -> list[str]:
+        """停止を出力へ送り、スレッドを止め、接続を閉じる。失敗の一覧を返す。"""
+        errors: list[str] = []
+        try:
+            self.session.request_stop("終了", "system")
+            self.session.enforce_stop_output()
+        except Exception as e:                           # noqa: BLE001
+            errors.append(f"終了時の停止要求に失敗: {e}")
+        self._stop_evt.set()
+        if self.is_alive():
+            self.join(timeout=timeout_s)
+            if self.is_alive():
+                errors.append(f"制御スレッドが {timeout_s}s で終了しませんでした")
+        try:
+            errors += self.session.close()
+        except Exception as e:                           # noqa: BLE001
+            errors.append(f"接続の切断に失敗: {e}")
+        if self.fault:
+            errors.append(self.fault)
+        self.shutdown_errors = errors
+        for msg in errors:
+            log.error("%s", msg)
+        self._publish()
+        return errors
 
     @staticmethod
     def _boost_timer() -> None:
@@ -129,7 +203,13 @@ class ControlLoop(threading.Thread):
             people=[(p.x_mm, p.y_mm) for p in s.people],
             target_xy=None if s.target is None else (float(s.target.floor_mm[0]), float(s.target.floor_mm[1])),
             waypoint=None if s.brain._waypoint is None else (float(s.brain._waypoint[0]), float(s.brain._waypoint[1])),
-            servo=dict(s.poller.states), stats=self.stats, message=self.message)
+            servo=dict(s.poller.fresh_states(s.t)),
+            servo_age_s={sid: s.poller.age_s(sid, s.t) for sid in s.bus.ids},
+            telemetry_source=s.poller.source, missing_axes=s.poller.missing_axes(s.t),
+            drive_state=s.stop.state.value, drive_text=s.stop.status_text(), latched=s.stop.latched,
+            blockers=s.blockers(), fault=self.fault,
+            head_link=("なし" if s.head is None else ("接続" if s.head.link_ok() else "断")),
+            stats=self.stats, message=self.message)
         with self._lock:
             self.snapshot = snap
 

@@ -1,6 +1,9 @@
 """テスト共通の道具。"""
 from __future__ import annotations
 
+from serpens.hw.mock_bus import MockServoBus
+from serpens.hw.servo_bus import ServoCommError
+
 
 class FakeClock:
     """手で進める時計。"""
@@ -70,3 +73,51 @@ def hexbytes(hex_str: str) -> list[int]:
 def checksum(body: list[int]) -> int:
     """プロトコル資料 [P] §1.1 のチェックサム: ~(ID+LEN+INST+PARAM...) の下位1バイト。"""
     return ~sum(body) & 0xFF
+
+
+class RecordingBus(MockServoBus):
+    """モックの上に「何を送ったか」の記録を足したバス。
+
+    実機バスの代わりに注入して、停止指令が出力先まで届いたか・脱力したかを数える。
+    fail_after を指定すると、その回数を超えた読み出しで通信エラーを起こす（欠損・鮮度の試験用）。
+    """
+
+    def __init__(self, cfg: dict, clock=None, fail_after: int | None = None) -> None:  # type: ignore[no-untyped-def]
+        super().__init__(cfg, clock=clock)
+        self.goal_calls: list[dict[int, float]] = []
+        self.torque_calls: list[tuple[int, bool]] = []
+        self.read_calls = 0
+        self.id_changes: list[tuple[int, int]] = []
+        self.scans: list[list[int]] = []
+        self.disconnects: list[bool] = []
+        self.fail_after = fail_after
+
+    def _set_goals(self, goals):  # type: ignore[no-untyped-def]
+        self.goal_calls.append({sid: g.deg for sid, g in goals.items()})
+        super()._set_goals(goals)
+
+    def set_torque(self, servo_id: int, on: bool) -> None:
+        self.torque_calls.append((servo_id, on))
+        super().set_torque(servo_id, on)
+
+    def _read_states(self, ids):  # type: ignore[no-untyped-def]
+        self.read_calls += 1
+        if self.fail_after is not None and self.read_calls > self.fail_after:
+            raise ServoCommError("テスト: 応答なし")
+        return super()._read_states(ids)
+
+    def set_servo_id(self, old_id: int, new_id: int) -> bool:
+        self.id_changes.append((old_id, new_id))
+        return super().set_servo_id(old_id, new_id)
+
+    def scan(self, ids=None):  # type: ignore[no-untyped-def]
+        self.scans.append(list(ids) if ids is not None else list(self.ids))
+        return super().scan(ids)
+
+    def disconnect(self, torque_off: bool = True) -> None:
+        self.disconnects.append(torque_off)
+        super().disconnect(torque_off=torque_off)
+
+    @property
+    def last_pose(self) -> dict[int, float]:
+        return self.goal_calls[-1] if self.goal_calls else {}
