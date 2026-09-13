@@ -127,15 +127,21 @@ class ControlLoop(threading.Thread):
             self._publish()
 
     def _on_fault(self, e: Exception) -> None:
-        """制御スレッドの例外: 緊急停止をラッチして出力へ送り、理由を残す。"""
-        self.fault = f"制御ループ例外: {type(e).__name__}: {e}"
+        """制御スレッドの例外: 先に機体を止めてから、理由を公開する。
+
+        self.fault は GUI と監視が「異常を検知した」として読む唯一の合図なので、
+        緊急停止をラッチし切る前に代入してはいけない。先に代入すると、
+        fault が見えているのにまだ停止していない瞬間が外から観測できてしまう。
+        """
+        fault = f"制御ループ例外: {type(e).__name__}: {e}"
         log.exception("制御ループが例外で停止しました")
         try:
-            self.session.request_emergency(self.fault, "system")
+            self.session.request_emergency(fault, "system")
             self.session.enforce_stop_output()
         except Exception as e2:                          # noqa: BLE001 - 停止失敗も握りつぶさない
-            self.fault += f" / 停止要求も失敗: {e2}"
+            fault += f" / 停止要求も失敗: {e2}"
             log.error("停止要求に失敗: %s", e2)
+        self.fault = fault                               # 停止が済んでから公開する
         self._publish()
 
     # ---- 停止・終了 --------------------------------------------------------------

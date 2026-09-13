@@ -13,7 +13,7 @@ from typing import Any
 from serpens.link.messages import Drive, Head
 from serpens.motion.gait import body_joint_names
 
-HEAD_JOINTS = ("J7", "J8", "J9")
+HEAD_MAX = 3            # HEAD 指令が運べる軸数（payload 固定長）。実際の軸数は config から決まる
 
 
 class DeviceMotion:
@@ -22,6 +22,8 @@ class DeviceMotion:
     def __init__(self, cfg: dict[str, Any]) -> None:
         self.joints = {j["name"]: j for j in cfg["joints"]}
         self.body = body_joint_names(cfg)
+        # 胴体ヨーより先（首・頭）。**関節数を決め打ちしない**（最小構成でも 9軸でも同じコードで動く）
+        self.head = [n for n in self.joints if n not in self.body][:HEAD_MAX]
         self.limits = cfg["link"]["limits"]
         self.ttl_max_ms = int(cfg["link"]["drive_ttl_max_ms"])
         self.breath = cfg["breath"]
@@ -54,7 +56,7 @@ class DeviceMotion:
             return False
         if not 0.0 < h.speed_dps <= float(self.limits["head_speed_dps"]):
             return False
-        for name, deg in zip(HEAD_JOINTS, (h.j7_deg, h.j8_deg, h.j9_deg)):
+        for name, deg in zip(self.head, (h.j7_deg, h.j8_deg, h.j9_deg)):
             j = self.joints[name]
             if not float(j["min_deg"]) <= deg <= float(j["max_deg"]):
                 return False
@@ -63,7 +65,7 @@ class DeviceMotion:
     # ---- 出力 -----------------------------------------------------------------------
     def set_head(self, h: Head) -> None:
         """頭部の目標角と速度を入れる（検査済みの値だけ渡すこと）。"""
-        for name, deg in zip(HEAD_JOINTS, (h.j7_deg, h.j8_deg, h.j9_deg)):
+        for name, deg in zip(self.head, (h.j7_deg, h.j8_deg, h.j9_deg)):
             self.target[name], self.speed[name] = deg, h.speed_dps
 
     def set_pose(self, pose: dict[str, Any]) -> None:
@@ -79,7 +81,7 @@ class DeviceMotion:
 
     def stop_head(self) -> None:
         """頭部だけ目標を現在角にする（HEAD の期限切れ）。"""
-        for n in HEAD_JOINTS:
+        for n in self.head:
             self.target[n] = self.goals[n]
 
     def step(self, dt: float, drive: Drive | None) -> None:
@@ -99,9 +101,10 @@ class DeviceMotion:
             self.goals[name] += max(-step, min(step, diff))
 
     def output(self, t: float, breathing: bool) -> dict[str, float]:
-        """サーボへ書く角度。呼吸（J7 の小さな上下）はここで足す。"""
+        """サーボへ書く角度。呼吸（首の小さな上下）はここで足す。"""
         out = dict(self.goals)
-        if breathing:
+        if breathing and self.head:
+            neck = self.head[0]                       # 首（胴体ヨーの次の軸）
             a = float(self.breath["amplitude_deg"])
-            out["J7"] = self.clamp("J7", out["J7"] + a * math.sin(2.0 * math.pi * t / float(self.breath["period_s"])))
+            out[neck] = self.clamp(neck, out[neck] + a * math.sin(2.0 * math.pi * t / float(self.breath["period_s"])))
         return out
