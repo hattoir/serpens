@@ -63,7 +63,8 @@ def test_real_build_path_shares_one_bus_and_no_mock_head(cfg: dict, monkeypatch:
     fake = RecordingBus(cfg)
     fake.connect()
     monkeypatch.setattr(app_mod, "_open_real_bus", lambda cfg_, port: fake)
-    args = argparse.Namespace(bus="feetech", port="FAKE", head_port=None, camera=None, seed=1)
+    args = argparse.Namespace(bus="feetech", port="FAKE", head_port=None, camera=None, seed=1,
+                              robot="direct", link_port=None)
     cfg_out, session, loop, (source, cam) = app_mod.build(args)
     try:
         assert session.bus is fake
@@ -124,7 +125,8 @@ def test_build_failure_closes_what_was_opened(cfg: dict, monkeypatch: pytest.Mon
     fake.connect()
     monkeypatch.setattr(app_mod, "_open_real_bus", lambda cfg_, port: fake)
     monkeypatch.setattr(app_mod, "SimSession", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("構築失敗")))
-    args = argparse.Namespace(bus="feetech", port="FAKE", head_port=None, camera=None, seed=1)
+    args = argparse.Namespace(bus="feetech", port="FAKE", head_port=None, camera=None, seed=1,
+                              robot="direct", link_port=None)
     with pytest.raises(RuntimeError, match="構築失敗"):
         app_mod.build(args)
     assert fake.disconnects == [False] and not fake._connected

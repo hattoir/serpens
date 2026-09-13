@@ -26,7 +26,7 @@ import numpy as np
 
 from serpens.config import load_config
 from serpens.runner import ControlLoop
-from serpens.sim.session import SimSession
+from serpens.sim.session import ManualClock, SimSession
 from serpens.sim.virtual_camera import SimPerson, VirtualCamera
 from serpens.sim.world import BodyPose
 
@@ -197,6 +197,27 @@ def _open_real_bus(cfg: dict[str, Any], port: str | None) -> Any:
     return bus
 
 
+def _make_link_robot(cfg: dict[str, Any], port: str | None, session_clock: Any) -> Any:
+    """駆動リンク経路の出力先を作る。
+
+    `--link-port` があれば実シリアル（**実機未検証**）、無ければ**模擬 ESP32**（同じ仕様の参照実装）。
+    模擬でも「PC が落ちたら機体が止まる」振る舞いはそのまま出る。
+    """
+    from serpens.link.client import LinkClient
+    from serpens.link.device import SimulatedDevice
+    from serpens.link.robot import LinkRobot
+    from serpens.link.transport import LoopbackTransport, SerialTransport
+
+    if port:
+        tr = SerialTransport(port)
+        print(f"駆動リンクへ接続します: {port}（**実機未検証**）")
+        return LinkRobot(cfg, LinkClient(tr, cfg), session_clock, pump=None)
+    device = SimulatedDevice(cfg)
+    loop_tr = LoopbackTransport(device)
+    print("駆動リンク: 模擬 ESP32（serpens/link/device.py）。実機は --link-port COMx")
+    return LinkRobot(cfg, LinkClient(loop_tr, cfg), session_clock, pump=loop_tr.pump)
+
+
 def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, ControlLoop, Any]:
     """設定・出力先・セッション・制御ループ・映像ソースを作る。
 
@@ -206,8 +227,10 @@ def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, Control
     cfg = load_config()
     start = BodyPose(float(cfg["sim"]["start_tail_x_mm"]), float(cfg["sim"]["start_tail_y_mm"]),
                      math.radians(float(cfg["sim"]["start_theta_deg"])))
-    real = args.bus == "feetech"
-    bus = _open_real_bus(cfg, args.port) if real else None
+    use_link = args.robot == "link"
+    # 実機かどうか = サーボへ直接つなぐか、実 ESP32 につなぐか。**模擬 ESP32 は実機ではない**
+    real = args.bus == "feetech" or bool(args.link_port)
+    bus = _open_real_bus(cfg, args.port) if real and not use_link else None
     head: Any = None
     try:
         if args.head_port:
@@ -218,7 +241,10 @@ def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, Control
         elif real:
             print("[注意] 頭部 I/O 未接続（--head-port 未指定）。ToF・タッチ・目は使えません。"
                   "モックを実センサーとしては使いません")
-        session = SimSession(cfg, start, seed=args.seed, bus=bus, head=head, robot_is_real=real)
+        clock = ManualClock()
+        robot = _make_link_robot(cfg, args.link_port, clock) if use_link else None
+        session = SimSession(cfg, start, seed=args.seed, bus=bus, head=head, robot_is_real=real,
+                             robot=robot, clock=clock)
         loop = ControlLoop(session, realtime=True)
         cam: Any = RealCamera(cfg, args.camera, session) if args.camera is not None else SimCamera(cfg, session)
         cam.start()
@@ -244,6 +270,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--sim-robot", action="store_true", help="--sim と同じ（ヘビはシミュレータ）")
     ap.add_argument("--camera", default=None, help="カメラ番号 / 動画 / 画像")
     ap.add_argument("--bus", choices=["mock", "feetech"], default="mock", help="サーボバス")
+    ap.add_argument("--robot", choices=["direct", "link"], default="direct",
+                    help="出力先: direct=サーボへ角度を直接書く / link=ESP32 へ歩容パラメータを送る")
+    ap.add_argument("--link-port", default=None, help="駆動リンク（ESP32）のCOMポート。**実機未検証**")
     ap.add_argument("--port", default=None, help="実機のCOMポート（例: COM5）")
     ap.add_argument("--head-port", default=None, help="頭部 XIAO ESP32S3 のCOMポート（例: COM6）")
     ap.add_argument("--seed", type=int, default=None)

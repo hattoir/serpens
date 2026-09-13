@@ -6,9 +6,8 @@ _last updated: 2026-09-14_
 
 ## Current Goal
 
-安全の絶対値を実装に落とし終えた（2026-09-14）。次は
-**「行動 → DRIVE → 機体が歩容生成 → 世界が動く」**を End-to-End で繋ぐ（RobotInterface）。
-いま行動は 9軸の角度を直接サーボへ書いていて、駆動リンクを通っていない。
+縦スライス（行動 → 駆動リンク → 機体 → 世界）は 2026-09-14 に繋がった（`--robot link`）。
+次は**実機が来た日に前へ進むための準備**: 接触→脱力を機体側へ、電子系の BOM、ファームのサーボ層。
 
 ## Current Architecture
 
@@ -30,7 +29,9 @@ _last updated: 2026-09-14_
 
 - Phase 1: 停止の3分離・実機経路の配線・終了処理（`tests/test_phase1_*.py` 20 件）
 - Phase 2: 駆動リンク（`tests/test_phase2_*.py` 48 件、`tools/link_check.py` で条件 1〜12 と時間の実測）
-- 全 222 件が緑（`.venv/Scripts/python.exe -m pytest -q`、約 65 秒）
+- 縦スライスの接続（`serpens/robot.py` / `serpens/link/robot.py`、`--robot link`）。
+  **アプリ経路でも PC 強制終了・USB 抜去で機体が自分で止まる**ことを試験で確認
+- 全 231 件が緑（`.venv/Scripts/python.exe -m pytest -q`、約 65 秒）
 - 安全の絶対値（構想設計書 16章）を `config/robot.yaml` の `safety_limits` と
   `tests/test_safety_limits.py`（10件）に落とした。トルク上限 1.18N·m を**経路を問わず**強制
 - 駆動リンクに BODY（胴体姿勢）と TORQUE（脱力）を追加。とぐろ・鎌首・脱力がリンク越しに出せる
@@ -39,7 +40,7 @@ _last updated: 2026-09-14_
 
 ## Current Problems
 
-1. **行動と駆動リンクが未接続。** `serpens.app` はリンクを一切使わない（`--bus feetech` は生の角度書き込み）
+1. **実 ESP32 が無い。** リンク経路は模擬機体でしか動かしていない（`--robot link --link-port COMx` は未検証）
 2. **接触 → 脱力が 800ms**（構想設計書の目標 20ms）。PC を経由する限り届かない。機体側で負荷を見る必要がある
 3. **電気的制限（層2）が無い**。電流検出も、独立して電源を切る安全 MCU も無い（`docs/safety_limits.md` §3）
 4. **輪の内径 53.6mm** は構想設計書の「80mm 以上」に届かない。±72° まで狭めれば満たすが、
@@ -65,8 +66,7 @@ _last updated: 2026-09-14_
 
 ## Next Best Actions
 
-1. **RobotInterface の継ぎ目を入れる**（`DirectRobot` / `LinkRobot`）。行動 → DRIVE → 機体 → 世界を
-   シミュレーションで End-to-End に繋ぐ。実機が来た日に配線だけで動く状態にする
-2. **接触 → 脱力を機体側へ**（`link.faults` に負荷しきい値、100Hz で判定）。20ms 目標への唯一の道
-3. 電子系のブロック図と BOM（MCU・ドライバ・配電・電流検出・IMU）。層2 が丸ごと無い
-4. ファームのサーボ層を偽サーボで検証できる形にする
+1. **接触 → 脱力を機体側へ**（`link.faults` に負荷しきい値、100Hz で判定）。20ms 目標への唯一の道
+2. 電子系のブロック図と BOM（MCU・ドライバ・配電・電流検出・IMU）。層2 が丸ごと無い
+3. ファームのサーボ層を偽サーボで検証できる形にする
+4. 3軸ベンチの config プロファイル（サーボが届いた日に試せる状態にする）

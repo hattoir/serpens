@@ -139,6 +139,8 @@ class Animator:
         self._paused_total = 0.0
         self._last_anim_t: float | None = None
         self.last_output: Pose = dict(self.base)
+        # 歩容と呼吸を足す前のベース姿勢。駆動リンク経路で「胴体の姿勢」として送る
+        self.last_base: Pose = dict(self.base)
 
     # ---- 時刻 -----------------------------------------------------------------
     def _anim_t(self, t: float) -> float:
@@ -189,6 +191,11 @@ class Animator:
             self._frozen_at = None
 
     @property
+    def breathing(self) -> bool:
+        """呼吸が ON か（リンク経路では機体側で生成する）。"""
+        return self._breath_target > 0.0
+
+    @property
     def frozen(self) -> bool:
         return self._frozen_at is not None
 
@@ -218,10 +225,13 @@ class Animator:
         self._breath_env += max(-step, min(step, self._breath_target - self._breath_env))
         gait = self.gait.update(at)
         out: Pose = {}
+        base: Pose = {}
         for i, name in enumerate(self.names):
-            v = self._base_value(name, at) + gait.get(name, 0.0) + self.breath_offset(i, at)
+            base[name] = self._base_value(name, at)
+            v = base[name] + gait.get(name, 0.0) + self.breath_offset(i, at)
             lo, hi = self._limits[name]
             out[name] = min(max(v, lo), hi)
+        self.last_base = base
         self.last_output = out
         return out
 

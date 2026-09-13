@@ -350,6 +350,10 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 - 上限（振幅・周波数・旋回・頭部角・速度）は**機体が持つ**。PC の設定では緩められない
 
 ```powershell
+# 行動・GUI を駆動リンク経由で動かす（模擬 ESP32。実機は不要）
+.\.venv\Scripts\python.exe -m serpens.app --sim --robot link
+# 実 ESP32 につなぐ（**実機未検証**）
+.\.venv\Scripts\python.exe -m serpens.app --robot link --link-port COM7
 # 完了条件 1〜12 の確認 + 時間の実測（模擬機体。実機は不要）
 .\.venv\Scripts\python.exe tools\link_check.py
 # ファームと突き合わせる参照角度列 → data/gait_reference.csv
@@ -364,7 +368,11 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 | `serpens/link/transport.py` `harness.py` | 偽経路（USB 抜去・PC 強制終了・再起動・重複・CRC 破損）と足場 |
 | `firmware/serpens_esp32/` | Arduino スケッチ。**未コンパイル・未書き込み**、配線が未確定 |
 
-⚠ **まだ `serpens.app`（GUI・行動）はこのリンクを使っていない。接続は Phase 3。**
+`--robot link` のとき、PC が送るのは**歩容のパラメータ（DRIVE）・胴体の姿勢（BODY）・
+首と頭の角度（HEAD）**だけで、9軸の角度列は送らない。胴体の波は機体が作る。
+そのため**アプリを強制終了しても、USB を抜いても、機体が自分で止まる**
+（`tests/test_phase3_link_robot.py` で確認）。`--robot direct`（既定）は従来どおり角度を直接書くので、
+**PC が死ぬとサーボは最後の指令角を保持し続ける**。
 
 ### 実機経路の接続（Phase 1 で直した部分）
 

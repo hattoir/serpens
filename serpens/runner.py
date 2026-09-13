@@ -210,7 +210,7 @@ class ControlLoop(threading.Thread):
             target_xy=None if s.target is None else (float(s.target.floor_mm[0]), float(s.target.floor_mm[1])),
             waypoint=None if s.brain._waypoint is None else (float(s.brain._waypoint[0]), float(s.brain._waypoint[1])),
             servo=dict(s.poller.fresh_states(s.t)),
-            servo_age_s={sid: s.poller.age_s(sid, s.t) for sid in s.bus.ids},
+            servo_age_s={sid: s.poller.age_s(sid, s.t) for sid in s.servo_ids},
             telemetry_source=s.poller.source, missing_axes=s.poller.missing_axes(s.t),
             drive_state=s.stop.state.value, drive_text=s.stop.status_text(), latched=s.stop.latched,
             blockers=s.blockers(), fault=self.fault,

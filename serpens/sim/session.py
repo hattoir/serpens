@@ -28,6 +28,7 @@ from serpens.hw.servo_bus import Goal, ServoBus, ServoCommError
 from serpens.hw.state_poller import ServoStatePoller
 from serpens.motion.animator import Animator
 from serpens.perception.person_detector import PersonDetection, PersonTracker, TrackedPerson
+from serpens.robot import DirectRobot, MotionCommand, RobotInterface
 from serpens.perception.snake_pose import SnakePose, SnakePoseTracker
 from serpens.safety import AutonomyInputs, DriveState, StopSupervisor, autonomy_blockers
 from serpens.sim.virtual_camera import SimPerson
@@ -51,40 +52,44 @@ class SimSession:
 
     def __init__(self, cfg: dict[str, Any], start: BodyPose | None = None, seed: int | None = None,
                  overrides: dict[str, dict[str, Any]] | None = None, bus: ServoBus | None = None,
-                 head: HeadIO | None = None, robot_is_real: bool = False, pose_source: str = "sim") -> None:
+                 head: HeadIO | None = None, robot_is_real: bool = False, pose_source: str = "sim",
+                 robot: RobotInterface | None = None, clock: "ManualClock | None" = None) -> None:
         cfg = copy.deepcopy(cfg)
         for section, values in (overrides or {}).items():
             cfg[section].update(values)
         self.cfg = cfg
         self.errors: list[str] = []                # 出力・切断の失敗をためる（握りつぶさない）
-        self.clock = ManualClock()
+        self.clock = clock if clock is not None else ManualClock()
         self.ctrl_dt = 1.0 / float(cfg["behavior"]["tick_hz"])
         self.sub = max(int(round(self.ctrl_dt / float(cfg["sim"]["dt_s"]))), 1)
         self.robot_is_real = robot_is_real
         self.pose_source = pose_source            # "sim"（仮想世界）/ "aruco"（実観測）
         self.world = World(cfg, start)
         # --- 出力先（注入されたものをそのまま全員で使う） ---
-        self.owns_bus = bus is None
-        self.bus: ServoBus = bus if bus is not None else MockServoBus(cfg, clock=self.clock)
-        if self.owns_bus:
+        # 駆動リンク経路（robot を注入）ではローカルのサーボバスを作らない。
+        # **使わないモックを実機の代わりに置かない**（値の出どころを偽らないため）
+        self.owns_bus = bus is None and robot is None
+        self.bus: ServoBus | None = bus if bus is not None else (
+            None if robot is not None else MockServoBus(cfg, clock=self.clock))
+        if self.owns_bus and self.bus is not None:
             self.bus.connect()
             for sid in self.bus.ids:
                 self.bus.set_torque(sid, True)
         # 実機経路でモックの頭部を実センサーとして扱わない（未接続なら None のまま）
         self.head: HeadIO | None = head if head is not None else (None if robot_is_real else MockHeadIO(cfg, clock=self.clock))
         self.owns_head = head is None and self.head is not None
-        failed = self.bus.apply_torque_ceiling()     # 安全上限（構想設計書 16章）を必ず通す
-        if failed:
-            self.errors.append(f"トルク上限を設定できなかった軸: {failed}")
-        self.poller = ServoStatePoller(self.bus, cfg, self.clock)
+        # 出力先。ここを差し替えると駆動リンク経路になる（serpens/link/robot.py）
+        self.robot: RobotInterface = robot if robot is not None else DirectRobot(cfg, self.bus, self.clock)
+        self.errors += list(getattr(self.robot, "errors", []))
+        self.poller = self.robot.telemetry           # 状態の読み出し（GUI・開始条件が見る）
         self.anim = Animator(cfg)
-        self.brain = Brain(cfg, self.anim, self.bus, self.head, random.Random(seed))
+        self.brain = Brain(cfg, self.anim, self.robot.torque_sink, self.head, random.Random(seed))
         self.snake_tracker = SnakePoseTracker(cfg)
         self.person_tracker = PersonTracker(cfg)
         # 実機は必ず待機から始める。シミュレーションのデモは従来どおりすぐ動く
         self.stop = StopSupervisor(cfg, self.clock,
                                    initial=DriveState.HOLD if robot_is_real else DriveState.RUN)
-        self.drive_link_ok = not robot_is_real     # 実機の駆動リンク（ESP32）は Phase 2 まで無い
+        self.drive_link_ok = self.robot.link_ok or not robot_is_real
         self.people: list[SimPerson] = []
         self.snake: SnakePose | None = None
         self.target: TrackedPerson | None = None
@@ -101,6 +106,11 @@ class SimSession:
     def t(self) -> float:
         return self.clock.t
 
+    @property
+    def servo_ids(self) -> list[int]:
+        """関節順のサーボ ID（出力先がバスでもリンクでも同じ）。"""
+        return list(self._ids.values())
+
     def touch(self, on: bool, where: str = "head") -> None:
         """頭部のタッチセンサを押す / 離す（モックのときだけ）。"""
         if isinstance(self.head, MockHeadIO):
@@ -116,9 +126,9 @@ class SimSession:
             pose_age_s=None if self.snake is None else self.snake_tracker.age_s(now),
             calibration_present=Path(self.cfg["homography"]["file"]).exists(),
             drive_link_ok=self.drive_link_ok,
-            torque_ceiling_ok=self.bus.torque_ceiling_applied,
+            torque_ceiling_ok=self.robot.torque_ceiling_ok,
             telemetry_axes=len(self.poller.fresh_states(now)),
-            expected_axes=len(self.bus.ids),
+            expected_axes=len(self._ids),
             telemetry_age_s=self.poller.newest_age_s(now),
         )
 
@@ -130,6 +140,7 @@ class SimSession:
         """走行を開始する（実機は条件を満たさないと開始しない）。"""
         ok, why = self.stop.start(self.blockers(), source)
         if ok:
+            self.robot.on_operator_start()      # 機体の再起動後はこの操作だけが再開を許す
             self._resume_output()
         return ok, why
 
@@ -142,8 +153,11 @@ class SimSession:
         return self.stop.emergency(reason, source)
 
     def clear_emergency(self, source: str = "操作") -> bool:
-        """緊急停止の解除 → 待機。走行は再開しない。"""
-        return self.stop.clear_emergency(source)
+        """緊急停止の解除 → 待機。走行は再開しない（機体側のラッチも解く）。"""
+        ok = self.stop.clear_emergency(source)
+        if ok:
+            self.robot.on_clear_emergency()
+        return ok
 
     def request_disable_torque(self, reason: str, source: str = "操作") -> bool:
         """駆動無効化（脱力）。停止中の明示操作のみ。"""
@@ -152,7 +166,7 @@ class SimSession:
     # ---- 1周期 -----------------------------------------------------------------------
     def step(self) -> BrainStatus | None:
         """制御周期1回ぶん進める。停止中は監視と保持だけ行う。"""
-        self.poller.poll()                                  # 停止中も監視は続ける
+        self.robot.poll()                                   # 停止中も監視は続ける
         for _ in range(self.sub):
             self.clock.t += self.ctrl_dt / self.sub
             self.world.step(self._world_angles(), self.ctrl_dt / self.sub)
@@ -171,13 +185,12 @@ class SimSession:
         self.status = self.brain.tick(t, Percept(self.snake, person_xy, self._serial, touch,
                                                  self.poller.max_temperature_c(t),
                                                  self.poller.max_abs_load(t) or 0.0))
-        self.anim.send(self.bus, self.anim.update(t))
+        self.robot.send(t, MotionCommand.from_animator(self.anim, self.robot.body, t))
         return self.status
 
     def _world_angles(self) -> dict[str, float]:
         """世界を進めるための関節角。実機では参考値（実位置は Phase 4 で ArUco から入れる）。"""
-        pos = self.poller.positions
-        return {n: pos[i] for n, i in self._ids.items() if i in pos}
+        return self.robot.positions_by_name()
 
     def _observe(self, t: float) -> None:
         """ヘビと人の位置を更新する（停止中も更新して、画面と復旧判断に使う）。"""
@@ -204,10 +217,9 @@ class SimSession:
             self._next_hold_send = 0.0
             if dropped:
                 self.brain._events.append(f"停止: 予約済みの演出 {len(dropped)} 件を破棄")
+        self.robot.apply_stop_state(state)               # 経路ごとの停止の出し方
         if self.stop.torque_should_be_off:
-            self._set_torque(False)
             return
-        self._set_torque(True)
         self._send_hold()
 
     def _send_hold(self) -> None:
@@ -220,24 +232,14 @@ class SimSession:
         for name, sid in self._ids.items():                 # 実測位置が新しければそこで止める
             if self.poller.is_fresh(sid, t) and sid in self.poller.positions:
                 pose[name] = self.poller.positions[sid]
-        goals = {self._ids[n]: Goal(v, self.bus.joints[self._ids[n]].max_speed_dps,
-                                    float(self.cfg["animator"]["default_accel_dps2"]))
-                 for n, v in pose.items() if n in self._ids}
-        self._guard(lambda: self.bus.sync_set_goals(goals), "保持指令の送信")
-
-    def _set_torque(self, on: bool) -> None:
-        if self._torque_off == (not on):
-            return
-        for sid in self.bus.ids:
-            self._guard(lambda sid=sid: self.bus.set_torque(sid, on), f"トルク{'ON' if on else 'OFF'}（ID{sid}）")
-        self._torque_off = not on
+        self.robot.hold(pose)
 
     def _resume_output(self) -> None:
         """走行に戻すとき、固定を解除してトルクを戻す。"""
+        self.robot.apply_stop_state(DriveState.RUN)     # 走行中であることを出力先へ伝え続ける
         if self._last_drive is None or self._last_drive is DriveState.RUN:
             self._last_drive = DriveState.RUN
             return
-        self._set_torque(True)
         self.anim.unfreeze(self.t)
         self._hold_pose = None
         self._last_drive = DriveState.RUN
@@ -258,8 +260,8 @@ class SimSession:
         """停止を出力へ送ってから、接続を閉じる。失敗は返り値で伝える。"""
         self.request_stop("終了処理", "system")
         self.enforce_stop_output()
-        torque_off = self.stop.disable_torque_on_exit
-        self._guard(lambda: self.bus.disconnect(torque_off=torque_off), "サーボバスの切断")
+        self.errors += [e for e in self.robot.close(self.stop.disable_torque_on_exit)
+                        if e not in self.errors]
         if self.head is not None:
             self._guard(self.head.close, "頭部 I/O の切断")
         return list(self.errors)

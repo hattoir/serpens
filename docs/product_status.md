@@ -23,18 +23,18 @@
 | Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |
 | Behavior | 実装済み（模擬） | 内部状態 4 種 + 効用による状態選択、10 状態、しぐさ（[behavior/](../serpens/behavior/)） | 充電要求・所有者探索の状態が無い。LLM は不使用（憲章どおり） |
 | Charging | **未着手** | 無し | ドック・姿勢・接点・充電制御のすべて |
-| Safety | 部分 | PC 側の 3 種停止とラッチ（[safety.py](../serpens/safety.py)）、機体側の watchdog・緊急停止ラッチ・上限強制（[device.py](../serpens/link/device.py)）、関節ソフトリミット、過熱での強制休憩 | **力・トルク・電流の上限が数値で決まっていない。** スリップ機構・手動解放・巻き付きの禁止条件が未定義 |
-| PC AI Integration | 実装済み | 50Hz 制御ループ（[runner.py](../serpens/runner.py)）、GUI（[gui/](../serpens/gui/)）、駆動リンクの PC 側（[client.py](../serpens/link/client.py)） | **GUI/行動と駆動リンクがまだ繋がっていない**（Phase 3 の作業） |
+| Safety | 部分 | PC 側の 3 種停止とラッチ（[safety.py](../serpens/safety.py)）、機体側の watchdog・緊急停止ラッチ・上限強制（[device.py](../serpens/link/device.py)）、**安全の絶対値**（[safety_limits.md](safety_limits.md)、`tests/test_safety_limits.py`） | 接触→脱力 20ms が未達（現状 800ms）。電気的制限（層2）が丸ごと無い。物理の緊急停止スイッチが無い |
+| PC AI Integration | 実装済み | 50Hz 制御ループ（[runner.py](../serpens/runner.py)）、GUI（[gui/](../serpens/gui/)）、駆動リンクの PC 側（[client.py](../serpens/link/client.py)）、出力先の継ぎ目（[robot.py](../serpens/robot.py)） | **行動 → 駆動リンク → 機体は 2026-09-14 に接続済み**（`--robot link`）。実 ESP32 は未接続 |
 
 ## 2. FIRST VERTICAL SLICE の現在地
 
 | 憲章の段 | 状態 | 根拠 |
 |---|---|---|
 | 2〜数 segment | 設計は**関節数に依存しない**ことを確認（§3）。実物は無い | `config/robot.yaml` の `joints` を減らすだけで動く |
-| motor control | 模擬で完成。実機は未 | `MockServoBus` / `FeetechServoBus`、`tools/servo_setup.py` |
+| motor control | 模擬で完成。実機は未 | `MockServoBus` / `FeetechServoBus`、`tools/servo_setup.py`。出力先は `--robot direct/link` で差し替え |
 | basic gait | 模擬で完成 | 参照式と機体側の出力が 1e-9° 以内で一致 |
 | PC communication | **完成**（模擬） | [docs/phase2_acceptance.md](phase2_acceptance.md) の条件 1〜12 |
-| safe start/stop | **完成**（模擬） | 同上。USB 抜去・PC 強制終了で機体が単独停止 |
+| safe start/stop | **完成**（模擬） | 同上。USB 抜去・PC 強制終了で機体が単独停止。**アプリ経路でも同じ**（`tests/test_phase3_link_robot.py`） |
 
 **つまり縦スライスは「実機のサーボ 1 個を回す」以外は揃っている。** 律速はハードウェア。
 
@@ -76,7 +76,7 @@
 | 2 | **3 軸ベンチの構成を確定**（config プロファイル + 部品表）。サーボ 2 個が届いたら即日試せる状態にする | 決定 1 | `config/robot_bench3.yaml`、BOM |
 | 3 | **電子系のブロック図と BOM**（MCU・ドライバ・配電・電流検出・IMU） | 決定 2 | `docs/electronics.md`、`docs/bom.md` |
 | 4 | **ファームのサーボ層**（同期書き込み・状態読み出し）をモックで検証できる形に | 決定なし（配線は後） | `firmware/` + 偽サーボでの試験 |
-| 5 | **GUI/行動と駆動リンクの接続**（Phase 3）。いま両者は別々に存在している | 決定不要 | `RobotInterface` の薄い層 |
+| 5 | ~~GUI/行動と駆動リンクの接続（Phase 3）~~ | **完了 2026-09-14** | `serpens/robot.py` + `serpens/link/robot.py` |
 | 6 | **IMU を前提にした自己位置**の検討（外部カメラ依存を外す道筋） | 決定 1・3 | `docs/localization.md` |
 
 ## 6. 境界（憲章どおり）
