@@ -7,8 +7,9 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-from serpens.link.protocol import (FMT_AXIS, FMT_DRIVE, FMT_HEAD, FMT_STOP, FMT_TELEM_HEAD,
-                                   REASON_JA, STATE_JA, Flag, State, StopReason)
+from serpens.link.protocol import (FMT_AXIS, FMT_BODY, FMT_DRIVE, FMT_HEAD, FMT_STOP,
+                                   FMT_TELEM_HEAD, FMT_TORQUE, REASON_JA, STATE_JA, Flag, State,
+                                   StopReason)
 
 FMT_ACK = "<HB"        # ack_seq, type
 FMT_NACK = "<HBB"      # ack_seq, type, reason
@@ -95,6 +96,40 @@ class Head:
     def unpack(payload: bytes) -> "Head":
         ttl, j7, j8, j9, spd = struct.unpack(FMT_HEAD, payload)
         return Head(ttl, j7 / 10, j8 / 10, j9 / 10, spd / 10)
+
+
+BODY_MAX = 6              # BODY 指令が運べる胴体ヨーの軸数（payload 固定長）
+
+
+@dataclass(frozen=True)
+class Body:
+    """胴体ヨーの目標角（とぐろ・鎌首など、歩容ではない姿勢）。
+
+    軸数が 6 未満の機体では先頭から使い、余った枠は 0 を入れて無視する。
+    """
+
+    ttl_ms: int
+    angles_deg: tuple[float, ...]
+    speed_dps: float
+
+    def pack(self) -> bytes:
+        a = list(self.angles_deg[:BODY_MAX]) + [0.0] * (BODY_MAX - len(self.angles_deg))
+        return struct.pack(FMT_BODY, int(self.ttl_ms), *[round(v * 10) for v in a],
+                           round(self.speed_dps * 10))
+
+    @staticmethod
+    def unpack(payload: bytes) -> "Body":
+        v = struct.unpack(FMT_BODY, payload)
+        return Body(v[0], tuple(x / 10 for x in v[1:1 + BODY_MAX]), v[-1] / 10)
+
+
+def pack_torque(ratio: float) -> bytes:
+    """トルク比（0.0〜1.0）。"""
+    return struct.pack(FMT_TORQUE, max(0, min(int(round(ratio * 1000)), 1000)))
+
+
+def unpack_torque(payload: bytes) -> float:
+    return float(struct.unpack(FMT_TORQUE, payload)[0]) / 1000.0
 
 
 @dataclass(frozen=True)

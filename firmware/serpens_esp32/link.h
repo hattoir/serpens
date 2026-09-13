@@ -14,6 +14,7 @@ static const uint16_t SEQ_FORWARD_WINDOW = 4096;
 enum Cmd : uint8_t {
   CMD_HEARTBEAT = 0x01, CMD_ARM = 0x02, CMD_DISARM = 0x03,
   CMD_DRIVE = 0x10, CMD_HEAD = 0x11, CMD_POSE = 0x12, CMD_BREATH = 0x13,
+  CMD_BODY = 0x14, CMD_TORQUE = 0x15,
   CMD_STOP = 0x20, CMD_EMERGENCY = 0x21, CMD_CLEAR_FAULT = 0x22,
   CMD_LIMITS = 0x30, CMD_PING = 0x40,
 };
@@ -23,7 +24,7 @@ enum Rep : uint8_t { REP_TELEMETRY = 0x80, REP_ACK = 0x81, REP_NACK = 0x82, REP_
 enum NackReason : uint8_t {
   NACK_BAD_CRC = 1, NACK_BAD_VERSION = 2, NACK_BAD_LENGTH = 3, NACK_STALE_SEQ = 4,
   NACK_OUT_OF_RANGE = 5, NACK_DISARMED = 6, NACK_LATCHED = 7, NACK_UNKNOWN_CMD = 8,
-  NACK_NO_HEARTBEAT = 9, NACK_NONCE_REUSED = 10,
+  NACK_NO_HEARTBEAT = 9, NACK_NONCE_REUSED = 10, NACK_BUSY = 11,
 };
 
 enum DeviceState : uint8_t { ST_DISARMED = 0, ST_ARMED = 1, ST_EMERGENCY = 2 };
@@ -45,6 +46,8 @@ inline int payloadLenFor(uint8_t type) {
     case CMD_HEARTBEAT: case CMD_ARM: case CMD_DISARM: case CMD_PING: return 0;
     case CMD_DRIVE: return 10;      // ttl(u16) + 4 × i16
     case CMD_HEAD:  return 10;      // ttl(u16) + 3 × i16 + speed(u16)
+    case CMD_BODY:  return 16;      // ttl(u16) + 6 × i16 + speed(u16)
+    case CMD_TORQUE: return 2;      // ratio(u16 0.001)
     case CMD_POSE:  case CMD_BREATH: case CMD_EMERGENCY: return 1;
     case CMD_STOP:  return 2;
     case CMD_CLEAR_FAULT: return 4;

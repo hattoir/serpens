@@ -93,6 +93,16 @@ class LinkClient:
         ttl = ttl_ms if ttl_ms is not None else self.drive_ttl_ms
         return self._send(Cmd.HEAD, m.Head(ttl, j7, j8, j9, speed_dps).pack(), now)
 
+    def body(self, now: float, angles_deg: tuple[float, ...], speed_dps: float,
+             ttl_ms: int | None = None) -> int:
+        """胴体の姿勢（とぐろ・鎌首）。**歩容中は機体が拒否する**ので、先に `clear_drive()`。"""
+        ttl = ttl_ms if ttl_ms is not None else self.drive_ttl_ms
+        return self._send(Cmd.BODY, m.Body(ttl, angles_deg, speed_dps).pack(), now)
+
+    def torque(self, now: float, ratio: float) -> int:
+        """トルク比（脱力の演出）。停止すると機体側で 100% に戻る。"""
+        return self._send(Cmd.TORQUE, m.pack_torque(ratio), now)
+
     def pose(self, now: float, pose_id: int) -> int:
         return self._send(Cmd.POSE, bytes([pose_id]), now)
 

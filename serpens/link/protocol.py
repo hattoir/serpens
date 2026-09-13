@@ -32,6 +32,8 @@ class Cmd(IntEnum):
     HEAD = 0x11
     POSE = 0x12
     BREATH = 0x13
+    BODY = 0x14        # 胴体の姿勢（とぐろ・鎌首）。歩容中は拒否される
+    TORQUE = 0x15      # トルク比（脱力の演出）
     STOP = 0x20
     EMERGENCY = 0x21
     CLEAR_FAULT = 0x22
@@ -61,6 +63,7 @@ class Nack(IntEnum):
     UNKNOWN_CMD = 8
     NO_HEARTBEAT = 9
     NONCE_REUSED = 10
+    BUSY = 11          # いまの状態では受け付けられない（歩容中の BODY など）
 
 
 class State(IntEnum):
@@ -119,11 +122,14 @@ STATE_JA = {State.DISARMED: "待機（DISARMED）", State.ARMED: "走行可（AR
 # payload の書式（struct）。長さ検査にも使う
 FMT_DRIVE = "<Hhhhh"      # ttl_ms, amp 0.1°, spatial 0.1°, freq 0.001Hz(符号), gamma 0.1°
 FMT_HEAD = "<HhhhH"       # ttl_ms, j7, j8, j9 (0.1°), speed 0.1°/s
+FMT_BODY = "<H6hH"        # ttl_ms, 胴体ヨー 6軸 (0.1°), speed 0.1°/s
+FMT_TORQUE = "<H"         # トルク比 0.001（0=不可、1000=100%）
 FMT_STOP = "<BB"          # mode, reason
 FMT_TELEM_HEAD = "<HIBBHBB"   # boot_id, uptime_ms, state, stop_reason, last_seq, flags, n_axes
 FMT_AXIS = "<hhBBBH"      # pos 0.1°, load 0.001, temp ℃, volt 0.1V, fault, current mA
 PAYLOAD_LEN = {Cmd.HEARTBEAT: 0, Cmd.ARM: 0, Cmd.DISARM: 0, Cmd.PING: 0,
                Cmd.DRIVE: struct.calcsize(FMT_DRIVE), Cmd.HEAD: struct.calcsize(FMT_HEAD),
+               Cmd.BODY: struct.calcsize(FMT_BODY), Cmd.TORQUE: struct.calcsize(FMT_TORQUE),
                Cmd.POSE: 1, Cmd.BREATH: 1, Cmd.STOP: 2, Cmd.EMERGENCY: 1, Cmd.CLEAR_FAULT: 4}
 
 

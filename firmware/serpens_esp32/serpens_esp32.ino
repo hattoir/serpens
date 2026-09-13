@@ -21,7 +21,8 @@ static uint16_t gLastSeq = 0;
 static bool     gHasLastSeq = false;
 static uint32_t gHbAt = 0;
 static bool     gHbSeen = false;
-static uint32_t gDriveAt = 0, gDriveUntil = 0, gHeadUntil = 0;
+static uint32_t gDriveAt = 0, gDriveUntil = 0, gHeadUntil = 0, gBodyUntil = 0;
+static float    gTorqueRatio = 1.0f;          // TORQUE 指令（脱力の演出）
 static uint32_t gNonces[16];
 static uint8_t  gNonceIdx = 0;
 
@@ -67,6 +68,7 @@ static void stopMotion(StopReason reason, bool latch, bool disarm, bool torqueOf
   if (gState == ST_EMERGENCY && !latch) return;    // ラッチ中の理由は上書きしない
   gDriving = false;
   gBreathing = false;
+  gTorqueRatio = 1.0f;                             // 演出の脱力は停止で解除する
   holdHere();                                      // ホーム姿勢へは動かさない
   gReason = reason;
   if (latch) gState = ST_EMERGENCY;
@@ -151,6 +153,27 @@ static void handleFrame(uint32_t now) {
     gHeadUntil = now + ttl;
     sendAck(Serial, seq, type); return;
   }
+  if (type == CMD_BODY) {
+    if (gDriving) { sendNack(Serial, seq, type, NACK_BUSY); return; }   // 胴体の持ち主は一つ
+    uint16_t ttl = rdU16(gRx.payload);
+    float spd = rdU16(gRx.payload + 14) / 10.0f;
+    bool ok = ttl >= 1 && ttl <= DRIVE_TTL_MAX_MS && spd > 0.0f && spd <= LIMIT_BODY_SPEED_DPS;
+    float a[N_BODY];
+    for (int i = 0; i < N_BODY && ok; i++) {
+      a[i] = rdI16(gRx.payload + 2 + 2 * i) / 10.0f;
+      if (a[i] < JOINTS[i].min_deg || a[i] > JOINTS[i].max_deg) ok = false;
+    }
+    if (!ok) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
+    for (int i = 0; i < N_BODY; i++) { gTarget[i] = a[i]; gSpeed[i] = spd; }
+    gBodyUntil = now + ttl;
+    sendAck(Serial, seq, type); return;
+  }
+  if (type == CMD_TORQUE) {
+    float ratio = rdU16(gRx.payload) / 1000.0f;
+    if (!(ratio > 0.0f && ratio <= 1.0f)) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
+    gTorqueRatio = ratio;                        // TODO: 実機ではトルク制限レジスタ（0〜1000）へ書く
+    sendAck(Serial, seq, type); return;
+  }
   if (type == CMD_POSE) {
     if (gRx.payload[0] != 0 || gDriving) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
     for (int i = 0; i < N_AXES; i++) { gTarget[i] = clampDeg(i, HOME_DEG[i]); gSpeed[i] = JOINTS[i].max_speed_dps; }
@@ -172,6 +195,7 @@ static void watchdogs(uint32_t now) {
     stopMotion(SR_DRIVE_TTL, false, true, false);
   }
   if ((int32_t)(now - gHeadUntil) > 0) for (int k = 0; k < 3; k++) gTarget[N_BODY + k] = gGoal[N_BODY + k];
+  if ((int32_t)(now - gBodyUntil) > 0 && !gDriving) for (int i = 0; i < N_BODY; i++) gTarget[i] = gGoal[i];
 }
 
 // ---- 制御（100Hz） --------------------------------------------------------------------

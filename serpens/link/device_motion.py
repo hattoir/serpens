@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
-from serpens.link.messages import Drive, Head
+from serpens.link.messages import Body, Drive, Head
 from serpens.motion.gait import body_joint_names
 
 HEAD_MAX = 3            # HEAD 指令が運べる軸数（payload 固定長）。実際の軸数は config から決まる
@@ -50,6 +50,18 @@ class DeviceMotion:
                     and abs(d.gamma_deg) <= float(lim["gamma_deg"])
                     and d.amplitude_deg + abs(d.gamma_deg) <= body_max)   # 合成しても範囲内
 
+    def body_ok(self, b: Body) -> bool:
+        """BODY（とぐろ・鎌首などの胴体姿勢）の角度・速度がソフトリミット内か。"""
+        if not 1 <= b.ttl_ms <= self.ttl_max_ms:
+            return False
+        if not 0.0 < b.speed_dps <= float(self.limits["body_speed_dps"]):
+            return False
+        for name, deg in zip(self.body, b.angles_deg):
+            j = self.joints[name]
+            if not float(j["min_deg"]) <= deg <= float(j["max_deg"]):
+                return False
+        return True
+
     def head_ok(self, h: Head) -> bool:
         """HEAD の角度・速度が各軸のソフトリミット内か。"""
         if not 1 <= h.ttl_ms <= self.ttl_max_ms:
@@ -67,6 +79,16 @@ class DeviceMotion:
         """頭部の目標角と速度を入れる（検査済みの値だけ渡すこと）。"""
         for name, deg in zip(self.head, (h.j7_deg, h.j8_deg, h.j9_deg)):
             self.target[name], self.speed[name] = deg, h.speed_dps
+
+    def set_body(self, b: Body) -> None:
+        """胴体ヨーの目標角を入れる（検査済みの値だけ渡すこと）。"""
+        for name, deg in zip(self.body, b.angles_deg):
+            self.target[name], self.speed[name] = deg, b.speed_dps
+
+    def stop_body(self) -> None:
+        """胴体だけ目標を現在角にする（BODY の期限切れ）。"""
+        for n in self.body:
+            self.target[n] = self.goals[n]
 
     def set_pose(self, pose: dict[str, Any]) -> None:
         """姿勢プリセットを目標にする（各軸の max_speed_dps で移る）。"""

@@ -39,6 +39,7 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 | 版違い | NACK(`BAD_VERSION`) |
 | len > 64、または payload 長が type と合わない | NACK(`BAD_LENGTH`) |
 | `seq` が**進んでいない**（重複・巻き戻り） | NACK(`STALE_SEQ`)。**指令は実行しない** |
+| いまの状態では受け付けられない（歩容中の `BODY`） | NACK(`BUSY`)。**状態は変えない** |
 | 値が上限外 | NACK(`OUT_OF_RANGE`)。**状態は変えない** |
 | DISARMED なのに DRIVE | NACK(`DISARMED`) |
 | EMERGENCY ラッチ中の ARM / DRIVE | NACK(`LATCHED`) |
@@ -57,6 +58,8 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 | 0x11 | `HEAD` | ttl_ms(u16), j7(i16 0.1°), j8(i16 0.1°), j9(i16 0.1°), speed(u16 0.1°/s) | 頭部の目標角 |
 | 0x12 | `POSE` | pose_id(u8) | 0=home / 1=coil / 2=relax |
 | 0x13 | `BREATH` | on(u8) | 呼吸の ON/OFF（機体側で生成し続ける） |
+| 0x14 | `BODY` | ttl_ms(u16), 胴体ヨー6軸(i16 0.1°), speed(u16 0.1°/s) | 胴体の姿勢（とぐろ・鎌首）。**歩容中は NACK(`BUSY`)**。軸数が6未満の機体は先頭から使う |
+| 0x15 | `TORQUE` | ratio(u16 0.001) | トルク比（脱力の演出）。0 は無効値で、脱力は `STOP(mode=disable)` |
 | 0x20 | `STOP` | mode(u8: 0=hold, 1=disable), reason(u8) | **即時停止**。TTL に依存しない。ARMED → **DISARMED** |
 | 0x21 | `EMERGENCY` | reason(u8) | 緊急停止。**機体側でラッチ** |
 | 0x22 | `CLEAR_FAULT` | nonce(u32) | ラッチ解除 → **DISARMED**。同じ nonce の再利用は拒否 |
@@ -100,6 +103,8 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 6. 上限外の値は機体が拒否し、状態も出力も変えない（条件 11）。
 7. 停止理由は `stop_reason` として保持し、TELEMETRY と EVENT の両方で PC から読める（条件 12）。
 8. 停止（保持）で**ホーム姿勢へ動かさない**。脱力は `STOP(mode=disable)` のときだけ。
+9. **胴体の持ち主は一つ。** 歩容（`DRIVE`）と姿勢（`BODY`）は同時に胴体を動かさない。
+   姿勢へ移るには先に `DRIVE` を止める。`TORQUE` の脱力は、どの停止でも 100% に戻る。
 
 ### stop_reason
 

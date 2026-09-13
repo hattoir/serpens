@@ -57,6 +57,8 @@ class SimulatedDevice:
         self._drive_at: float | None = None
         self._drive_until = 0.0
         self._head_until = 0.0
+        self._body_until = 0.0
+        self.torque_ratio = 1.0               # TORQUE 指令（脱力の演出）。1.0 = 100%
         self._nonces: list[int] = []
         self._last_ctrl = now
         self._last_telem = now
@@ -162,14 +164,31 @@ class SimulatedDevice:
             self.mo.set_head(h)
             self._head_until = now + h.ttl_ms / 1000.0
             return self._ack(fr)
+        if cmd is Cmd.BODY:
+            b = m.Body.unpack(fr.payload)
+            if self.driving:
+                return self._nack(fr, Nack.BUSY)       # 胴体は歩容が使っている（先に DRIVE を止める）
+            if not self.mo.body_ok(b):
+                return self._nack(fr, Nack.OUT_OF_RANGE)
+            self.mo.set_body(b)
+            self._body_until = now + b.ttl_ms / 1000.0
+            return self._ack(fr)
+        if cmd is Cmd.TORQUE:
+            ratio = m.unpack_torque(fr.payload)
+            if not 0.0 < ratio <= 1.0:
+                return self._nack(fr, Nack.OUT_OF_RANGE)
+            self.torque_ratio = ratio                  # 実機ではサーボのトルク制限レジスタへ
+            return self._ack(fr)
         if cmd is Cmd.POSE:
             pose = POSE_IDS.get(fr.payload[0])
             if pose is None or self.driving or not isinstance(self.cfg["poses"].get(pose), dict):
                 return self._nack(fr, Nack.OUT_OF_RANGE)
             self.mo.set_pose(self.cfg["poses"][pose])
             return self._ack(fr)
-        self.breathing = bool(fr.payload[0])           # Cmd.BREATH
-        return self._ack(fr)
+        if cmd is Cmd.BREATH:
+            self.breathing = bool(fr.payload[0])
+            return self._ack(fr)
+        return self._nack(fr, Nack.UNKNOWN_CMD)        # 取りこぼしを別の指令として実行しない
 
     def _clear_fault(self, fr: Frame, now: float) -> bytes:
         """ラッチ解除。**待機（DISARMED）へ戻すだけ**（完了条件 10）。"""
@@ -213,6 +232,8 @@ class SimulatedDevice:
             self._stop(StopReason.DRIVE_TTL, now)
         if now > self._head_until:
             self.mo.stop_head()                                     # 頭も期限切れで止める
+        if now > self._body_until:
+            self.mo.stop_body()                                     # 胴体の姿勢も期限切れで止める
         if (self.stop_reason, self.state) != before:
             self._log(now)
             return encode(Rep.EVENT, 0, m.pack_event(int(self.stop_reason), int(self.state)))
@@ -228,6 +249,7 @@ class SimulatedDevice:
         self.driving = False
         self._drive = None
         self.breathing = False
+        self.torque_ratio = 1.0                           # 演出の脱力は停止で解除する
         self.mo.hold()                                    # いまの角度で保持
         self.stop_reason = reason
         if latch:

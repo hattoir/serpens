@@ -18,6 +18,7 @@ static const float LIMIT_SPATIAL_DEG     = 150.0f;
 static const float LIMIT_TEMPORAL_HZ     = 1.0f;
 static const float LIMIT_GAMMA_DEG       = 30.0f;
 static const float LIMIT_HEAD_SPEED_DPS  = 120.0f;
+static const float LIMIT_BODY_SPEED_DPS  = 240.0f;  // BODY 指令（とぐろ・鎌首）の速度上限
 
 // ---- 異常で緊急停止（ラッチ）する条件 ----
 static const uint8_t FAULT_TEMP_LIMIT_C = 60;       // behavior.safety.overheat_c(55) より上
