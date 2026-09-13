@@ -166,12 +166,12 @@ def test_sim_session_keeps_working(cfg: dict) -> None:
 
 def test_autonomy_blockers_list_reasons(cfg: dict) -> None:
     """不足している条件が個別に言葉で出る。"""
-    bad = AutonomyInputs(True, "sim", None, False, False, 0, 9, None)
+    bad = AutonomyInputs(True, "sim", None, False, False, False, 0, 9, None)
     why = autonomy_blockers(cfg, bad)
-    assert len(why) == 4
-    ok = AutonomyInputs(True, "aruco", 0.1, True, True, 9, 9, 0.2)
+    assert len(why) == 5, why          # 自己位置・校正・駆動リンク・トルク上限・テレメトリ
+    ok = AutonomyInputs(True, "aruco", 0.1, True, True, True, 9, 9, 0.2)
     assert autonomy_blockers(cfg, ok) == []
-    stale = AutonomyInputs(True, "aruco", 5.0, True, True, 9, 9, 9.0)
+    stale = AutonomyInputs(True, "aruco", 5.0, True, True, True, 9, 9, 9.0)
     assert any("古い" in w for w in autonomy_blockers(cfg, stale))
 
 

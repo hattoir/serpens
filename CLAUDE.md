@@ -292,21 +292,78 @@ OBSERVE → PRIORITIZE → DESIGN → BUILD → TEST → CRITIQUE → FIX → DO
 
 # serpens — このプロジェクト固有
 
-> Serpens EX-1 — 9軸ヘビ型ロボット 制御ソフトウェア（展示機）
+> Serpens EX-1 — 9軸（胴体ヨー×6 + 首ピッチ J7 + 頭ヨー J8 + 頭ロール J9）ヘビ型ロボット制御。
 
-- **canonical name**: `serpens`
-- **実際の場所**: `Serpens_Home AI/serpens`
-- **stack**: Python 3.12 / pytest / OpenCV(contrib) / ultralytics / ESP32 firmware
+- **canonical name**: `serpens` / **実際の場所**: `Serpens_Home AI/serpens`（理由は `agent/DECISIONS.md`）
+- **stack**: Python 3.12 / pytest / opencv-contrib / ultralytics / ESP32-S3 firmware
+- **位置づけ**: 単体の製品ではなく、`home-ai` を家庭に持ち込むための入口
+  （`../蛇ロボット_HomeAI_構想設計書.pdf` 01章）
 
 ## 作業を始める前に読む
 
-1. `agent/STATE.md` — 今どこにいるか、次に何が価値が高いか
-2. `agent/ROADMAP.md` — どこへ向かっているか
-3. `agent/DECISIONS.md` — なぜこうなっているか
-4. `git status` — ユーザーの未コミット変更を消さないため
+1. **`docs/product_status.md`** — サブシステムごとの現在地と、実機が無くても進む作業の優先順。**一次資料**
+2. `agent/STATE.md` — セッション間の引き継ぎ・仮定・検証記録
+3. `agent/ROADMAP.md` — 構想設計書のフェーズとの対応
+4. `agent/DECISIONS.md` — なぜこうなっているか
+5. `git status` — **ユーザーの未コミット変更を消さないため**
 
 ## 変更したら通すもの
 
 ```bash
 .venv/Scripts/python.exe -m pytest -q
 ```
+
+212 件通るのが正常（2026-09-14 時点）。**1 件でも落ちたら先に直す。**
+このリポジトリのテストは安全機構の振る舞いを直接検証しているので、
+落ちたテストを「タイミングの問題」として通す方向に直してはいけない
+（実際に 1 件、テストが正しくて実装が間違っていた例がある。`agent/DECISIONS.md` 参照）。
+
+## モックファースト — 崩さない
+
+**実機が 1 台も無くてもシミュレータ上で全機能が動く。** これが開発速度の源。
+実機が無いと動かないコードパスを増やさない。
+
+## 安全設計 — 緩めない
+
+Home AI 構想設計書の第一原則:
+**「安全は最下層で保証する。LLM や AI エージェントがどれだけ誤判断しても、
+モーターに危険な指令が届かない。安全は AI の賢さではなく、
+AI が介在できない層の物理・電気的制約で担保する。」**
+
+その実装上の帰結:
+
+- **停止の権限は `serpens/safety.py` の `StopSupervisor` に集約。** ここを迂回して
+  モーター出力を書くコードを書かない。
+- **緊急停止はラッチする。** 原因が消えても自動復帰しない。`CLEAR_FAULT` は DISARMED までで、
+  走行再開には明示的な ARM が要る。この段差を無くさない。
+- **機体側（ESP32）が単独で止まれる。** PC が落ちても USB が抜けても、
+  DRIVE TTL 300ms / heartbeat タイムアウト 400ms で機体が自分で保持へ入る。
+  **PC を信頼する設計に変えない。**
+- **上限の強制は機体側でも行う。** 範囲外の角度・速度・歩容値は NACK OUT_OF_RANGE。
+- **異常を公開する前に、まず止める。** `fault` は「異常を検知した」の合図なので、
+  緊急停止がラッチし切る前に立ててはいけない。
+- 実機は**待機（停止）から始まる**。`--bus feetech --port COM5` を足しただけでは走らない。
+  実観測の自己位置・床の校正・ESP32 駆動リンクが揃うまで自律走行は開始しない。
+
+## 設定値
+
+**寸法・しきい値・ゲインは全部 `config/robot.yaml`。コードにマジックナンバーを書かない。**
+このルールは既に守られている。破らない。
+
+## 使わないもの（意図的な選択）
+
+- **ROS 2 を使わない**
+- **行動選択に LLM を使わない**（効用関数は手書き。構想設計書の
+  「ネットが切れても飼える」原則と、デバッグ可能性のため）
+- **腕への巻き付き**は安全設計上、構想設計書 16章が封印を推奨（T6）
+
+## 依存関係の罠（README §1 に詳しい）
+
+opencv は **`opencv-contrib-python` だけ**を入れる。`ultralytics` は `opencv-python` に依存するので、
+素直に入れると両方入って `cv2.aruco` が消える。だから 2 段階インストールになっている。
+`pip check` が「ultralytics requires opencv-python」と警告するのは**想定どおり**。
+
+## 模擬と実測を混ぜない
+
+`docs/phase2_acceptance.md` は条件ごとに「確認済み / 模擬のみ / 未実施」を分けて書いている。
+**この区別を消さない。** 実機が来たら `tools/link_check.py` で測り直して表を更新する。

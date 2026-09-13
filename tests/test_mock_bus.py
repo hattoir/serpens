@@ -120,13 +120,24 @@ def test_load_while_moving_and_external(rig: tuple[MockServoBus, FakeClock]) -> 
     assert bus.read_state(1).load == pytest.approx(0.4, abs=0.02)
 
 
-def test_torque_limit_caps_load(rig: tuple[MockServoBus, FakeClock]) -> None:
-    """トルク上限 60% なら負荷も 0.6 で頭打ち。"""
+def test_torque_limit_is_relative_to_safety_ceiling(rig: tuple[MockServoBus, FakeClock],
+                                                    cfg: dict) -> None:
+    """トルク比は**安全上限（safety_limits.torque_ratio_max）に対する割合**。
+
+    脱力演出でも、ここを通して全力（ストールトルク）へは戻せない。
+    """
     bus, clock = rig
+    ceiling = float(cfg["safety_limits"]["torque_ratio_max"])
     bus.set_torque_limit(1, 0.6)
     bus.set_external_load(1, 0.9)
     clock.advance(0.01)
-    assert bus.read_state(1).load == pytest.approx(0.6)
+    assert bus.read_state(1).load == pytest.approx(0.6 * ceiling)
+    bus.set_torque_limit(1, 1.0)                       # 「全開」でも上限まで
+    clock.advance(0.01)
+    assert bus.read_state(1).load == pytest.approx(ceiling)
+    bus.set_torque_limit(1, 5.0)                       # 上限外の要求も上限で頭打ち
+    clock.advance(0.01)
+    assert bus.read_state(1).load == pytest.approx(ceiling)
 
 
 def test_torque_off_does_not_move(rig: tuple[MockServoBus, FakeClock]) -> None:

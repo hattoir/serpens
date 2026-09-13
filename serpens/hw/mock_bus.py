@@ -87,8 +87,8 @@ class MockServoBus(ServoBus):
             ax.goal = Goal(ax.pos_deg, ax.goal.speed_dps, ax.goal.accel_dps2)
         ax.torque_on = on
 
-    def set_torque_limit(self, servo_id: int, ratio: float) -> None:
-        """トルク上限（0〜1）。"""
+    def _set_torque_limit(self, servo_id: int, ratio: float) -> None:
+        """トルク上限（0〜1 = ストールトルクに対する割合）。"""
         self._update()
         self._axis(servo_id).torque_ratio = min(max(ratio, 0.0), 1.0)
 

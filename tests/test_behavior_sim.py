@@ -85,10 +85,12 @@ def test_touch_makes_it_go_limp(cfg: dict) -> None:
     run_until(s, 2.3)
     s.touch(False)
     assert s.brain.fsm.state == "PETTED"
-    assert s.bus._axes[7].torque_ratio == pytest.approx(cfg["poses"]["relax"]["torque_ratio"])
+    assert s.bus._axes[7].torque_ratio == pytest.approx(
+        cfg["poses"]["relax"]["torque_ratio"] * cfg["safety_limits"]["torque_ratio_max"])
     assert s.head.eye_rgb_brightness[3] == cfg["behavior"]["eyes"]["PETTED"][3]
     run_until(s, 2.3 + cfg["behavior"]["expression"]["petted_s"] + 0.2)
-    assert s.bus._axes[7].torque_ratio == 1.0
+    assert s.bus._axes[7].torque_ratio == pytest.approx(
+        cfg["safety_limits"]["torque_ratio_max"])   # 演出が終わっても安全上限まで
 
 
 def test_hot_servos_make_it_coil_and_rest(cfg: dict) -> None:

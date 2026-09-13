@@ -162,8 +162,11 @@ class FeetechServoBus(ServoBus):
             r = self._handler().write1ByteTxRx(servo_id, SMS_STS_TORQUE_ENABLE, 1 if on else 0)
         self._check(r[0], f"トルク設定 ID{servo_id}")
 
-    def set_torque_limit(self, servo_id: int, ratio: float) -> None:
-        """トルク制限（48 番地）を書く。"""
+    def _set_torque_limit(self, servo_id: int, ratio: float) -> None:
+        """トルク制限（48 番地・SRAM）を書く。ratio はストールトルクに対する割合。
+
+        **実機未検証。** 48 番地の単位は資料間で食い違いがある（docs/sts3215_registers.md §注意 2）。
+        """
         val = ratio_to_torque_limit(ratio, self._s)
         with self._lock:
             r = self._handler().write2ByteTxRx(servo_id, ADDR_TORQUE_LIMIT, val)

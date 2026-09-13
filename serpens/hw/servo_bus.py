@@ -80,6 +80,9 @@ class ServoBus(ABC):
         self.joints: dict[int, JointSpec] = {
             j.servo_id: j for j in (JointSpec.from_cfg(d) for d in cfg["joints"])
         }
+        # 安全の絶対上限（構想設計書 16章の L0 トルク上限）。ここを超える出力は出せない
+        self.torque_ceiling = float(cfg["safety_limits"]["torque_ratio_max"])
+        self.torque_ceiling_applied = False
 
     # ---- 共通処理 ------------------------------------------------------------
     @property
@@ -166,9 +169,30 @@ class ServoBus(ABC):
     def set_torque(self, servo_id: int, on: bool) -> None:
         """トルクの ON/OFF。"""
 
-    @abstractmethod
     def set_torque_limit(self, servo_id: int, ratio: float) -> None:
-        """出力トルクの上限を 0.0〜1.0 で設定する（脱力演出用）。"""
+        """出力トルクの上限。**ratio 1.0 = 安全上限**（safety_limits.torque_ratio_max）。
+
+        脱力演出はこの上限に対する割合で、ここを通して全力へ戻すことはできない。
+        """
+        self._set_torque_limit(servo_id, min(max(ratio, 0.0), 1.0) * self.torque_ceiling)
+
+    def apply_torque_ceiling(self) -> list[int]:
+        """全軸へ安全上限を書き、**書けなかった軸の ID** を返す。
+
+        接続のたびに通す（SRAM なので電源で消える）。書けなかった軸があるまま走らせない
+        （`autonomy_blockers` が実機の自律走行を止める）。
+        """
+        failed: list[int] = []
+        for sid in self.ids:
+            try:
+                self._set_torque_limit(sid, self.torque_ceiling)
+            except (ServoCommError, OSError):
+                failed.append(sid)
+        self.torque_ceiling_applied = not failed
+        return failed
+
+    def _set_torque_limit(self, servo_id: int, ratio: float) -> None:
+        """実際に上限を書く（ストールトルクに対する割合）。実装側で上書きする。"""
 
     @abstractmethod
     def _set_goals(self, goals: dict[int, Goal]) -> None:

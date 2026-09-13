@@ -140,6 +140,7 @@ class AutonomyInputs:
     pose_age_s: float | None
     calibration_present: bool
     drive_link_ok: bool
+    torque_ceiling_ok: bool           # 安全上限（トルク制限）を全軸へ書けたか
     telemetry_axes: int
     expected_axes: int
     telemetry_age_s: float | None
@@ -167,6 +168,9 @@ def autonomy_blockers(cfg: dict[str, Any], inputs: AutonomyInputs) -> list[str]:
         out.append(f"床の校正が無い（{cfg['homography']['file']}。tools/calibrate_floor.py で作成）")
     if bool(a["require_drive_link"]) and not inputs.drive_link_ok:
         out.append("駆動リンク（ESP32 heartbeat）が無い。Phase 2 まで実機の自律走行は禁止")
+    if not inputs.torque_ceiling_ok:
+        out.append("トルク上限を全軸へ設定できていない"
+                   f"（safety_limits.torque_ratio_max = {cfg['safety_limits']['torque_ratio_max']}）")
     if inputs.telemetry_axes < inputs.expected_axes:
         out.append(f"テレメトリ不足: {inputs.telemetry_axes}/{inputs.expected_axes} 軸しか読めていない")
     elif inputs.telemetry_age_s is not None and inputs.telemetry_age_s > float(t["stale_after_s"]):

@@ -56,6 +56,7 @@ class SimSession:
         for section, values in (overrides or {}).items():
             cfg[section].update(values)
         self.cfg = cfg
+        self.errors: list[str] = []                # 出力・切断の失敗をためる（握りつぶさない）
         self.clock = ManualClock()
         self.ctrl_dt = 1.0 / float(cfg["behavior"]["tick_hz"])
         self.sub = max(int(round(self.ctrl_dt / float(cfg["sim"]["dt_s"]))), 1)
@@ -72,6 +73,9 @@ class SimSession:
         # 実機経路でモックの頭部を実センサーとして扱わない（未接続なら None のまま）
         self.head: HeadIO | None = head if head is not None else (None if robot_is_real else MockHeadIO(cfg, clock=self.clock))
         self.owns_head = head is None and self.head is not None
+        failed = self.bus.apply_torque_ceiling()     # 安全上限（構想設計書 16章）を必ず通す
+        if failed:
+            self.errors.append(f"トルク上限を設定できなかった軸: {failed}")
         self.poller = ServoStatePoller(self.bus, cfg, self.clock)
         self.anim = Animator(cfg)
         self.brain = Brain(cfg, self.anim, self.bus, self.head, random.Random(seed))
@@ -84,7 +88,6 @@ class SimSession:
         self.people: list[SimPerson] = []
         self.snake: SnakePose | None = None
         self.target: TrackedPerson | None = None
-        self.errors: list[str] = []                # 停止・切断の失敗をためる（握りつぶさない）
         self._serial = 0
         self._switches = 0
         self._ids = {j["name"]: int(j["servo_id"]) for j in cfg["joints"]}
@@ -113,6 +116,7 @@ class SimSession:
             pose_age_s=None if self.snake is None else self.snake_tracker.age_s(now),
             calibration_present=Path(self.cfg["homography"]["file"]).exists(),
             drive_link_ok=self.drive_link_ok,
+            torque_ceiling_ok=self.bus.torque_ceiling_applied,
             telemetry_axes=len(self.poller.fresh_states(now)),
             expected_axes=len(self.bus.ids),
             telemetry_age_s=self.poller.newest_age_s(now),
