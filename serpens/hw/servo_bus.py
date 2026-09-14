@@ -44,7 +44,9 @@ class JointSpec:
     horn_offset_deg: float   # サーボホーン取付角のずれ（サーボ角 = direction×関節角 + これ）
     min_deg: float           # ソフトリミット
     max_deg: float
-    mech_min_deg: float      # 機械リミット
+    geometry_min_deg: float  # 機構的に到達しうる角度（干渉検査なし）
+    geometry_max_deg: float
+    mech_min_deg: float      # CAD で干渉なしを確認した角度
     mech_max_deg: float
     max_speed_dps: float
 
@@ -56,7 +58,8 @@ class JointSpec:
             x_mm=float(d["x_mm"]), direction=int(d["direction"]),
             horn_offset_deg=float(d["horn_offset_deg"]),
             min_deg=float(d["min_deg"]), max_deg=float(d["max_deg"]),
-            mech_min_deg=float(d["mech_min_deg"]), mech_max_deg=float(d["mech_max_deg"]),
+            geometry_min_deg=float(d["geometry_min_deg"]), geometry_max_deg=float(d["geometry_max_deg"]),
+            mech_min_deg=float(d["mechanical_min_deg"]), mech_max_deg=float(d["mechanical_max_deg"]),
             max_speed_dps=float(d["max_speed_dps"]),
         )
         if not j.mech_min_deg <= j.min_deg < j.max_deg <= j.mech_max_deg:

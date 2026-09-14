@@ -34,7 +34,8 @@ def s(cfg: dict) -> dict:
 
 
 def joint(direction: int = 1, offset: float = 0.0) -> JointSpec:
-    return JointSpec("JX", 1, "yaw", 0.0, direction, offset, -170.0, 170.0, -180.0, 180.0, 240.0)
+    return JointSpec("JX", 1, "yaw", 0.0, direction, offset,
+                     -180.0, 180.0, -170.0, 170.0, -180.0, 180.0, 240.0)
 
 
 @pytest.fixture()
@@ -83,7 +84,8 @@ def test_load_sign_hypothesis(s: dict) -> None:
 
 def test_joint_spec_rejects_soft_limit_outside_mech() -> None:
     d = {"name": "JX", "servo_id": 1, "axis": "yaw", "x_mm": 0, "direction": 1, "horn_offset_deg": 0,
-         "mech_min_deg": -90, "mech_max_deg": 90, "min_deg": -95, "max_deg": 85, "max_speed_dps": 240}
+         "geometry_min_deg": -90, "geometry_max_deg": 90, "mechanical_min_deg": -90,
+         "mechanical_max_deg": 90, "min_deg": -95, "max_deg": 85, "max_speed_dps": 240}
     with pytest.raises(ValueError):
         JointSpec.from_cfg(d)
 

@@ -153,11 +153,15 @@ def test_coil_leaves_room_for_breathing(cfg: dict) -> None:
 
 
 def test_coil_has_no_self_intersection(cfg: dict) -> None:
-    """とぐろ: J1〜J6 で 300° 以上巻き、呼吸で ±振れても中心線間隔が下限以上。"""
+    """とぐろ: J1〜J6 で 250° 以上巻き、呼吸で ±振れても中心線間隔が下限以上。
+
+    巻き数は operational limit（現在 ±60°、CAD R03 の ±64° 由来）で決まる。
+    可動域が変われば、ここと config の coil を作り直す。
+    """
     poses = Poses(cfg)
     sc = cfg["self_collision"]
     coil = poses.coil()
-    assert sum(coil[f"J{k}"] for k in range(1, 7)) > 300
+    assert sum(coil[f"J{k}"] for k in range(1, 7)) > 250
     for d in (-cfg["breath"]["amplitude_deg"], 0.0, cfg["breath"]["amplitude_deg"]):
         pose = {k: v + d for k, v in coil.items()}
         pts = poses.points(pose)

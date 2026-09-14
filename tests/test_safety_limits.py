@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import copy
 import math
 
 import pytest
@@ -50,6 +51,53 @@ def test_joint_range_keeps_minimum_bend_radius(cfg: dict, lim: dict) -> None:
     assert worst >= float(lim["min_bend_radius_mm"]), (
         f"最小曲げ半径 {worst:.1f}mm < {lim['min_bend_radius_mm']}mm。"
         "可動域を狭めるか、リンクを長くすること（機構担当と相談）")
+
+
+def test_free_loop_diameter_meets_design_document(cfg: dict, lim: dict) -> None:
+    """ヘビが作れる**自由な穴の直径**が 80mm 以上（指も手首も通せない輪を作れない）。
+
+    構想設計書 16章は「最小の輪の内径 80mm 以上」。中心線の曲率半径 R から胴体半径を引いて出す。
+    """
+    joints = cfg["joints"]
+    r_body = float(cfg["body"]["diameter_mm"]) / 2.0
+    worst = math.inf
+    for a, b in zip(joints, joints[1:]):
+        if a["axis"] != b["axis"]:
+            continue
+        link_mm = float(b["x_mm"] - a["x_mm"])
+        theta = math.radians(max(abs(float(a["min_deg"])), abs(float(a["max_deg"]))))
+        worst = min(worst, link_mm / (2.0 * math.tan(theta / 2.0)))
+    hole_mm = 2.0 * (worst - r_body)
+    assert hole_mm >= 80.0, f"輪の内径 {hole_mm:.0f}mm < 80mm（可動域を狭めること）"
+
+
+def test_operational_limits_stay_inside_cad_verified_range(cfg: dict) -> None:
+    """operational ⊆ mechanical ⊆ geometry。**CAD の干渉検査を超えた角度を出せない。**"""
+    from serpens.config import check_joint_limits
+
+    check_joint_limits(cfg)                       # 現物は通る
+    bad = copy.deepcopy(cfg)
+    bad["joints"][0]["max_deg"] = bad["joints"][0]["mechanical_max_deg"] + 1.0
+    with pytest.raises(ValueError, match="operational"):
+        check_joint_limits(bad)
+    worse = copy.deepcopy(cfg)
+    worse["joints"][0]["mechanical_max_deg"] = worse["joints"][0]["geometry_max_deg"] + 1.0
+    with pytest.raises(ValueError, match="mechanical"):
+        check_joint_limits(worse)
+
+
+def test_body_operational_limit_matches_cad_review(cfg: dict) -> None:
+    """胴体ヨーの可動域が CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` と矛盾しない。
+
+    ±64° 干渉なし / ±65° で Belly Shell 干渉。**±85° は過去の想定で、機械設計と一致しない。**
+    """
+    body = [j for j in cfg["joints"] if j["axis"] == "yaw" and j["name"] in
+            {f"J{k+1}" for k in range(6)}]
+    assert body, "胴体ヨーが見つからない"
+    for j in body:
+        assert abs(float(j["mechanical_max_deg"])) <= 64.0, f"{j['name']}: CAD の干渉検査を超えている"
+        assert abs(float(j["max_deg"])) <= abs(float(j["mechanical_max_deg"]))
+        assert abs(float(j["max_deg"])) < 85.0, "±85° 想定が残っている"
 
 
 def test_mass_budget_within_limit(cfg: dict, lim: dict) -> None:

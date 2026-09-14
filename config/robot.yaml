@@ -18,20 +18,29 @@ body:
 #   servo_id        バス上の ID
 #   direction       取り付け向き（+1 / -1）
 #   horn_offset_deg サーボホーン取付角のずれ（実機で測って吸収する。既定 0）
-#   mech_min/max    機械リミット（確定）   min/max_deg  ソフトリミット（確定。指令はここでクランプ）
 #   max_speed_dps   その軸の最高角速度（頭部は丁寧に動かすため遅い）
-# ±85° の根拠: リンク 95mm で隣接関節 85° のとき曲率半径 R = 95 / (2·tan42.5°) = 51.8mm（内径 約104mm）
+#
+# **可動域は3段**（geometry ⊇ mechanical ⊇ operational）。load_config が包含関係を検査する。
+#   geometry_*    機構的に到達しうる角度。干渉検査はしていない
+#   mechanical_*  CAD で干渉なしを確認した角度
+#   min/max_deg   operational。**ソフトが指令してよい角度**（ここでクランプ）
+#
+# 胴体ヨー（J1〜J6）の根拠: CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` で
+#   ±64° 干渉なし / ±65° で Belly Shell 干渉 → mechanical ±64°。
+#   operational は呼吸 ±2° とサーボの追従誤差を見て **±60°（暫定）**。最終値は機械側の確定待ち。
+#   曲率半径 R = 95 / (2·tan30°) = 82.3mm（自由な穴の直径 114mm。構想設計書16章の 80mm 以上を満たす）
+# 頭部（J7〜J9）の mechanical は **CAD 未検証**。geometry と同じ値を置いてあるだけ
 # TODO: 外皮ニット装着後に可動範囲を再測定する（README 参照）
 joints:
-  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
-  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
-  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
-  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
-  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
-  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -90.0, mech_max_deg: 90.0, min_deg: -85.0, max_deg: 85.0, max_speed_dps: 240.0}
-  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -10.0, mech_max_deg: 95.0, min_deg: -8.0,  max_deg: 90.0, max_speed_dps: 120.0}
-  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -85.0, mech_max_deg: 85.0, min_deg: -80.0, max_deg: 80.0, max_speed_dps: 90.0}
-  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, horn_offset_deg: 0.0, mech_min_deg: -40.0, mech_max_deg: 40.0, min_deg: -35.0, max_deg: 35.0, max_speed_dps: 90.0}
+  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
+  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
+  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
+  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
+  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
+  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
+  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -10.0, geometry_max_deg: 95.0, mechanical_min_deg: -10.0, mechanical_max_deg: 95.0, min_deg: -8.0,  max_deg: 90.0, max_speed_dps: 120.0}
+  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -85.0, geometry_max_deg: 85.0, mechanical_min_deg: -85.0, mechanical_max_deg: 85.0, min_deg: -80.0, max_deg: 80.0, max_speed_dps: 90.0}
+  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -40.0, geometry_max_deg: 40.0, mechanical_min_deg: -40.0, mechanical_max_deg: 40.0, min_deg: -35.0, max_deg: 35.0, max_speed_dps: 90.0}
 
 # 首（J7）の使い分け
 neck:
@@ -110,8 +119,10 @@ gait:
 poses:
   # J7 = +8°: 頭をわずかに浮かせる（呼吸が下限で切れず、上下にゆっくり揺れて生きて見える）
   home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 8, J8: 0, J9: 0}
-  # とぐろ: J1〜J6 のみで平面の渦（329°巻き、中心線間隔 69mm）。呼吸 ±2° を足してもソフトリミット内
-  coil: {J1: 83.0, J2: 68.9, J3: 57.2, J4: 47.5, J5: 39.4, J6: 32.7, J7: 8, J8: 0, J9: 0}
+  # とぐろ: J1〜J6 のみで平面の渦。**operational ±60° 内で作り直した**（旧値は ±85° 前提で CAD と不一致）
+  # 合計 260°巻き（尾から頭へ 0.92 で減衰）。**呼吸 ±2° を足した状態**で自己クリアランス 89.6mm、
+  # 最大関節角 54.8° ≤ operational 60°。旧値（329°巻き・J1=83°）は CAD の可動域と一致しない
+  coil: {J1: 52.8, J2: 48.6, J3: 44.7, J4: 41.1, J5: 37.9, J6: 34.8, J7: 8, J8: 0, J9: 0}
   # とぐろへの移り方: 尾から順に巻き、頭（J7 以降）を最後に引き込む
   coil_sequence:
     order: [J1, J2, J3, J4, J5, J6, J7, J8, J9]
@@ -123,7 +134,7 @@ poses:
     default_base: s_curve
     bases:
       s_curve:      {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}   # 仮
-      partial_coil: {J1: 60, J2: 50, J3: 40, J4: 0, J5: 0, J6: 0}    # 後方を軽く巻く（仮）
+      partial_coil: {J1: 55, J2: 48, J3: 40, J4: 0, J5: 0, J6: 0}    # 後方を軽く巻く（仮。呼吸ぶん余裕を残す）
   # 脱力（タッチ時）: 首を下げ、トルクを落とす
   relax:
     neck_deg: 0.0             # J7 を下げる

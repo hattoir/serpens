@@ -21,7 +21,25 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
         raise ValueError(f"設定ファイルの形式が不正です: {p}")
+    check_joint_limits(data)
     return data
+
+
+def check_joint_limits(cfg: dict[str, Any]) -> None:
+    """可動域の包含関係 geometry ⊇ mechanical ⊇ operational を確かめる。
+
+    **ソフトの都合で operational を機構の外へ広げられないようにする。**
+    出典: CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW`（±64° 干渉なし / ±65° 干渉）。
+    """
+    for j in cfg.get("joints", []):
+        g = (float(j["geometry_min_deg"]), float(j["geometry_max_deg"]))
+        m = (float(j["mechanical_min_deg"]), float(j["mechanical_max_deg"]))
+        o = (float(j["min_deg"]), float(j["max_deg"]))
+        if not g[0] <= m[0] < m[1] <= g[1]:
+            raise ValueError(f"{j['name']}: mechanical {m} が geometry {g} の外")
+        if not m[0] <= o[0] < o[1] <= m[1]:
+            raise ValueError(f"{j['name']}: operational {o} が mechanical {m} の外"
+                             "（CAD の干渉検査を超えた角度をソフトから出そうとしている）")
 
 
 def joint_names(cfg: dict[str, Any]) -> list[str]:

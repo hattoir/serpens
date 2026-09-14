@@ -12,7 +12,7 @@
 
 | サブシステム | 状態 | いまある物 | 憲章との差 |
 |---|---|---|---|
-| Mechanical | **未着手** | 寸法・質量収支は数値だけ（`config/robot.yaml` の `body` / `mass_budget_g` / `joints`）。CAD は別担当で、リポジトリに図面は無い | segment 構成・シェル・ケーブル経路・修理性・製造性の検討が無い |
+| Mechanical | 部分 | 寸法・質量収支と**3段の可動域**（geometry / mechanical / operational）。CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` の ±64° をソフトへ反映済み | 図面はリポジトリに無い。シェル・ケーブル経路・修理性・製造性の検討が無い。頭部の干渉検査は未 |
 | Actuation | 部分 | STS3215 の仕様を一次情報で確認（[docs/sts3215_registers.md](sts3215_registers.md)）。トルク・速度・分解能・電圧の値は config 済み | ギア比・スリップ機構・実測トルク余裕は未検討。**サーボ実機ゼロ** |
 | Electronics | **未着手** | MCU は ESP32-S3 を前提に置いただけ。回路図・PCB・部品表は無い | ドライバ・電流検出・IMU・温度・配電の設計が無い。KiCad 未着手 |
 | Power | **未着手** | 12V テザー給電の注意書きのみ（README §2.4） | バッテリ・BMS・電流監視・突入電流・電圧降下の設計が無い |

@@ -278,7 +278,8 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 
 - `serpens/hw/servo_bus.py` … 抽象クラス `ServoBus`。角度は**関節角 [deg]**（0° = まっすぐ）。
   ソフトリミット（config の `min_deg` / `max_deg`）でのクランプはここで共通に行う。
-  機械リミット（`mech_min_deg` / `mech_max_deg`）は別に持ち、ソフトリミットがその内側かを起動時に確認する。
+  可動域は3段（`geometry_*` ⊇ `mechanical_*` ⊇ `min_deg`/`max_deg`）で、包含関係を `load_config` が検査する。
+  胴体ヨーは CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` の ±64°（干渉なし）に対し operational ±60°（暫定）。
 - `serpens/hw/mock_bus.py` … 一次遅れ追従。温度は一次系で、時定数 `mock_servo.heat_tau_s` を変えられる。
 - `serpens/hw/feetech_bus.py` … 実機用。根拠は [docs/sts3215_registers.md](docs/sts3215_registers.md)。
   取り付け向き（`direction`）とホーン取付角オフセット（`horn_offset_deg`）は config で関節ごとに設定する。

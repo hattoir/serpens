@@ -213,9 +213,10 @@ def test_valid_head_moves_within_limits(cfg: dict) -> None:
 
 
 def test_amplitude_plus_turn_must_fit_soft_limit(cfg: dict) -> None:
-    """振幅と旋回オフセットの**合計**がソフトリミット（85°）を超える組み合わせも拒否する。
+    """振幅と旋回オフセットの**合計**が operational limit を超える組み合わせを拒否する。
 
-    既定の上限（振幅 40 + γ 30 = 70）では届かないが、上限を緩めたときの最後の砦。
+    胴体ヨーの operational は現在 ±60°（CAD R03 の ±64° 由来）。
+    既定の上限（振幅 40 + γ 30 = 70）でも超えうるので、この検査が効く。
     """
     import copy
 
@@ -225,8 +226,9 @@ def test_amplitude_plus_turn_must_fit_soft_limit(cfg: dict) -> None:
     loose["link"]["limits"]["amplitude_deg"] = 90.0
     loose["link"]["limits"]["gamma_deg"] = 90.0
     mo = DeviceMotion(loose)
-    assert mo.drive_ok(m.Drive(300, 60.0, 60.0, 0.5, 20.0))        # 80 ≤ 85
-    assert not mo.drive_ok(m.Drive(300, 60.0, 60.0, 0.5, 30.0))    # 90 > 85
+    body_max = min(float(loose["joints"][k]["max_deg"]) for k in range(6))
+    assert mo.drive_ok(m.Drive(300, body_max - 10.0, 60.0, 0.5, 10.0))       # 合計 = 上限
+    assert not mo.drive_ok(m.Drive(300, body_max - 10.0, 60.0, 0.5, 10.1))   # 合計 > 上限
 
 
 def test_unknown_command_and_bad_length(cfg: dict) -> None:
