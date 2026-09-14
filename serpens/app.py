@@ -200,22 +200,16 @@ def _open_real_bus(cfg: dict[str, Any], port: str | None) -> Any:
 def _make_link_robot(cfg: dict[str, Any], port: str | None, session_clock: Any) -> Any:
     """駆動リンク経路の出力先を作る。
 
-    `--link-port` があれば実シリアル（**実機未検証**）、無ければ**模擬 ESP32**（同じ仕様の参照実装）。
-    模擬でも「PC が落ちたら機体が止まる」振る舞いはそのまま出る。
+    `--link-port` があれば `RealSnake`（**HARDWARE_UNVERIFIED**）、無ければ `SimulatedSnake`。
+    どちらも同じ `RobotInterface` なので、行動・安全・GUI 側は何も変わらない。
     """
-    from serpens.link.client import LinkClient
-    from serpens.link.device import SimulatedDevice
-    from serpens.link.robot import LinkRobot
-    from serpens.link.transport import LoopbackTransport, SerialTransport
+    from serpens.link.snake import RealSnake, SimulatedSnake
 
     if port:
-        tr = SerialTransport(port)
-        print(f"駆動リンクへ接続します: {port}（**実機未検証**）")
-        return LinkRobot(cfg, LinkClient(tr, cfg), session_clock, pump=None)
-    device = SimulatedDevice(cfg)
-    loop_tr = LoopbackTransport(device)
-    print("駆動リンク: 模擬 ESP32（serpens/link/device.py）。実機は --link-port COMx")
-    return LinkRobot(cfg, LinkClient(loop_tr, cfg), session_clock, pump=loop_tr.pump)
+        print(f"RealSnake: {port} へ接続します（**HARDWARE_UNVERIFIED**）")
+        return RealSnake(cfg, session_clock, port)
+    print("SimulatedSnake: 仮想 ESP32 + 仮想サーボ（serpens/link/device.py）。実機は --link-port COMx")
+    return SimulatedSnake(cfg, session_clock)
 
 
 def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, ControlLoop, Any]:

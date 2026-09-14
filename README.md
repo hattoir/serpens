@@ -357,17 +357,29 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe -m serpens.app --robot link --link-port COM7
 # 完了条件 1〜12 の確認 + 時間の実測（模擬機体。実機は不要）
 .\.venv\Scripts\python.exe tools\link_check.py
+# 歩容パラメータの掃引（速さ・旋回性・蛇らしさ・滑らかさ・負荷・電力目安）
+.\.venv\Scripts\python.exe tools\gait_sweep.py
 # ファームと突き合わせる参照角度列 → data/gait_reference.csv
 .\.venv\Scripts\python.exe tools\make_gait_reference.py
 ```
 
 | 場所 | 中身 |
 |---|---|
+| `serpens/link/snake.py` | **`SimulatedSnake` / `RealSnake`**。上位から見た2つのヘビ（同じ Interface） |
 | `serpens/link/protocol.py` `messages.py` | フレームと payload（通信路を持たない） |
-| `serpens/link/device.py` `device_motion.py` | **機体側の参照実装**（ファームはこれを写す） |
-| `serpens/link/client.py` | PC 側。heartbeat・TTL・停止理由の履歴 |
-| `serpens/link/transport.py` `harness.py` | 偽経路（USB 抜去・PC 強制終了・再起動・重複・CRC 破損）と足場 |
+| `serpens/link/device.py` `device_motion.py` `device_servos.py` | **Virtual ESP32**（7状態）と仮想サーボバス |
+| `serpens/link/client.py` | PC 側。heartbeat・TTL・停止理由の履歴・NaN/Inf の遮断 |
+| `serpens/link/transport.py` `faults.py` `harness.py` | 偽経路と**故障注入**（loss / delay / 順序入れ替え / 重複 / CRC 破損 / 抜去 / 再起動） |
 | `firmware/serpens_esp32/` | Arduino スケッチ。**未コンパイル・未書き込み**、配線が未確定 |
+
+機体の状態は7つ（`BOOT / DISARMED / ARMED_HOLD / DRIVING / FAULT_HOLD /
+EMERGENCY_LATCHED / TORQUE_DISABLED`）。テレメトリは**指令角ではなく実測角**を返し、
+`source`（SIMULATION / HARDWARE）で模擬か実測かが分かる。
+GUI 下段の関節ペインに、9軸の指令角・実測角・安全状態・機体状態が出る。
+
+**「確認済み」と書くときは4段のどれかを指す**（`docs/verification_status.md`）:
+`SIMULATED` / `SOFTWARE_VERIFIED` / `HARDWARE_UNVERIFIED` / `HARDWARE_VERIFIED`。
+現在 `HARDWARE_VERIFIED` は **0 件**。
 
 `--robot link` のとき、PC が送るのは**歩容のパラメータ（DRIVE）・胴体の姿勢（BODY）・
 首と頭の角度（HEAD）**だけで、9軸の角度列は送らない。胴体の波は機体が作る。

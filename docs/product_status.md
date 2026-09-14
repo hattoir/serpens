@@ -16,8 +16,8 @@
 | Actuation | 部分 | STS3215 の仕様を一次情報で確認（[docs/sts3215_registers.md](sts3215_registers.md)）。トルク・速度・分解能・電圧の値は config 済み | ギア比・スリップ機構・実測トルク余裕は未検討。**サーボ実機ゼロ** |
 | Electronics | **未着手** | MCU は ESP32-S3 を前提に置いただけ。回路図・PCB・部品表は無い | ドライバ・電流検出・IMU・温度・配電の設計が無い。KiCad 未着手 |
 | Power | **未着手** | 12V テザー給電の注意書きのみ（README §2.4） | バッテリ・BMS・電流監視・突入電流・電圧降下の設計が無い |
-| Embedded | 部分 | 駆動リンクの契約（[docs/link_protocol.md](link_protocol.md)）、機体側の参照実装（[device.py](../serpens/link/device.py)）、ファーム雛形（[firmware/](../firmware/serpens_esp32/README.md)） | **ファームは未コンパイル・未書き込み。** サーボ読み書きと配線が未確定 |
-| Locomotion | 実装済み（模擬） | serpenoid 歩容 α(n,t)=A·sin(Ωn+ωt)+γ(n)（[gait.py](../serpens/motion/gait.py)）、非ホロノミック 2D シミュレータ（[world.py](../serpens/sim/world.py)）、とぐろ・鎌首・呼吸 | 実機での前進量・摩擦は未校正（`tools/fit_sim.py` が待っている）。段差・絨毯・坂は未検討 |
+| Embedded | 部分 | 駆動リンク v2（[link_protocol.md](link_protocol.md)）、**Virtual ESP32（7状態）+ 仮想サーボバス**、故障注入、ファームとの値の一致検査 | **ファームは未コンパイル・未書き込み**（C++ コンパイラが無い）。サーボ読み書きと配線が未確定 |
+| Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**Belly（wheel/snake）× 摩擦プロファイル**、[gait_sweep.py](../tools/gait_sweep.py) | 摩擦はすべて未実測。3D 物理は未導入（[phase3b_physics_sim.md](phase3b_physics_sim.md) で MuJoCo を第一候補に選定） |
 | Sensors | 部分 | 頭部 I/O の行プロトコル（ToF・タッチ×2・LED×2）とモック（[head_io.py](../serpens/hw/head_io.py)）、サーボの位置/負荷/温度/電圧の読み出し（[state_poller.py](../serpens/hw/state_poller.py)） | **IMU が無い。** 搭載カメラも無い。電流センサも無い |
 | Vision | 実装済み（外部カメラ前提） | ArUco による自己位置、床ホモグラフィ、YOLO 人物検出（[perception/](../serpens/perception/)） | **上方に固定した外部カメラが前提。** 室内を動き回る前提だと成立しない。所有者の個人識別は無い |
 | Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |
@@ -57,6 +57,9 @@
 
 ## 4. 決めていただきたいこと
 
+0. **胴体ヨーの operational limit（現在 ±60° 暫定）。** CAD R03 の「±64° 干渉なし / ±65° 干渉」に
+   合わせて下げた。とぐろの巻き数はこの値で決まる（329° → 260°）。最終値が決まったら
+   `config/robot.yaml` の `min/max_deg` と `poses.coil` を作り直す。
 1. **第一号機はどちらか。**（a）展示会用の 9 軸テザー機を仕上げる（b）室内ペットとして電源・知覚から作り直す
    （c）3 軸のベンチを先に作って（a)(b) の共通部分を実機検証する。
    → 既存の知覚（外部固定カメラ + ArUco + 床ホモグラフィ）は (b) では**使えない**。

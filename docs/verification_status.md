@@ -67,6 +67,19 @@
 | 行動の状態遷移・効用調停 | `SOFTWARE_VERIFIED` | `tests/test_behavior_*.py` |
 | 「生き物らしさ」 | **未評価** | 人が見ての評価。実機でしか判断できない |
 
+## 4.5 仮想実機（Phase 2/3）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| `SimulatedSnake`（PC → 仮想ESP32 → 仮想サーボ → シミュレータ） | `SIMULATED` | `tests/test_phase3_link_robot.py`（12） |
+| `RealSnake`（PC → 実 ESP32 → STS3215） | **`HARDWARE_UNVERIFIED`** | 一度も実ポートで通信していない |
+| 7状態の遷移（FAULT_HOLD からの復帰は DISARMED まで） | `SOFTWARE_VERIFIED` | `tests/test_phase2_safety.py` |
+| テレメトリ v2（velocity / age / ttl / overrun / source） | `SOFTWARE_VERIFIED` | `tests/test_phase2_frame.py` |
+| 仮想サーボの応答（一次遅れ・速度上限・温度・電圧降下） | `SIMULATED` | `mock_servo` の係数は仮値 |
+| GUI の関節ペイン（指令角 / 実測角 / 機体状態） | `SOFTWARE_VERIFIED` | オフスクリーン描画テスト + 目視（output/gui_joints.png） |
+| Belly（wheel / snake）と摩擦プロファイル | `SIMULATED` | `tests/test_belly_and_gait_config.py`。**係数は未実測** |
+| 歩容の掃引（速さ・蛇らしさ・滑らかさ・負荷） | `SIMULATED` | `tools/gait_sweep.py` |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

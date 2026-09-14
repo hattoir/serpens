@@ -17,6 +17,53 @@
 
 ---
 
+## 2026-09-15 — 機体の状態を7つにし、機体の中に仮想サーボバスを置いた
+
+**Decision**: Virtual ESP32 の状態を `BOOT / DISARMED / ARMED_HOLD / DRIVING / FAULT_HOLD /
+EMERGENCY_LATCHED / TORQUE_DISABLED` の7つにした。あわせて、機体の中に `MockServoBus` を置き
+（`VirtualServoBus`）、**テレメトリが返すのは指令角ではなく模擬の実測角**にした。
+応答しない軸は欠けたまま返し、走行中に欠けたら `FAULT_HOLD` へ落とす。
+
+**Why**: 3状態（DISARMED / ARMED / EMERGENCY）では「異常で止まっている」と「人が止めた」が
+区別できず、停止理由を別フィールドで補っていた。実機ファームも同じ区別が要る。
+また、指令角をそのままテレメトリにすると「指令したのに追従していない」が**原理的に見えない**。
+引っかかり・過負荷・配線抜けはそこにしか現れない。
+
+**Alternatives**: (1) 3状態のまま stop_reason で読み替える → 状態と理由の対応を毎回推論することになる。
+(2) 仮想サーボを入れず、テレメトリに指令角を返し続ける → 実機で最初に効く異常が模擬できない。
+
+**Trade-offs**: 状態の値が変わったので、既存テスト 18 件の期待値を書き換えた。
+模擬サーボを毎周期読むぶん少し遅くなる（計測では suite 全体で有意差なし）。
+
+**Context**: 実機ゼロ。`tests/test_firmware_sync.py` を足して、ファームと Python の値のズレを
+自動検出するようにした（実際に MAX_PAYLOAD と可動域 ±85° の残りを検出した）。
+
+## 2026-09-15 — 摩擦の値は belly プロファイルだけが持つ
+
+**Decision**: `sim.tangential_drag_ratio` / `sim.pad_drag_ratio` を削除し、
+`belly.profiles[type][profile]` を唯一の出どころにした。`tools/fit_sim.py` もそこを同定する。
+
+**Why**: Belly（wheel / snake）を切り替えられるようにした結果、同じ意味の値が config の2か所に
+現れた。二重管理は必ずズレる（実際、テストが `sim` 側を書き換えても効かなくなっていた）。
+
+**Trade-offs**: 既存の設定ファイルと手順書の記述を書き換える必要があった。
+
+## 2026-09-15 — 3D 物理は MuJoCo を第一候補にする（まだ導入しない）
+
+**Decision**: Phase 3B の物理エンジンは MuJoCo を第一候補とし、**`serpens/` 本体からは import しない**
+任意の依存（`tools/` からのみ）として入れる。モデルは config から生成する。
+
+**Why**: Snake Belly の是非は**異方性摩擦**でしか判定できない。MuJoCo は接触ごとに
+5つの摩擦係数（接線2・ねじり1・転がり2）を持ち、接線方向に別々の値を入れられる。
+Apache-2.0、`pip install mujoco` で本体同梱、CPU で動く。
+
+**Alternatives**: PyBullet（等方摩擦が基本）/ Gazebo（ROS 寄り・別インストール）/
+Isaac Sim（GPU 必須・重い）/ Drake（大きい）。
+
+**Trade-offs**: 依存が1つ増える。2D シミュレータは残す（行動の回帰試験は速度が要る）。
+
+**Context**: 一次資料で確認（`docs/phase3b_physics_sim.md` の出典）。**まだ何も実装していない。**
+
 ## 2026-09-14 — 出力先を RobotInterface で差し替え可能にした（Phase 3）
 
 **Decision**: セッションは毎周期 `MotionCommand`（9軸の合成角 + 歩容パラメータ + 胴体ベース角 +

@@ -182,7 +182,11 @@ class ControlLoop(threading.Thread):
         self.shutdown_errors = errors
         for msg in errors:
             log.error("%s", msg)
-        self._publish()
+        try:
+            self._publish()                              # 終了処理は例外を外へ出さない
+        except Exception as e:                           # noqa: BLE001
+            errors.append(f"終了時の状態公開に失敗: {e}")
+            log.exception("終了時の状態公開に失敗")
         return errors
 
     @staticmethod

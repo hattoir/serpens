@@ -153,3 +153,44 @@ def test_session_has_no_fake_servo_bus(rig: Rig) -> None:
     """リンク経路では使わないモックのバスを置かない（値の出どころを偽らない）。"""
     assert rig.session.bus is None
     assert rig.session.robot is rig.robot
+
+
+# ---- SimulatedSnake / RealSnake（上位から見た2つのヘビ） ---------------------------------
+def test_simulated_snake_is_a_drop_in_robot(cfg: dict) -> None:
+    """`SimulatedSnake` をそのままセッションへ渡せる（行動側は何も変わらない）。"""
+    from serpens.link.snake import SimulatedSnake
+
+    clock = ManualClock()
+    snake = SimulatedSnake(cfg, clock)
+    s = SimSession(cfg, START, seed=1, robot=snake, clock=clock)
+    s.request_start("テスト")
+    for _ in range(int(5.0 / s.ctrl_dt)):
+        s.step()
+    assert snake.device.state is State.DRIVING
+    assert s.poller.source == "ESP32 link"
+    assert snake.device_status() is not None and snake.device_status().simulated
+
+
+def test_simulated_snake_exposes_fault_injection(cfg: dict) -> None:
+    """故障注入が上位からも届く（GUI やテストから異常を起こせる）。"""
+    from serpens.link.snake import SimulatedSnake
+
+    clock = ManualClock()
+    snake = SimulatedSnake(cfg, clock)
+    s = SimSession(cfg, START, seed=1, robot=snake, clock=clock)
+    s.request_start("テスト")
+    for _ in range(int(4.0 / s.ctrl_dt)):
+        s.step()
+    assert snake.device.driving
+    snake.faults.drop_ratio = 1.0                 # 経路を全部落とす
+    for _ in range(int(2.0 / s.ctrl_dt)):
+        s.step()
+    assert not snake.device.driving, "通信が全部落ちても走り続けた"
+
+
+def test_real_snake_needs_a_port(cfg: dict) -> None:
+    """`RealSnake` は実ポートが要る。**実機が無いので接続は試せない**（未検証のまま）。"""
+    from serpens.link.snake import RealSnake
+
+    with pytest.raises(Exception):
+        RealSnake(cfg, ManualClock(), "COM_DOES_NOT_EXIST")

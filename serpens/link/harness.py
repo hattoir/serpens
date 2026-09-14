@@ -54,6 +54,12 @@ class LinkHarness:
         self.advance(settle_s)
         return self.device.driving
 
+    def as_snake(self, clock: Any) -> Any:
+        """この足場の機体を `SimulatedSnake` と同じ形で上位へ渡す（セッションに注入する用）。"""
+        from serpens.link.robot import LinkRobot
+
+        return LinkRobot(self.cfg, self.client, clock, pump=self.tr.pump)
+
     def moved_deg(self, seconds: float) -> float:
         """この先 `seconds` の間に出力が動いた最大角（停止の確認に使う）。"""
         before = dict(self.device.output)
