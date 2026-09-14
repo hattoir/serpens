@@ -1,4 +1,4 @@
-# PC ⇄ ESP32-S3 駆動リンク仕様 v1
+# PC ⇄ ESP32-S3 駆動リンク仕様 v2
 
 Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmware/serpens_esp32/`）は
 この1枚だけを根拠に実装する。** 頭部の ASCII 行プロトコル（`serpens/hw/head_io.py`）とは別物で、
@@ -70,25 +70,45 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 
 | type | 名前 | payload |
 |---|---|---|
-| 0x80 | `TELEMETRY` | boot_id(u16), uptime_ms(u32), state(u8), stop_reason(u8), last_seq(u16), flags(u8), n_axes(u8), 各軸 [pos(i16 0.1°), load(i16 0.001), temp(u8 ℃), volt(u8 0.1V), fault(u8), current(u16 mA, 0xFFFF=不明)] |
+| 0x80 | `TELEMETRY` | boot_id(u16), uptime_ms(u32), state(u8), stop_reason(u8), last_rx_seq(u16), last_drive_seq(u16), flags(u16), heartbeat_age_ms(u16), drive_age_ms(u16), drive_ttl_remaining_ms(u16), loop_period_us(u16), overruns(u16), **source(u8: 0=SIMULATION, 1=HARDWARE)**, n_axes(u8), 各軸 [pos(i16 0.1°), vel(i16 0.1°/s), load(i16 0.001), temp(u8 ℃), volt(u8 0.1V), fault(u8), current(u16 mA, 0xFFFF=不明)] |
 | 0x81 | `ACK` | ack_seq(u16), type(u8) |
 | 0x82 | `NACK` | ack_seq(u16), type(u8), reason(u8) |
 | 0x83 | `EVENT` | code(u8), detail(u8) — 停止理由・起動・ラッチの変化を通知（取りこぼしても TELEMETRY で分かる） |
 
-`flags`: bit0 駆動中(driving) / bit1 呼吸中 / bit2 heartbeat 有効 / bit3 DRIVE 有効 / bit4 トルク ON。
+`flags`(u16): bit0 駆動中 / bit1 呼吸中 / bit2 heartbeat 有効 / bit3 DRIVE 有効 / bit4 トルク ON /
+bit5 ARMED / bit6 緊急停止ラッチ / **bit7 SIMULATED（値が模擬）** / bit8 応答しない軸あり / bit9 制御周期超過。
+
+**`source` と bit7 を落とさないこと。** 模擬の値を実測として扱わないための印で、
+PC 側も GUI も記録もこの印をそのまま持ち回す（`docs/verification_status.md`）。
 
 ## 4. 状態機械（機体側）
 
 ```
-起動 ─▶ DISARMED ──ARM──▶ ARMED ──有効なDRIVE──▶ ARMED(driving)
-          ▲  ▲                │                        │
-          │  └──STOP / DISARM─┘                        │
-          │                    DRIVE期限切れ・heartbeat途絶・上限違反 ─┘（保持）
-          │
-  CLEAR_FAULT
-          │
-     EMERGENCY ◀── EMERGENCY指令 / 機体の致命異常（過熱・過電流・サーボfault）
+BOOT ─(heartbeat)─▶ DISARMED ─ARM─▶ ARMED_HOLD ─有効なDRIVE─▶ DRIVING
+                      ▲  ▲             ▲    │ TTL切れ            │
+                      │  └─STOP/DISARM─┴────┘                    │
+   heartbeat 復帰 +   │                                           │
+   全軸が応答         │        heartbeat途絶 / 応答しない軸 ◀──────┘
+   FAULT_HOLD ────────┘
+                      ▲
+   EMERGENCY_LATCHED ─┴─ CLEAR_FAULT ─▶ DISARMED
+        ▲                                   ▲
+        │ EMERGENCY / 過熱 / サーボfault     │ ARM
+   TORQUE_DISABLED ◀── STOP(mode=disable) ───┘
 ```
+
+| 状態 | 意味 | 動く | トルク |
+|---|---|---|---|
+| `BOOT` | 起動直後。まだ heartbeat を受けていない | いいえ | 保持 |
+| `DISARMED` | 待機 | いいえ | 保持 |
+| `ARMED_HOLD` | 走行可だが歩容が無い | いいえ | 保持 |
+| `DRIVING` | 歩容を生成している | はい | 保持 |
+| `FAULT_HOLD` | 異常で止めた（heartbeat 途絶・応答しない軸） | いいえ | 保持 |
+| `EMERGENCY_LATCHED` | 緊急停止。ラッチ | いいえ | 保持 |
+| `TORQUE_DISABLED` | 明示的な脱力 | いいえ | **切** |
+
+**`FAULT_HOLD` からの復帰は `DISARMED` まで。** 原因（heartbeat・軸の応答）が戻っただけでは走らない。
+`ARM` は `FAULT_HOLD` 中は NACK(`BUSY`)。
 
 **不変条件**
 
@@ -105,6 +125,8 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 8. 停止（保持）で**ホーム姿勢へ動かさない**。脱力は `STOP(mode=disable)` のときだけ。
 9. **胴体の持ち主は一つ。** 歩容（`DRIVE`）と姿勢（`BODY`）は同時に胴体を動かさない。
    姿勢へ移るには先に `DRIVE` を止める。`TORQUE` の脱力は、どの停止でも 100% に戻る。
+10. **テレメトリの位置は指令値ではなく実測値**（模擬機体では仮想サーボの応答）。
+    応答しない軸は**欠けたまま**返し、0 で埋めない。走行中に軸が欠けたら `FAULT_HOLD`。
 
 ### stop_reason
 

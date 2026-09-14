@@ -8,8 +8,8 @@ import pytest
 
 from serpens.link import messages as m
 from serpens.link.protocol import (FRAME_OVERHEAD, MAX_PAYLOAD, SEQ_FORWARD_WINDOW, SEQ_MOD, Cmd,
-                                   FrameReader, Rep, State, StopReason, crc16, encode,
-                                   seq_is_forward)
+                                   Flag, FrameReader, Rep, Source, State, StopReason, crc16,
+                                   encode, seq_is_forward)
 
 DRIVE = m.Drive(300, 30.0, 60.0, 0.5, -20.0)
 
@@ -73,11 +73,19 @@ def test_payload_roundtrips() -> None:
 
 
 def test_telemetry_roundtrip() -> None:
-    axes = [m.AxisTelemetry(1.5 * k, 0.02 * k, 30 + k, 11.8, 0, None) for k in range(9)]
-    tel = m.Telemetry(7, 123456, State.ARMED, StopReason.DRIVE_TTL, 42, 0b10101, axes)
+    axes = [m.AxisTelemetry(1.5 * k, 3.0 * k, 0.02 * k, 30 + k, 11.8, 0, None) for k in range(9)]
+    tel = m.Telemetry(boot_id=7, uptime_ms=123456, state=State.ARMED_HOLD,
+                      stop_reason=StopReason.DRIVE_TTL, last_seq=42, last_drive_seq=41,
+                      flags=int(Flag.SIMULATED), heartbeat_age_ms=12, drive_age_ms=340,
+                      drive_ttl_remaining_ms=0, loop_period_us=10000, overruns=2,
+                      source=Source.SIMULATION, axes=axes)
     payload = tel.pack()
-    assert len(payload) == 93 <= MAX_PAYLOAD
+    assert len(payload) == 125 <= MAX_PAYLOAD
     got = m.Telemetry.unpack(FrameReader().feed(encode(Rep.TELEMETRY, 0, payload))[0].payload)
-    assert got.boot_id == 7 and got.state is State.ARMED and len(got.axes) == 9
+    assert got.boot_id == 7 and got.state is State.ARMED_HOLD and len(got.axes) == 9
     assert got.axes[8].pos_deg == pytest.approx(12.0) and got.axes[8].current_ma is None
+    assert got.axes[8].vel_dps == pytest.approx(24.0)
     assert "期限切れ" in got.reason_ja and "走行可" in got.state_ja
+    # **値がシミュレーション由来であることが、PC 側でそのまま分かる**
+    assert got.simulated and got.source is Source.SIMULATION
+    assert got.drive_age_ms == 340 and got.overruns == 2 and got.last_drive_seq == 41

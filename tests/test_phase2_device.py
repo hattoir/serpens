@@ -79,7 +79,7 @@ def test_drive_ttl_stops_motion_while_heartbeat_alive(cfg: dict) -> None:
     ttl_s = cfg["link"]["drive_ttl_ms"] / 1000.0
     assert h.now - last_drive_at == pytest.approx(ttl_s, abs=1.5 * h.dt), "最後の DRIVE から TTL 後に止まる"
     assert h.device.stop_reason is StopReason.DRIVE_TTL
-    assert h.device.state is State.ARMED, "TTL 切れは保持まで（いきなり待機へ落とさない）"
+    assert h.device.state is State.ARMED_HOLD, "TTL 切れは保持まで（いきなり待機へ落とさない）"
     assert h.device._hb_fresh(h.now), "heartbeat は生きている"
     assert h.moved_deg(0.5) < 1e-9, "停止後に動いた"
     assert h.device.torque_on, "保持なのでトルクは入れたまま"
@@ -168,7 +168,7 @@ def test_device_rejects_out_of_range_drive(cfg: dict, label: str, bad: m.Drive) 
     rd = FrameReader()
     reply = rd.feed(h.device.feed(encode(Cmd.DRIVE, h.client._seq + 1, bad.pack()), h.now))[0]
     assert reply.type == Rep.NACK and m.unpack_nack(reply.payload)[2] == Nack.OUT_OF_RANGE, label
-    assert not h.device.driving and h.device.state is State.ARMED
+    assert not h.device.driving and h.device.state is State.ARMED_HOLD
     h.advance(0.3)
     assert max(abs(h.device.output[k] - before[k]) for k in before) < 1e-9, label
 

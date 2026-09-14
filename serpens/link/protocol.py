@@ -13,7 +13,7 @@ from enum import IntEnum
 
 SOF = b"\xa5\x5a"
 VERSION = 1
-MAX_PAYLOAD = 128              # テレメトリ 9軸 = 93 バイト。len は u8 なので 255 まで拡張できる
+MAX_PAYLOAD = 192              # テレメトリ 9軸 = 125 バイト。len は u8 なので 255 まで拡張できる
 SEQ_MOD = 1 << 16
 SEQ_FORWARD_WINDOW = 4096      # (seq - last) % 65536 がこの範囲なら「進んだ」
 FMT_HEADER = "<BBHB"           # ver, type, seq, len（SOF の直後。CRC の対象はここから payload まで）
@@ -67,11 +67,32 @@ class Nack(IntEnum):
 
 
 class State(IntEnum):
-    """機体の状態。"""
+    """機体の状態（docs/link_protocol.md §4）。**ファームと同じ7状態を持つ。**"""
 
-    DISARMED = 0
-    ARMED = 1
-    EMERGENCY = 2
+    BOOT = 0               # 電源投入直後。まだ heartbeat を受けていない
+    DISARMED = 1           # 待機。指令は受けるが動かない
+    ARMED_HOLD = 2         # 走行可だが歩容は無い（現在姿勢を保持）
+    DRIVING = 3            # 歩容を生成して動いている
+    FAULT_HOLD = 4         # 異常で動きを止めた（トルクは保持）。復帰は DISARMED 経由
+    EMERGENCY_LATCHED = 5  # 緊急停止。ラッチ。CLEAR_FAULT でのみ解ける
+    TORQUE_DISABLED = 6    # 明示的な脱力（STOP mode=disable）
+
+    @property
+    def armed(self) -> bool:
+        """走行の指令を受け付ける状態か。"""
+        return self in (State.ARMED_HOLD, State.DRIVING)
+
+    @property
+    def stopped(self) -> bool:
+        """異常で止まっている状態か。"""
+        return self in (State.FAULT_HOLD, State.EMERGENCY_LATCHED)
+
+
+class Source(IntEnum):
+    """テレメトリの値の出どころ。**模擬と実測を混ぜないための印。**"""
+
+    SIMULATION = 0
+    HARDWARE = 1
 
 
 class StopReason(IntEnum):
@@ -90,13 +111,18 @@ class StopReason(IntEnum):
 
 
 class Flag(IntEnum):
-    """テレメトリの flags。"""
+    """テレメトリの flags（u16）。"""
 
     DRIVING = 1 << 0
     BREATHING = 1 << 1
     HEARTBEAT_OK = 1 << 2
     DRIVE_VALID = 1 << 3
     TORQUE_ON = 1 << 4
+    ARMED = 1 << 5
+    EMERGENCY_LATCHED = 1 << 6
+    SIMULATED = 1 << 7          # **この値はシミュレーション由来**（実測ではない）
+    SERVO_MISSING = 1 << 8      # 応答しない軸がある
+    OVERRUN = 1 << 9            # 制御周期を超えた
 
 
 class StopMode(IntEnum):
@@ -116,8 +142,10 @@ REASON_JA = {
     StopReason.OUT_OF_RANGE: "上限外の指令",
     StopReason.BOOT: "起動直後（未 ARM）",
 }
-STATE_JA = {State.DISARMED: "待機（DISARMED）", State.ARMED: "走行可（ARMED）",
-            State.EMERGENCY: "緊急停止（ラッチ）"}
+STATE_JA = {State.BOOT: "起動直後（BOOT）", State.DISARMED: "待機（DISARMED）",
+            State.ARMED_HOLD: "走行可・保持（ARMED_HOLD）", State.DRIVING: "走行中（DRIVING）",
+            State.FAULT_HOLD: "異常で保持（FAULT_HOLD）",
+            State.EMERGENCY_LATCHED: "緊急停止（ラッチ）", State.TORQUE_DISABLED: "脱力（TORQUE_DISABLED）"}
 
 # payload の書式（struct）。長さ検査にも使う
 FMT_DRIVE = "<Hhhhh"      # ttl_ms, amp 0.1°, spatial 0.1°, freq 0.001Hz(符号), gamma 0.1°
@@ -125,8 +153,11 @@ FMT_HEAD = "<HhhhH"       # ttl_ms, j7, j8, j9 (0.1°), speed 0.1°/s
 FMT_BODY = "<H6hH"        # ttl_ms, 胴体ヨー 6軸 (0.1°), speed 0.1°/s
 FMT_TORQUE = "<H"         # トルク比 0.001（0=不可、1000=100%）
 FMT_STOP = "<BB"          # mode, reason
-FMT_TELEM_HEAD = "<HIBBHBB"   # boot_id, uptime_ms, state, stop_reason, last_seq, flags, n_axes
-FMT_AXIS = "<hhBBBH"      # pos 0.1°, load 0.001, temp ℃, volt 0.1V, fault, current mA
+# テレメトリ v2。boot_id, uptime_ms, state, stop_reason, last_rx_seq, last_drive_seq, flags,
+# heartbeat_age_ms, drive_age_ms, drive_ttl_remaining_ms, loop_period_us, overruns, source, n_axes
+FMT_TELEM_HEAD = "<HIBBHHHHHHHHBB"
+FMT_AXIS = "<hhhBBBH"     # pos 0.1°, vel 0.1°/s, load 0.001, temp ℃, volt 0.1V, fault, current mA
+AGE_MAX_MS = 0xFFFF       # これ以上古い値は飽和させる（u16）
 PAYLOAD_LEN = {Cmd.HEARTBEAT: 0, Cmd.ARM: 0, Cmd.DISARM: 0, Cmd.PING: 0,
                Cmd.DRIVE: struct.calcsize(FMT_DRIVE), Cmd.HEAD: struct.calcsize(FMT_HEAD),
                Cmd.BODY: struct.calcsize(FMT_BODY), Cmd.TORQUE: struct.calcsize(FMT_TORQUE),

@@ -1,35 +1,42 @@
 // Serpens EX-1 駆動リンク ファームウェア（XIAO ESP32S3 / ESP32-S3）
 //
 // **PC が死んでも、この基板だけでヘビを止める。** それがこのファームの存在理由。
-// 仕様は docs/link_protocol.md v1。判断の順序と時定数は serpens/link/device.py と同じにしてある。
-// 参照実装（Python）は偽時計で全条件を検証済み: tests/test_phase2_device.py / test_phase2_safety.py
+// 仕様は docs/link_protocol.md v2。状態は7つで、判断の順序と時定数は
+// serpens/link/device.py（Virtual ESP32）と同じにしてある。
+// 参照実装は偽時計で検証済み: tests/test_phase2_*.py / tests/test_phase3_link_robot.py
 //
-// **未検証**: 実機（ESP32 + STS3215）が無いため、コンパイルも書き込みもしていない。
-//   サーボへの書き込み（writeServos）は配線が決まるまで空のまま。firmware/serpens_esp32/README.md 参照。
+// **HARDWARE_UNVERIFIED**: 実機（ESP32 + STS3215）が無いため、コンパイルも書き込みもしていない。
+//   サーボの読み書き（writeServos / readServos）は配線が決まるまで空。README.md 参照。
 #include "config.h"
 #include "link.h"
 
 // ---- 状態 ----------------------------------------------------------------------------
-static DeviceState gState = ST_DISARMED;
+static DeviceState gState = ST_BOOT;
 static StopReason  gReason = SR_BOOT;
 static uint16_t    gBootId = 0;
 static bool        gTorqueOn = true;      // 起動時は現在姿勢を保持（勝手に脱力しない）
-static bool        gDriving = false;
 static bool        gBreathing = false;
+static float       gTorqueRatio = 1.0f;   // TORQUE 指令（脱力の演出）。安全上限に対する割合
 
-static uint16_t gLastSeq = 0;
+static uint16_t gLastSeq = 0, gLastDriveSeq = 0;
 static bool     gHasLastSeq = false;
 static uint32_t gHbAt = 0;
 static bool     gHbSeen = false;
 static uint32_t gDriveAt = 0, gDriveUntil = 0, gHeadUntil = 0, gBodyUntil = 0;
-static float    gTorqueRatio = 1.0f;          // TORQUE 指令（脱力の演出）
+static bool     gDriveSeen = false;
 static uint32_t gNonces[16];
 static uint8_t  gNonceIdx = 0;
+static uint16_t gOverruns = 0, gLoopPeriodUs = CONTROL_PERIOD_MS * 1000;
 
-static float gGoal[N_AXES];               // いまサーボへ書いている角度
+static float gGoal[N_AXES];               // いまサーボへ書いている角度（指令値）
 static float gTarget[N_AXES];             // 補間の目標
 static float gSpeed[N_AXES];              // [deg/s]
 static float gPhase = 0.0f;               // 歩容の時間位相 [rad]
+
+// サーボから読んだ値（**実測**。指令値と混ぜない）
+static float   gMeasPos[N_AXES], gMeasVel[N_AXES], gMeasLoad[N_AXES];
+static uint8_t gMeasTemp[N_AXES], gMeasVolt[N_AXES], gMeasFault[N_AXES];
+static bool    gMeasOk[N_AXES];
 
 struct DriveCmd { float amp, spatial, freq, gamma; };
 static DriveCmd gDrive = {0, 0, 0, 0};
@@ -38,6 +45,8 @@ static uint32_t gLastCtrl = 0, gLastTelem = 0;
 static FrameReader gRx;
 
 // ---- 小道具 --------------------------------------------------------------------------
+static bool driving() { return gState == ST_DRIVING; }
+
 static float clampDeg(int i, float deg) {
   if (deg < JOINTS[i].min_deg) return JOINTS[i].min_deg;
   if (deg > JOINTS[i].max_deg) return JOINTS[i].max_deg;
@@ -48,33 +57,49 @@ static bool hbFresh(uint32_t now) {
   return gHbSeen && (uint32_t)(now - gHbAt) <= HEARTBEAT_TIMEOUT_MS;
 }
 
-// サーボへ 9軸同期書き込み（docs/sts3215_registers.md の 41〜47 ブロック）
-// TODO: 配線が決まるまで空。SCServo/ftservo 系ライブラリの SyncWritePosEx を使う予定。
-static void writeServos(const float deg[N_AXES]) {
-  (void)deg;
+static bool anyServoMissing() {
+  for (int i = 0; i < N_AXES; i++) if (!gMeasOk[i]) return true;
+  return false;
 }
 
-// トルク ON/OFF。**脱力は STOP(mode=disable) のときだけ**
+// サーボへ 9軸同期書き込み（docs/sts3215_registers.md の 41〜47 ブロック）
+// TODO: 配線が決まるまで空。SCServo/ftservo 系ライブラリの SyncWritePosEx を使う予定。
+static void writeServos(const float deg[N_AXES]) { (void)deg; }
+
+// サーボから位置・速度・負荷・温度・電圧・fault を読む（56〜63 ブロック）
+// TODO: 未実装。読めなかった軸は gMeasOk[i] = false のままにする（**0 で埋めない**）
+static void readServos() {
+  for (int i = 0; i < N_AXES; i++) gMeasOk[i] = false;
+}
+
 static void setTorque(bool on) {
   gTorqueOn = on;
   // TODO: 実機では全軸のトルクスイッチを書く
+}
+
+static void setTorqueRatio(float ratio) {
+  gTorqueRatio = ratio;
+  // TODO: 実機ではトルク制限レジスタ（48番地）へ ratio × 安全上限 を書く
 }
 
 static void holdHere() {
   for (int i = 0; i < N_AXES; i++) gTarget[i] = gGoal[i];
 }
 
-static void stopMotion(StopReason reason, bool latch, bool disarm, bool torqueOff) {
-  if (gState == ST_EMERGENCY && !latch) return;    // ラッチ中の理由は上書きしない
-  gDriving = false;
-  gBreathing = false;
-  gTorqueRatio = 1.0f;                             // 演出の脱力は停止で解除する
-  holdHere();                                      // ホーム姿勢へは動かさない
+static void setState(DeviceState to, StopReason reason) {
+  gState = to;
   gReason = reason;
-  if (latch) gState = ST_EMERGENCY;
-  else if (disarm) gState = ST_DISARMED;
-  if (torqueOff) setTorque(false);
   sendEvent(Serial, (uint8_t)gReason, (uint8_t)gState);
+}
+
+// 停止。**現在の出力を保持する**（ホーム姿勢へ動かさない）
+static void stopMotion(StopReason reason, DeviceState to) {
+  if (gState == ST_EMERGENCY_LATCHED && to != ST_EMERGENCY_LATCHED) return;  // ラッチを上書きしない
+  gBreathing = false;
+  setTorqueRatio(1.0f);                            // 演出の脱力は停止で解除する
+  holdHere();
+  if (to == ST_TORQUE_DISABLED) setTorque(false);
+  setState(to, reason);
 }
 
 // ---- 受信 ----------------------------------------------------------------------------
@@ -86,56 +111,20 @@ static bool driveOk(const DriveCmd& d, uint16_t ttl) {
       && d.spatial > 0.0f && d.spatial <= LIMIT_SPATIAL_DEG
       && fabsf(d.freq) <= LIMIT_TEMPORAL_HZ
       && fabsf(d.gamma) <= LIMIT_GAMMA_DEG
-      && d.amp + fabsf(d.gamma) <= bodyMax;
+      && d.amp + fabsf(d.gamma) <= bodyMax;        // 合成しても operational limit 内
 }
 
-static void handleFrame(uint32_t now) {
-  const uint8_t type = gRx.type;
-  const uint16_t seq = gRx.seq;
-  if (!gRx.crcOk)                    { sendNack(Serial, seq, type, NACK_BAD_CRC); return; }
-  if (gRx.version != LINK_VERSION)   { sendNack(Serial, seq, type, NACK_BAD_VERSION); return; }
-  const int want = payloadLenFor(type);
-  if (want < 0)                      { sendNack(Serial, seq, type, NACK_UNKNOWN_CMD); return; }
-  if (gRx.len != want)               { sendNack(Serial, seq, type, NACK_BAD_LENGTH); return; }
-  if (!seqIsForward(seq, gLastSeq, gHasLastSeq)) { sendNack(Serial, seq, type, NACK_STALE_SEQ); return; }
-  gLastSeq = seq; gHasLastSeq = true;
-
-  switch (type) {
-    case CMD_HEARTBEAT:                              // DRIVE の期限はここでは延びない
-      gHbAt = now; gHbSeen = true; sendAck(Serial, seq, type); return;
-    case CMD_PING: sendAck(Serial, seq, type); return;
-    case CMD_EMERGENCY:
-      stopMotion(SR_EMERGENCY_CMD, true, true, false); sendAck(Serial, seq, type); return;
-    case CMD_STOP:
-      stopMotion(SR_OPERATOR_STOP, false, true, gRx.payload[0] == 1);
-      sendAck(Serial, seq, type); return;
-    case CMD_CLEAR_FAULT: {
-      uint32_t nonce = rdU32(gRx.payload);
-      for (int i = 0; i < 16; i++) if (gNonces[i] == nonce) { sendNack(Serial, seq, type, NACK_NONCE_REUSED); return; }
-      gNonces[gNonceIdx] = nonce; gNonceIdx = (gNonceIdx + 1) % 16;
-      gState = ST_DISARMED; gDriving = false;        // **待機へ戻すだけ。走行は再開しない**
-      sendEvent(Serial, (uint8_t)gReason, (uint8_t)gState);
-      sendAck(Serial, seq, type); return;
-    }
-    default: break;
-  }
-  if (gState == ST_EMERGENCY) { sendNack(Serial, seq, type, NACK_LATCHED); return; }
-  if (type == CMD_DISARM) { stopMotion(SR_OPERATOR_STOP, false, true, false); sendAck(Serial, seq, type); return; }
-  if (type == CMD_ARM) {
-    if (!hbFresh(now)) { sendNack(Serial, seq, type, NACK_NO_HEARTBEAT); return; }
-    gState = ST_ARMED; gReason = SR_NONE; setTorque(true); sendAck(Serial, seq, type); return;
-  }
-  if (type == CMD_LIMITS) { sendNack(Serial, seq, type, NACK_UNKNOWN_CMD); return; }  // Phase 9
-
-  if (gState != ST_ARMED) { sendNack(Serial, seq, type, NACK_DISARMED); return; }
-  if (!hbFresh(now))      { sendNack(Serial, seq, type, NACK_NO_HEARTBEAT); return; }
+static void handleMotion(uint8_t type, uint16_t seq, uint32_t now) {
+  if (!stateArmed(gState)) { sendNack(Serial, seq, type, NACK_DISARMED); return; }
+  if (!hbFresh(now))       { sendNack(Serial, seq, type, NACK_NO_HEARTBEAT); return; }
 
   if (type == CMD_DRIVE) {
     uint16_t ttl = rdU16(gRx.payload);
     DriveCmd d = {rdI16(gRx.payload + 2) / 10.0f, rdI16(gRx.payload + 4) / 10.0f,
                   rdI16(gRx.payload + 6) / 1000.0f, rdI16(gRx.payload + 8) / 10.0f};
     if (!driveOk(d, ttl)) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
-    gDrive = d; gDriveAt = now; gDriveUntil = now + ttl; gDriving = true; gReason = SR_NONE;
+    gDrive = d; gDriveAt = now; gDriveSeen = true; gDriveUntil = now + ttl; gLastDriveSeq = seq;
+    if (gState != ST_DRIVING) setState(ST_DRIVING, SR_NONE);
     sendAck(Serial, seq, type); return;
   }
   if (type == CMD_HEAD) {
@@ -154,7 +143,7 @@ static void handleFrame(uint32_t now) {
     sendAck(Serial, seq, type); return;
   }
   if (type == CMD_BODY) {
-    if (gDriving) { sendNack(Serial, seq, type, NACK_BUSY); return; }   // 胴体の持ち主は一つ
+    if (driving()) { sendNack(Serial, seq, type, NACK_BUSY); return; }   // 胴体の持ち主は一つ
     uint16_t ttl = rdU16(gRx.payload);
     float spd = rdU16(gRx.payload + 14) / 10.0f;
     bool ok = ttl >= 1 && ttl <= DRIVE_TTL_MAX_MS && spd > 0.0f && spd <= LIMIT_BODY_SPEED_DPS;
@@ -171,38 +160,99 @@ static void handleFrame(uint32_t now) {
   if (type == CMD_TORQUE) {
     float ratio = rdU16(gRx.payload) / 1000.0f;
     if (!(ratio > 0.0f && ratio <= 1.0f)) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
-    gTorqueRatio = ratio;                        // TODO: 実機ではトルク制限レジスタ（0〜1000）へ書く
+    setTorqueRatio(ratio);
     sendAck(Serial, seq, type); return;
   }
   if (type == CMD_POSE) {
-    if (gRx.payload[0] != 0 || gDriving) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
+    if (gRx.payload[0] != 0 || driving()) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
     for (int i = 0; i < N_AXES; i++) { gTarget[i] = clampDeg(i, HOME_DEG[i]); gSpeed[i] = JOINTS[i].max_speed_dps; }
     sendAck(Serial, seq, type); return;
   }
   if (type == CMD_BREATH) { gBreathing = gRx.payload[0] != 0; sendAck(Serial, seq, type); return; }
+  sendNack(Serial, seq, type, NACK_UNKNOWN_CMD);   // 取りこぼしを別の指令として実行しない
+}
+
+static void handleFrame(uint32_t now) {
+  const uint8_t type = gRx.type;
+  const uint16_t seq = gRx.seq;
+  if (!gRx.crcOk)                    { sendNack(Serial, seq, type, NACK_BAD_CRC); return; }
+  if (gRx.version != LINK_VERSION)   { sendNack(Serial, seq, type, NACK_BAD_VERSION); return; }
+  const int want = payloadLenFor(type);
+  if (want < 0)                      { sendNack(Serial, seq, type, NACK_UNKNOWN_CMD); return; }
+  if (gRx.len != want)               { sendNack(Serial, seq, type, NACK_BAD_LENGTH); return; }
+  if (!seqIsForward(seq, gLastSeq, gHasLastSeq)) { sendNack(Serial, seq, type, NACK_STALE_SEQ); return; }
+  gLastSeq = seq; gHasLastSeq = true;
+
+  switch (type) {
+    case CMD_HEARTBEAT:                              // DRIVE の期限はここでは延びない
+      gHbAt = now; gHbSeen = true;
+      if (gState == ST_BOOT) setState(ST_DISARMED, SR_BOOT);
+      sendAck(Serial, seq, type); return;
+    case CMD_PING: sendAck(Serial, seq, type); return;
+    case CMD_EMERGENCY:
+      stopMotion(SR_EMERGENCY_CMD, ST_EMERGENCY_LATCHED); sendAck(Serial, seq, type); return;
+    case CMD_STOP:
+      stopMotion(SR_OPERATOR_STOP, gRx.payload[0] == 1 ? ST_TORQUE_DISABLED : ST_DISARMED);
+      sendAck(Serial, seq, type); return;
+    case CMD_CLEAR_FAULT: {
+      uint32_t nonce = rdU32(gRx.payload);
+      for (int i = 0; i < 16; i++) if (gNonces[i] == nonce) { sendNack(Serial, seq, type, NACK_NONCE_REUSED); return; }
+      gNonces[gNonceIdx] = nonce; gNonceIdx = (gNonceIdx + 1) % 16;
+      setTorque(true);
+      setState(ST_DISARMED, gReason);                // **待機へ戻すだけ。走行は再開しない**
+      sendAck(Serial, seq, type); return;
+    }
+    default: break;
+  }
+  if (gState == ST_EMERGENCY_LATCHED) { sendNack(Serial, seq, type, NACK_LATCHED); return; }
+  if (type == CMD_DISARM) { stopMotion(SR_OPERATOR_STOP, ST_DISARMED); sendAck(Serial, seq, type); return; }
+  if (type == CMD_ARM) {
+    if (gState == ST_FAULT_HOLD) { sendNack(Serial, seq, type, NACK_BUSY); return; }
+    if (!hbFresh(now))           { sendNack(Serial, seq, type, NACK_NO_HEARTBEAT); return; }
+    setTorque(true);
+    setState(ST_ARMED_HOLD, SR_NONE);
+    sendAck(Serial, seq, type); return;
+  }
+  if (type == CMD_LIMITS) { sendNack(Serial, seq, type, NACK_UNKNOWN_CMD); return; }  // Phase 9
+  handleMotion(type, seq, now);
 }
 
 // ---- watchdog（PC が死んでも自分で止まる） -----------------------------------------------
 static void watchdogs(uint32_t now) {
   uint8_t maxTemp = 0;
   bool anyFault = false;
-  // TODO: 実機ではサーボから温度・fault を読む（docs/sts3215_registers.md の 56〜63）
-  if (maxTemp > FAULT_TEMP_LIMIT_C)       { stopMotion(SR_OVERHEAT, true, true, false); return; }
-  if (anyFault)                           { stopMotion(SR_SERVO_FAULT, true, true, false); return; }
-  if (gHbSeen && !hbFresh(now))           { stopMotion(SR_HEARTBEAT_LOST, false, true, false); return; }
-  if (gDriving && (int32_t)(now - gDriveUntil) > 0) { stopMotion(SR_DRIVE_TTL, false, false, false); return; }
-  if (gState == ST_ARMED && gDriveAt && (uint32_t)(now - gDriveAt) > DRIVE_DISARM_MS) {
-    stopMotion(SR_DRIVE_TTL, false, true, false);
+  for (int i = 0; i < N_AXES; i++) {
+    if (!gMeasOk[i]) continue;
+    if (gMeasTemp[i] > maxTemp) maxTemp = gMeasTemp[i];
+    if (gMeasFault[i]) anyFault = true;
+  }
+  if (maxTemp > FAULT_TEMP_LIMIT_C)  { stopMotion(SR_OVERHEAT, ST_EMERGENCY_LATCHED); return; }
+  if (anyFault)                      { stopMotion(SR_SERVO_FAULT, ST_EMERGENCY_LATCHED); return; }
+  if (stateArmed(gState) && anyServoMissing()) { stopMotion(SR_SERVO_FAULT, ST_FAULT_HOLD); return; }
+  if (gHbSeen && !hbFresh(now) && stateArmed(gState)) {
+    stopMotion(SR_HEARTBEAT_LOST, ST_FAULT_HOLD); return;     // USB 断・PC 強制終了もここ
+  }
+  if (gState == ST_FAULT_HOLD && hbFresh(now) && !anyServoMissing()) {
+    setState(ST_DISARMED, gReason); return;                   // 復帰は待機まで
+  }
+  if (driving() && (int32_t)(now - gDriveUntil) > 0) {
+    stopMotion(SR_DRIVE_TTL, ST_ARMED_HOLD); return;          // 保持のまま（条件 4）
+  }
+  if (gState == ST_ARMED_HOLD && gDriveSeen && (uint32_t)(now - gDriveAt) > DRIVE_DISARM_MS) {
+    stopMotion(SR_DRIVE_TTL, ST_DISARMED); return;
   }
   if ((int32_t)(now - gHeadUntil) > 0) for (int k = 0; k < 3; k++) gTarget[N_BODY + k] = gGoal[N_BODY + k];
-  if ((int32_t)(now - gBodyUntil) > 0 && !gDriving) for (int i = 0; i < N_BODY; i++) gTarget[i] = gGoal[i];
+  if ((int32_t)(now - gBodyUntil) > 0 && !driving()) for (int i = 0; i < N_BODY; i++) gTarget[i] = gGoal[i];
 }
 
 // ---- 制御（100Hz） --------------------------------------------------------------------
 static void control(uint32_t now) {
-  float dt = (now - gLastCtrl) / 1000.0f;
+  uint32_t dtMs = now - gLastCtrl;
   gLastCtrl = now;
-  if (gDriving) {
+  gLoopPeriodUs = (uint16_t)(dtMs * 1000 > AGE_MAX_MS ? AGE_MAX_MS : dtMs * 1000);
+  if (dtMs > CONTROL_PERIOD_MS * 3 / 2) gOverruns++;
+  float dt = dtMs / 1000.0f;
+  if (driving()) {
     gPhase += 2.0f * PI * gDrive.freq * dt;
     float big = gDrive.spatial * PI / 180.0f;
     for (int n = 0; n < N_BODY; n++) {                       // α(n,t) = A·sin(Ω·n+ω·t) + γ0·n/N
@@ -211,7 +261,7 @@ static void control(uint32_t now) {
     }
   }
   for (int i = 0; i < N_AXES; i++) {
-    if (gDriving && i < N_BODY) continue;
+    if (driving() && i < N_BODY) continue;
     float step = gSpeed[i] * dt;
     float diff = clampDeg(i, gTarget[i]) - gGoal[i];
     if (diff > step) diff = step;
@@ -219,31 +269,57 @@ static void control(uint32_t now) {
     gGoal[i] += diff;
   }
   if (gTorqueOn) writeServos(gGoal);                         // 保持中も送り続ける
+  readServos();                                              // 実測値を取り込む
+}
+
+static uint16_t ageMs(uint32_t at, bool seen, uint32_t now) {
+  if (!seen) return AGE_MAX_MS;
+  uint32_t d = now - at;
+  return (uint16_t)(d > AGE_MAX_MS ? AGE_MAX_MS : d);
 }
 
 static void sendTelemetry(uint32_t now) {
   uint8_t p[MAX_PAYLOAD];
+  int o = 0;
+  putU16(p, o, gBootId);
   uint32_t up = now;
-  p[0] = gBootId & 0xFF; p[1] = gBootId >> 8;
-  p[2] = up & 0xFF; p[3] = (up >> 8) & 0xFF; p[4] = (up >> 16) & 0xFF; p[5] = (up >> 24) & 0xFF;
-  p[6] = (uint8_t)gState; p[7] = (uint8_t)gReason;
-  p[8] = gLastSeq & 0xFF; p[9] = gLastSeq >> 8;
-  uint8_t fl = 0;
-  if (gDriving) fl |= FL_DRIVING;
+  p[o++] = up & 0xFF; p[o++] = (up >> 8) & 0xFF; p[o++] = (up >> 16) & 0xFF; p[o++] = (up >> 24) & 0xFF;
+  p[o++] = (uint8_t)gState;
+  p[o++] = (uint8_t)gReason;
+  putU16(p, o, gLastSeq);
+  putU16(p, o, gLastDriveSeq);
+  uint16_t fl = 0;
+  if (driving()) fl |= FL_DRIVING;
   if (gBreathing) fl |= FL_BREATHING;
   if (hbFresh(now)) fl |= FL_HEARTBEAT_OK;
-  if (gDriving && (int32_t)(now - gDriveUntil) <= 0) fl |= FL_DRIVE_VALID;
+  if (driving() && (int32_t)(now - gDriveUntil) <= 0) fl |= FL_DRIVE_VALID;
   if (gTorqueOn) fl |= FL_TORQUE_ON;
-  p[10] = fl; p[11] = N_AXES;
-  int o = 12;
+  if (stateArmed(gState)) fl |= FL_ARMED;
+  if (gState == ST_EMERGENCY_LATCHED) fl |= FL_EMERGENCY_LATCHED;
+  if (anyServoMissing()) fl |= FL_SERVO_MISSING;
+  if (gOverruns) fl |= FL_OVERRUN;
+  putU16(p, o, fl);                                          // **FL_SIMULATED は実機では立てない**
+  putU16(p, o, ageMs(gHbAt, gHbSeen, now));
+  putU16(p, o, ageMs(gDriveAt, gDriveSeen, now));
+  putU16(p, o, (driving() && (int32_t)(gDriveUntil - now) > 0) ? (uint16_t)(gDriveUntil - now) : 0);
+  putU16(p, o, gLoopPeriodUs);
+  putU16(p, o, gOverruns);
+  p[o++] = (uint8_t)SRC_HARDWARE;                            // **実機の値**
+  int nAxes = 0;
+  for (int i = 0; i < N_AXES; i++) if (gMeasOk[i]) nAxes++;
+  p[o++] = (uint8_t)nAxes;
   for (int i = 0; i < N_AXES; i++) {
-    int16_t pos = (int16_t)lroundf(gGoal[i] * 10.0f);        // TODO: 実機では読み値を入れる
+    if (!gMeasOk[i]) continue;                               // 読めない軸は返さない（0 で埋めない）
+    int16_t pos = (int16_t)lroundf(gMeasPos[i] * 10.0f);
+    int16_t vel = (int16_t)lroundf(gMeasVel[i] * 10.0f);
+    int16_t load = (int16_t)lroundf(gMeasLoad[i] * 1000.0f);
     p[o++] = pos & 0xFF; p[o++] = (pos >> 8) & 0xFF;
-    p[o++] = 0; p[o++] = 0;                                  // load
-    p[o++] = 0;                                              // temp ℃
-    p[o++] = 120;                                            // 12.0V
-    p[o++] = 0;                                              // fault
-    p[o++] = 0xFF; p[o++] = 0xFF;                            // current 不明
+    p[o++] = vel & 0xFF; p[o++] = (vel >> 8) & 0xFF;
+    p[o++] = load & 0xFF; p[o++] = (load >> 8) & 0xFF;
+    p[o++] = gMeasTemp[i];
+    p[o++] = gMeasVolt[i];
+    p[o++] = gMeasFault[i];
+    p[o++] = 0xFF; p[o++] = 0xFF;                            // current 不明（電流センサ無し）
   }
   sendFrame(Serial, REP_TELEMETRY, p, (uint8_t)o);
 }
@@ -256,8 +332,9 @@ void setup() {
     gGoal[i] = HOME_DEG[i];                                  // TODO: 実機では現在角を読んでから入れる
     gTarget[i] = gGoal[i];
     gSpeed[i] = JOINTS[i].max_speed_dps;
+    gMeasOk[i] = false;
   }
-  gState = ST_DISARMED; gReason = SR_BOOT;                   // **必ず待機から始まる**
+  gState = ST_BOOT; gReason = SR_BOOT;                       // **必ず BOOT から始まる**
   gLastCtrl = millis(); gLastTelem = gLastCtrl;
 }
 

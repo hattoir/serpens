@@ -37,19 +37,20 @@ struct JointCfg {
 };
 
 static const JointCfg JOINTS[N_AXES] = {
-  {1, -85.0f, 85.0f, 240.0f, 1, 0.0f},              // J1 尾側
-  {2, -85.0f, 85.0f, 240.0f, 1, 0.0f},
-  {3, -85.0f, 85.0f, 240.0f, 1, 0.0f},
-  {4, -85.0f, 85.0f, 240.0f, 1, 0.0f},
-  {5, -85.0f, 85.0f, 240.0f, 1, 0.0f},
-  {6, -85.0f, 85.0f, 240.0f, 1, 0.0f},              // J6 頭側の胴体ヨー
-  {7,  -8.0f, 90.0f, 120.0f, 1, 0.0f},              // J7 首 pitch
-  {8, -80.0f, 80.0f,  90.0f, 1, 0.0f},              // J8 頭 yaw
-  {9, -35.0f, 35.0f,  90.0f, 1, 0.0f},              // J9 頭 roll
+  // **operational limit**（config/robot.yaml の min/max_deg）。CAD R03: 胴体ヨーは ±64° で干渉なし
+  {1,  -60.0f,  60.0f, 240.0f, 1, 0.0f}, // J1 尾側
+  {2,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
+  {3,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
+  {4,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
+  {5,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
+  {6,  -60.0f,  60.0f, 240.0f, 1, 0.0f}, // J6 頭側の胴体ヨー
+  {7,   -8.0f,  90.0f, 120.0f, 1, 0.0f}, // J7 首 pitch
+  {8,  -80.0f,  80.0f,  90.0f, 1, 0.0f}, // J8 頭 yaw
+  {9,  -35.0f,  35.0f,  90.0f, 1, 0.0f}, // J9 頭 roll
 };
 
 // 起動時の姿勢（config/robot.yaml の poses.home）。J7 = +8° は呼吸が下限で切れないため
-static const float HOME_DEG[N_AXES] = {0, 0, 0, 0, 0, 0, 8.0f, 0, 0};
+static const float HOME_DEG[N_AXES] = {0f, 0f, 0f, 0f, 0f, 0f, 8f, 0f, 0f};
 
 // ---- サーボ（docs/sts3215_registers.md） ----
 static const uint32_t SERVO_BAUD      = 1000000;    // TTL バス

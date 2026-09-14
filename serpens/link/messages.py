@@ -7,9 +7,9 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-from serpens.link.protocol import (FMT_AXIS, FMT_BODY, FMT_DRIVE, FMT_HEAD, FMT_STOP,
-                                   FMT_TELEM_HEAD, FMT_TORQUE, REASON_JA, STATE_JA, Flag, State,
-                                   StopReason)
+from serpens.link.protocol import (AGE_MAX_MS, FMT_AXIS, FMT_BODY, FMT_DRIVE, FMT_HEAD,
+                                   FMT_STOP, FMT_TELEM_HEAD, FMT_TORQUE, REASON_JA, STATE_JA, Flag,
+                                   Source, State, StopReason)
 
 FMT_ACK = "<HB"        # ack_seq, type
 FMT_NACK = "<HBB"      # ack_seq, type, reason
@@ -134,9 +134,10 @@ def unpack_torque(payload: bytes) -> float:
 
 @dataclass(frozen=True)
 class AxisTelemetry:
-    """1軸ぶんの状態。current_ma が None なら測れていない。"""
+    """1軸ぶんの状態。current_ma が None なら測れていない（電流センサが無い機体）。"""
 
     pos_deg: float
+    vel_dps: float
     load: float
     temp_c: int
     volt_v: float
@@ -146,19 +147,42 @@ class AxisTelemetry:
 
 @dataclass(frozen=True)
 class Telemetry:
-    """機体の状態一式。"""
+    """機体の状態一式（テレメトリ v2）。
+
+    **`source` が SIMULATION なら、この値は実測ではない。** 画面にも記録にもそのまま持ち回す。
+    """
 
     boot_id: int
     uptime_ms: int
     state: State
     stop_reason: StopReason
-    last_seq: int
+    last_seq: int                  # 最後に受理したフレームの seq
+    last_drive_seq: int            # 最後に受理した DRIVE の seq
     flags: int
+    heartbeat_age_ms: int          # 最後の heartbeat からの経過（0xFFFF = 未受信）
+    drive_age_ms: int              # 最後の DRIVE からの経過（0xFFFF = 未受信）
+    drive_ttl_remaining_ms: int    # DRIVE の残り期限（0 = 期限切れ）
+    loop_period_us: int            # 実測の制御周期
+    overruns: int                  # 制御周期を超えた回数
+    source: Source
     axes: list[AxisTelemetry]
 
     @property
     def driving(self) -> bool:
         return bool(self.flags & Flag.DRIVING)
+
+    @property
+    def simulated(self) -> bool:
+        """**シミュレーション由来の値か。** 実機の測定値と混ぜないための判定。"""
+        return self.source is Source.SIMULATION or bool(self.flags & Flag.SIMULATED)
+
+    @property
+    def emergency_latched(self) -> bool:
+        return self.state is State.EMERGENCY_LATCHED
+
+    @property
+    def armed(self) -> bool:
+        return self.state.armed
 
     @property
     def torque_on(self) -> bool:
@@ -174,21 +198,28 @@ class Telemetry:
 
     def pack(self) -> bytes:
         out = struct.pack(FMT_TELEM_HEAD, self.boot_id, self.uptime_ms, int(self.state),
-                          int(self.stop_reason), self.last_seq, self.flags, len(self.axes))
+                          int(self.stop_reason), self.last_seq, self.last_drive_seq, self.flags,
+                          min(self.heartbeat_age_ms, AGE_MAX_MS), min(self.drive_age_ms, AGE_MAX_MS),
+                          min(self.drive_ttl_remaining_ms, AGE_MAX_MS),
+                          min(self.loop_period_us, AGE_MAX_MS), min(self.overruns, AGE_MAX_MS),
+                          int(self.source), len(self.axes))
         for a in self.axes:
-            out += struct.pack(FMT_AXIS, round(a.pos_deg * 10), round(a.load * 1000), int(a.temp_c),
-                               round(a.volt_v * 10), a.fault,
+            out += struct.pack(FMT_AXIS, round(a.pos_deg * 10), round(a.vel_dps * 10),
+                               round(a.load * 1000), int(a.temp_c), round(a.volt_v * 10), a.fault,
                                0xFFFF if a.current_ma is None else min(int(a.current_ma), 0xFFFE))
         return out
 
     @staticmethod
     def unpack(payload: bytes) -> "Telemetry":
         head = struct.calcsize(FMT_TELEM_HEAD)
-        boot, up, state, reason, last_seq, flags, n = struct.unpack_from(FMT_TELEM_HEAD, payload)
+        (boot, up, state, reason, last_seq, last_drive, flags, hb_age, drive_age, ttl,
+         period, overruns, source, n) = struct.unpack_from(FMT_TELEM_HEAD, payload)
         size = struct.calcsize(FMT_AXIS)
         axes = []
         for k in range(n):
-            pos, load, temp, volt, fault, cur = struct.unpack_from(FMT_AXIS, payload, head + k * size)
-            axes.append(AxisTelemetry(pos / 10, load / 1000, temp, volt / 10, fault,
+            pos, vel, load, temp, volt, fault, cur = struct.unpack_from(FMT_AXIS, payload,
+                                                                        head + k * size)
+            axes.append(AxisTelemetry(pos / 10, vel / 10, load / 1000, temp, volt / 10, fault,
                                       None if cur == 0xFFFF else cur))
-        return Telemetry(boot, up, State(state), StopReason(reason), last_seq, flags, axes)
+        return Telemetry(boot, up, State(state), StopReason(reason), last_seq, last_drive, flags,
+                         hb_age, drive_age, ttl, period, overruns, Source(source), axes)

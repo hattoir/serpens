@@ -62,7 +62,7 @@ def test_behavior_drives_the_device_and_the_world_moves(rig: Rig) -> None:
     """PC は歩容パラメータだけ送り、角度は機体が作り、世界が動く。"""
     x0, y0 = rig.session.world.pose.x, rig.session.world.pose.y
     rig.run(6.0)
-    assert rig.device.state is State.ARMED and rig.device.driving
+    assert rig.device.state is State.DRIVING and rig.device.driving
     assert rig.body_spread() > 10.0, "機体側で進行波が立っていない"
     moved = ((rig.session.world.pose.x - x0) ** 2 + (rig.session.world.pose.y - y0) ** 2) ** 0.5
     assert moved > 50.0, f"世界が動いていない（{moved:.0f}mm）"
@@ -116,7 +116,7 @@ def test_emergency_latches_on_the_machine(rig: Rig) -> None:
     rig.run(4.0)
     rig.session.request_emergency("テスト緊急")
     rig.run(0.5)
-    assert rig.device.state is State.EMERGENCY
+    assert rig.device.state is State.EMERGENCY_LATCHED
     rig.session.clear_emergency("テスト")         # PC 側の解除 → 待機へ戻るだけ
     rig.run(0.5)
     assert not rig.device.driving

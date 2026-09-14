@@ -45,7 +45,7 @@ def test_pc_process_killed_leads_to_hold(cfg: dict) -> None:
     assert h.device.stop_reason is StopReason.DRIVE_TTL       # 先に効くのは TTL
     h.advance(timeout_s(cfg))
     assert h.device.stop_reason is StopReason.HEARTBEAT_LOST  # 続いて heartbeat 途絶
-    assert h.device.state is State.DISARMED
+    assert h.device.state is State.FAULT_HOLD, "異常で止まった状態が残っていない"
     assert h.moved_deg(1.0) < 1e-9, "PC が死んだ後に動いた"
     assert h.device.torque_on, "保持なのでトルクは入ったまま（脱力は明示指令のときだけ）"
 
@@ -59,7 +59,7 @@ def test_usb_unplug_leads_to_hold(cfg: dict) -> None:
     assert took == pytest.approx(cfg["link"]["drive_ttl_ms"] / 1000.0, abs=HB_TIMEOUT_MARGIN_S)
     h.advance(timeout_s(cfg))
     assert h.device.stop_reason is StopReason.HEARTBEAT_LOST
-    assert h.device.state is State.DISARMED
+    assert h.device.state is State.FAULT_HOLD
     assert h.moved_deg(1.0) < 1e-9
 
 
@@ -112,7 +112,7 @@ def test_arm_requires_heartbeat(cfg: dict) -> None:
     rd = FrameReader()
     reply = rd.feed(h.device.feed(encode(Cmd.ARM, 1, b""), h.now))[0]
     assert reply.type == Rep.NACK and m.unpack_nack(reply.payload)[2] == Nack.NO_HEARTBEAT
-    assert h.device.state is State.DISARMED
+    assert h.device.state is State.BOOT, "heartbeat を受ける前は BOOT"
 
 
 # ---- 完了条件 6: 機体の再起動で自動再開しない --------------------------------------------
@@ -145,14 +145,14 @@ def test_emergency_latches_on_device(cfg: dict) -> None:
     h = driving_harness(cfg)
     h.client.emergency(h.now)
     h.advance(0.1)
-    assert h.device.state is State.EMERGENCY
+    assert h.device.state is State.EMERGENCY_LATCHED
     assert h.device.stop_reason is StopReason.EMERGENCY_CMD
     assert not h.device.driving and h.moved_deg(1.0) < 1e-9
     h.client.arm(h.now)                          # ARM しても解除されない
     h.advance(0.1)
     h.client.set_drive(30.0, 60.0, 0.5)
     h.advance(0.5)
-    assert h.device.state is State.EMERGENCY and not h.device.driving
+    assert h.device.state is State.EMERGENCY_LATCHED and not h.device.driving
     assert Nack.LATCHED in {n[2] for n in h.client.nacks}
 
 
@@ -165,10 +165,10 @@ def test_emergency_survives_reconnect(cfg: dict) -> None:
     h.advance(1.0)
     h.tr.plug()
     h.advance(0.5)
-    assert h.device.state is State.EMERGENCY
+    assert h.device.state is State.EMERGENCY_LATCHED
     h.client = type(h.client)(h.tr, cfg, now=h.now)     # PC 側だけ作り直す（再起動に相当）
     h.advance(1.0)
-    assert h.device.state is State.EMERGENCY and h.client.latched
+    assert h.device.state is State.EMERGENCY_LATCHED and h.client.latched
     assert h.client.telemetry is not None and "緊急停止" in h.client.telemetry.state_ja
 
 
@@ -178,7 +178,7 @@ def test_stop_command_does_not_clear_latch(cfg: dict) -> None:
     h.advance(0.2)
     h.client.stop(h.now)
     h.advance(0.2)
-    assert h.device.state is State.EMERGENCY
+    assert h.device.state is State.EMERGENCY_LATCHED
     assert h.device.stop_reason is StopReason.EMERGENCY_CMD, "停止理由が上書きされた"
 
 
@@ -213,7 +213,7 @@ def test_clear_fault_nonce_cannot_be_replayed(cfg: dict) -> None:
     reply = rd.feed(h.device.feed(encode(Cmd.CLEAR_FAULT, h.client._seq + 1,
                                          m.pack_nonce(0xABCD)), h.now))[0]
     assert reply.type == Rep.NACK and m.unpack_nack(reply.payload)[2] == Nack.NONCE_REUSED
-    assert h.device.state is State.EMERGENCY
+    assert h.device.state is State.EMERGENCY_LATCHED
 
 
 # ---- 完了条件 12: 停止理由が PC から確認できる -------------------------------------------
@@ -278,10 +278,10 @@ def test_device_faults_latch_as_emergency(cfg: dict) -> None:
     h = driving_harness(cfg)
     h.device.inject_axis("J2", temp_c=cfg["link"]["faults"]["temp_limit_c"] + 1)
     h.advance(0.2)
-    assert h.device.state is State.EMERGENCY and h.device.stop_reason is StopReason.OVERHEAT
+    assert h.device.state is State.EMERGENCY_LATCHED and h.device.stop_reason is StopReason.OVERHEAT
     h.device.inject_axis("J2", temp_c=25.0)
     h.advance(1.0)
-    assert h.device.state is State.EMERGENCY, "冷えたら勝手に復帰した"
+    assert h.device.state is State.EMERGENCY_LATCHED, "冷えたら勝手に復帰した"
 
 
 def test_stop_with_disable_torque_is_explicit(cfg: dict) -> None:

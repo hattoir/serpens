@@ -155,8 +155,8 @@ class LinkClient:
         if prev is None or (prev.state, prev.stop_reason) != (tel.state, tel.stop_reason):
             self.history.append((now, tel.stop_reason, tel.state))
             del self.history[:-HISTORY_KEEP]
-        if tel.state is not State.ARMED:
-            self.drive = None                      # 機体が待機・ラッチなら送り続けない
+        if not tel.state.armed:
+            self.drive = None                      # 機体が待機・異常・ラッチなら送り続けない
 
     # ---- 表示 -----------------------------------------------------------------------
     def age_s(self, now: float) -> float | None:
@@ -173,7 +173,11 @@ class LinkClient:
 
     @property
     def latched(self) -> bool:
-        return self.state is State.EMERGENCY
+        return self.state is State.EMERGENCY_LATCHED
+
+    @property
+    def armed(self) -> bool:
+        return self.state is not None and self.state.armed
 
     @property
     def driving(self) -> bool:

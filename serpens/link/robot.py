@@ -121,7 +121,7 @@ class LinkRobot:
     def send(self, t: float, cmd: MotionCommand) -> None:
         """胴体は歩容パラメータ（または姿勢）、首・頭は角度で送る。"""
         now = self._clock()
-        if self.client.state is not State.ARMED:
+        if not self.client.armed:
             return                      # 通らない指令を送らない（ARM は apply_stop_state が行う）
         if cmd.gait is not None:
             self.client.set_drive(cmd.gait.amplitude_deg, cmd.gait.spatial_freq_deg,
@@ -178,7 +178,7 @@ class LinkRobot:
     def _arm_if_needed(self, now: float) -> None:
         """待機中なら ARM する。**再起動後・ラッチ中は自動で ARM しない**（完了条件 6/8）。"""
         st = self.client.state
-        if st is State.ARMED or self.client.latched or self.client.rebooted:
+        if st is None or st.armed or st is State.FAULT_HOLD or self.client.latched or self.client.rebooted:
             return
         if self._armed_at is not None and now - self._armed_at < self.client.drive_dt:
             return

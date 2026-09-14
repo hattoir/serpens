@@ -7,7 +7,7 @@
 static const uint8_t  SOF0 = 0xA5;
 static const uint8_t  SOF1 = 0x5A;
 static const uint8_t  LINK_VERSION = 1;
-static const uint16_t MAX_PAYLOAD = 128;         // テレメトリ 9軸 = 93 バイト
+static const uint16_t MAX_PAYLOAD = 192;         // テレメトリ 9軸 = 125 バイト（v2）
 static const uint8_t  HEADER_LEN = 5;            // ver + type + seq(2) + len
 static const uint16_t SEQ_FORWARD_WINDOW = 4096;
 
@@ -27,7 +27,16 @@ enum NackReason : uint8_t {
   NACK_NO_HEARTBEAT = 9, NACK_NONCE_REUSED = 10, NACK_BUSY = 11,
 };
 
-enum DeviceState : uint8_t { ST_DISARMED = 0, ST_ARMED = 1, ST_EMERGENCY = 2 };
+// 7状態（docs/link_protocol.md §4 / serpens/link/protocol.py の State と同じ値）
+enum DeviceState : uint8_t {
+  ST_BOOT = 0, ST_DISARMED = 1, ST_ARMED_HOLD = 2, ST_DRIVING = 3,
+  ST_FAULT_HOLD = 4, ST_EMERGENCY_LATCHED = 5, ST_TORQUE_DISABLED = 6,
+};
+
+inline bool stateArmed(DeviceState s) { return s == ST_ARMED_HOLD || s == ST_DRIVING; }
+
+// テレメトリの値の出どころ。**実機ファームは必ず SRC_HARDWARE を返す**
+enum TelemetrySource : uint8_t { SRC_SIMULATION = 0, SRC_HARDWARE = 1 };
 
 enum StopReason : uint8_t {
   SR_NONE = 0, SR_OPERATOR_STOP = 1, SR_DRIVE_TTL = 2, SR_HEARTBEAT_LOST = 3,
@@ -35,10 +44,14 @@ enum StopReason : uint8_t {
   SR_OUT_OF_RANGE = 8, SR_BOOT = 9,
 };
 
-enum Flags : uint8_t {
+enum Flags : uint16_t {
   FL_DRIVING = 1 << 0, FL_BREATHING = 1 << 1, FL_HEARTBEAT_OK = 1 << 2,
-  FL_DRIVE_VALID = 1 << 3, FL_TORQUE_ON = 1 << 4,
+  FL_DRIVE_VALID = 1 << 3, FL_TORQUE_ON = 1 << 4, FL_ARMED = 1 << 5,
+  FL_EMERGENCY_LATCHED = 1 << 6, FL_SIMULATED = 1 << 7,   // 実機では立てない
+  FL_SERVO_MISSING = 1 << 8, FL_OVERRUN = 1 << 9,
 };
+
+static const uint16_t AGE_MAX_MS = 0xFFFF;   // 古さ・周期の飽和値
 
 // payload の長さ（type ごと）。-1 = 検査しない
 inline int payloadLenFor(uint8_t type) {
@@ -153,6 +166,9 @@ inline void sendEvent(Stream& io, uint8_t code, uint8_t detail) {
   uint8_t p[2] = {code, detail};
   sendFrame(io, REP_EVENT, p, 2);
 }
+
+// テレメトリ組み立て用（o を進めながら書く）
+inline void putU16(uint8_t* p, int& o, uint16_t v) { p[o++] = v & 0xFF; p[o++] = (v >> 8) & 0xFF; }
 
 inline int16_t rdI16(const uint8_t* p) { return (int16_t)((uint16_t)p[0] | ((uint16_t)p[1] << 8)); }
 inline uint16_t rdU16(const uint8_t* p) { return (uint16_t)p[0] | ((uint16_t)p[1] << 8); }

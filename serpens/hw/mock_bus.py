@@ -34,6 +34,8 @@ class _AxisSim:
     torque_ratio: float = 1.0
     external_load: float = 0.0
     load: float = 0.0
+    offline: bool = False        # 故障注入: 応答しない（配線が抜けた・電源が来ていない）
+    fault: int = 0               # 故障注入: サーボが返す fault ビット
 
 
 class MockServoBus(ServoBus):
@@ -75,8 +77,24 @@ class MockServoBus(ServoBus):
         self._connected = False
 
     def ping(self, servo_id: int) -> bool:
-        """設定にある ID なら応答する。"""
-        return self._connected and servo_id in self._axes
+        """設定にある ID なら応答する（offline に落とした軸は応答しない）。"""
+        return self._connected and servo_id in self._axes and not self._axes[servo_id].offline
+
+    # ---- 故障注入（**シミュレーション専用**。実機には存在しない） ----------------------
+    def set_offline(self, servo_id: int, offline: bool = True) -> None:
+        """その軸を応答なしにする（読み出しから消え、指令も届かない）。"""
+        self._axis(servo_id).offline = offline
+
+    def set_fault(self, servo_id: int, bits: int) -> None:
+        """サーボが返す fault ビットを立てる（過負荷・過熱・エンコーダ異常など）。"""
+        self._axis(servo_id).fault = int(bits)
+
+    def fault_of(self, servo_id: int) -> int:
+        return self._axes[servo_id].fault if servo_id in self._axes else 0
+
+    def velocity_of(self, servo_id: int) -> float:
+        """現在の角速度 [deg/s]（模擬）。"""
+        return self._axes[servo_id].vel_dps if servo_id in self._axes else 0.0
 
     # ---- 指令 -----------------------------------------------------------------
     def set_torque(self, servo_id: int, on: bool) -> None:
@@ -100,7 +118,9 @@ class MockServoBus(ServoBus):
     def _set_goals(self, goals: dict[int, Goal]) -> None:
         self._update()
         for sid, g in goals.items():
-            self._axis(sid).goal = g
+            ax = self._axis(sid)
+            if not ax.offline:                      # 応答しない軸には届かない
+                ax.goal = g
 
     # ---- 読み出し -------------------------------------------------------------
     def _read_states(self, ids: list[int]) -> dict[int, ServoState]:
@@ -108,6 +128,8 @@ class MockServoBus(ServoBus):
         out: dict[int, ServoState] = {}
         for sid in ids:
             ax = self._axis(sid)
+            if ax.offline:
+                continue                            # 読めない軸は返さない（鮮度の判定に任せる）
             volt = float(self._m["voltage_nominal_v"]) - float(self._m["voltage_sag_v"]) * abs(ax.load)
             out[sid] = ServoState(ax.pos_deg, ax.load, volt, ax.temp_c)
         return out
