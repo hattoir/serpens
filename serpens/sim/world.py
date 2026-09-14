@@ -46,10 +46,8 @@ class World:
         self.mat_w = float(cfg["mat"]["width_mm"])
         self.mat_d = float(cfg["mat"]["depth_mm"])
         self.radius = float(cfg["body"]["diameter_mm"]) / 2.0
-        # (リンク番号, 横方向の重み, 進行方向の重み)
-        tan = math.sqrt(float(s["tangential_drag_ratio"]))
-        pad = math.sqrt(float(s["pad_drag_ratio"]))
-        self._contacts = [(int(k), 1.0, tan) for k in s["wheel_links"]] + [(int(k), pad, pad) for k in s["pad_links"]]
+        # (リンク番号, 横方向の重み, 進行方向の重み)。belly の種類と摩擦プロファイルで決まる
+        self._contacts = self._build_contacts(cfg)   # body_links もここで決まる
         self.contact_h = float(s["contact_height_mm"])
         self.rcond = float(s["lstsq_rcond"])
         m = cfg["markers"]
@@ -62,6 +60,29 @@ class World:
         self.travel_mm = 0.0       # 重心の総移動距離
 
     # ---- 更新 -----------------------------------------------------------------
+    def _build_contacts(self, cfg: dict[str, Any]) -> list[tuple[int, float, float]]:
+        """接地点の重みを作る。**摩擦の値はすべて未実測**（config/robot.yaml の belly）。
+
+        Wheel Belly は受動輪のあるリンクだけが接地。Snake Belly は車輪が無いので、
+        胴体のリンク全部が異方性摩擦で接地する。重みは最小二乗の係数なので平方根で入れる。
+        """
+        s = cfg["sim"]
+        b = cfg.get("belly")
+        wheel_links = [int(k) for k in s["wheel_links"]]
+        pad_links = [int(k) for k in s["pad_links"]]
+        self.body_links = wheel_links       # 重心の代わりに使う接地リンク
+        if b is None:                       # 古い設定（belly 節が無い）との互換
+            tan = math.sqrt(float(s["tangential_drag_ratio"]))
+            pad = math.sqrt(float(s["pad_drag_ratio"]))
+            return [(k, 1.0, tan) for k in wheel_links] + [(k, pad, pad) for k in pad_links]
+        prof = b["profiles"][b["type"]][b["friction_profile"]]
+        lat, tan = math.sqrt(float(prof["lateral"])), math.sqrt(float(prof["tangential"]))
+        pad_lat = math.sqrt(float(b["pad"]["lateral"]))
+        pad_tan = math.sqrt(float(b["pad"]["tangential"]))
+        body = wheel_links if b["type"] == "wheel" else sorted(set(wheel_links + pad_links) - set(pad_links))
+        self.body_links = body
+        return [(k, lat, tan) for k in body] + [(k, pad_lat, pad_tan) for k in pad_links]
+
     def step(self, angles: Pose, dt: float) -> None:
         """関節角を angles に変えたときの、全体の動きを dt 秒ぶん積分する。"""
         new_pts = forward(self.chain, angles)[0]
@@ -125,9 +146,9 @@ class World:
         return np.column_stack([self._to_world(self._pts_body), self._pts_body[:, 2]])
 
     def centroid(self) -> np.ndarray:
-        """車輪リンク中点の平均（ヘビの「重心」代わり）[mm]。"""
+        """接地している胴体リンク中点の平均（ヘビの「重心」代わり）[mm]。"""
         pts = self.world_points()
-        mids = [(pts[k] + pts[k + 1]) / 2 for k, w_n, _ in self._contacts if w_n == 1.0]
+        mids = [(pts[k] + pts[k + 1]) / 2 for k in self.body_links]
         return np.mean(np.array(mids)[:, :2], axis=0)
 
     def marker_xy(self, which: str) -> np.ndarray:

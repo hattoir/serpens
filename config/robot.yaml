@@ -109,6 +109,14 @@ gait:
   # uniform / head_weighted。同じ旋回率で比べると半径は同じ（約480mm）で、
   # 尾が頭の軌跡をなぞる精度は head_weighted が上（ずれ平均 91mm vs 115mm）→ 既定
   turn_profile: head_weighted
+  phase_offset_deg: 0.0       # 歩容の初期位相（0 = sin の位相ゼロから始める）
+  # 垂直波（ピッチ）。**この機体では出せない。**
+  # J1〜J6 は全て yaw で、胴体に pitch 軸が無い（pitch は首 J7 のみ）。
+  # 構想設計書 04章の「ヨーとピッチを交互に配置する直交2軸構成」とは構成が違う。
+  # さらに、上下に波を伝えられると巻き付きが可能になるため、16章が螺旋歩容を封印している。
+  # → **0 のまま。** 非ゼロにするには機構の変更と安全設計の見直しが要る（tests が拒否する）
+  pitch_amplitude_deg: 0.0
+  yaw_pitch_phase_deg: 90.0   # 上が 0 の間は未使用（直交2軸構成になったときの位相差）
   turn_ramp_periods: 1.0      # γ0 を 0 → turn_full_scale_deg だけ変えるのにかける時間（歩容の周期単位）
   turn_full_scale_deg: 20.0   # γ0 の変化の速さの基準（= 旋回プリセットの γ0）
   blend_s: 1.0                # 歩容の開始・停止時に振幅を 0↔1 でなめらかに変える時間
@@ -182,7 +190,7 @@ sim:
   lstsq_rcond: 1.0e-6         # 最小二乗の打ち切り（まっすぐな胴体で前後が不定のとき 0 にする）
   # 車輪の接線方向（進行方向）の転がり抵抗 / 横方向の拘束 の重み比。
   # 小径受動輪の転がり抵抗係数 0.01〜0.05 の下寄りとして 0.02。
-  # 要実機校正。STEP 4.5 の fit_sim.py で実測から同定する
+  # **HARDWARE_UNVERIFIED。** belly.profiles の既定値と同じ値を置いてある（fit_sim.py が同定する）
   tangential_drag_ratio: 0.02
   # Sim-to-Real 校正（tools/fit_sim.py）: tangential_drag_ratio をこの範囲でスイープして実測に合わせる
   fit_ratio_min: 0.0
@@ -193,6 +201,34 @@ sim:
   start_tail_x_mm: 150.0      # 初期姿勢（尾端の位置と、尾→頭の向き）
   start_tail_y_mm: 600.0
   start_theta_deg: 0.0
+
+# ---------------------------------------------------------------------------
+# 腹側の交換パーツ（CAD: Wheel Belly / Snake Belly）と、床との摩擦
+#
+# **摩擦係数はどれも未実測（HARDWARE_UNVERIFIED）。仮値を「現実の摩擦」として扱わない。**
+# 実機ができたら tools/fit_sim.py で実測から同定し、ここを更新する。
+# 接触は (横方向の重み, 進行方向の重み) の比で表す。1.0 = 滑らない、0 に近いほど滑る。
+#   wheel  … 受動輪。横は滑らず（1.0）、進行方向はよく転がる（0.02）
+#   snake  … 鱗状の腹。どちらも滑るが、横の方が滑りにくい（異方性摩擦）
+# ---------------------------------------------------------------------------
+belly:
+  type: wheel                 # wheel / snake（実機では部品を交換する）
+  friction_profile: MEDIUM    # LOW / MEDIUM / HIGH / ANISOTROPIC
+  profiles:
+    # 受動輪つき（現行の展示機）。MEDIUM が従来の値
+    wheel:
+      LOW:         {lateral: 1.0, tangential: 0.010}
+      MEDIUM:      {lateral: 1.0, tangential: 0.020}
+      HIGH:        {lateral: 1.0, tangential: 0.060}
+      ANISOTROPIC: {lateral: 1.0, tangential: 0.005}   # 横は完全拘束、前後は極めて軽い
+    # 鱗状の腹（車輪なし）。**推進が成立するかどうか自体が未検証**
+    snake:
+      LOW:         {lateral: 0.30, tangential: 0.10}
+      MEDIUM:      {lateral: 0.50, tangential: 0.20}
+      HIGH:        {lateral: 0.80, tangential: 0.40}
+      ANISOTROPIC: {lateral: 0.70, tangential: 0.10}   # 鱗の向きで前後だけよく滑る
+  # 頭部の接地パッド（PTFE / フェルト、等方摩擦）は belly の種類によらない
+  pad: {lateral: 0.05, tangential: 0.05}
 
 # ---------------------------------------------------------------------------
 # 知覚（STEP 5）
@@ -399,6 +435,13 @@ safety_limits:
 # サーボ STS3215（出典は docs/sts3215_registers.md）
 # ---------------------------------------------------------------------------
 servo:
+  # **第一候補は STS3215 7.4V 1:191（CAD 側の検討）。ストールトルクが未確認なので、
+  # 安全のトルク上限（safety_limits）を出し直すまで variant を切り替えない。**
+  # 切り替えると tests/test_safety_limits.py が落ちる（未確認の値で安全設計をしないため）
+  variant: "12V_1:345"        # 12V_1:345 / 7.4V_1:191
+  variants:
+    "12V_1:345": {stall_torque_kgfcm: 30.0, supply_voltage_v: 12.0, verified: false}
+    "7.4V_1:191": {stall_torque_kgfcm: null, supply_voltage_v: 7.4, verified: false}   # 未確認
   baudrate: 1000000
   steps_per_rev: 4096
   center_step: 2047          # [W] の中立位置。[M] の「2048 校正」とは 1step 差

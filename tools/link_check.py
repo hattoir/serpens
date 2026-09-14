@@ -65,7 +65,7 @@ def c4_drive_stop(cfg: dict) -> tuple[bool, str]:
     last = h.device._drive_at
     h.run_until(lambda: not h.device.driving, 2.0)
     dt_ms = (h.now - last) * 1000.0
-    ok = h.device.stop_reason is StopReason.DRIVE_TTL and h.device.state is State.ARMED
+    ok = h.device.stop_reason is StopReason.DRIVE_TTL and h.device.state is State.ARMED_HOLD
     return ok, f"最後の DRIVE から {dt_ms:.0f}ms（TTL {cfg['link']['drive_ttl_ms']}ms）で保持"
 
 
@@ -107,7 +107,7 @@ def c8_emergency_latch(cfg: dict) -> tuple[bool, str]:
     h.advance(0.1)
     h.client.set_drive(30.0, 60.0, 0.5)
     h.advance(0.5)
-    ok = h.device.state is State.EMERGENCY and not h.device.driving
+    ok = h.device.state is State.EMERGENCY_LATCHED and not h.device.driving
     return ok, f"ARM/DRIVE を送っても {h.device.state.name} のまま（NACK: LATCHED）"
 
 
@@ -120,7 +120,7 @@ def c9_reconnect_keeps_latch(cfg: dict) -> tuple[bool, str]:
     h.tr.plug()
     h.client = type(h.client)(h.tr, cfg, now=h.now)      # PC 側を作り直す
     h.advance(1.0)
-    return h.device.state is State.EMERGENCY, "USB 抜き差し + PC 再起動でも解除されない"
+    return h.device.state is State.EMERGENCY_LATCHED, "USB 抜き差し + PC 再起動でも解除されない"
 
 
 def c10_clear_fault(cfg: dict) -> tuple[bool, str]:
