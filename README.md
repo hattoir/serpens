@@ -245,7 +245,7 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 
 - `sim/world.py` … 車輪のあるリンク（`sim.wheel_links` = 尾端〜J7 の7リンク × 2輪 = 14輪）は横滑りしない、
   という拘束を全リンク分まとめて最小二乗で解き、胴体全体の剛体速度 (vx, vy, ω) を毎ステップ求める。物理エンジンなし。
-  - 車輪の進行方向には転がり抵抗の重み `sim.tangential_drag_ratio`（推定値 0.02。**要実機校正**）
+  - 車輪の進行方向には転がり抵抗の重み `belly.profiles[type][profile].tangential`（推定値 0.02。**要実機校正**）。腹側は Wheel / Snake を切り替えられる
   - J7 より先は車輪なし。頭部が床にあるときは PTFE / フェルトのパッド（`sim.pad_links`、等方の軽い摩擦）
   - 床から浮いたリンク（鎌首の頭側）は拘束に入れない。マットからはみ出したら全体を内側へ押し戻す
 - ヘビの位置姿勢（`perception/snake_pose.py`。ArUco でもシミュレータでも同じ処理）
@@ -443,7 +443,7 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
    ```powershell
    .\.venv\Scripts\python.exe tools\fit_sim.py
    ```
-   シミュレータの `sim.tangential_drag_ratio` を 0〜0.2 でスイープし、実測に最も合う値を出す（図: `output/fit_sim.png`）。
+   シミュレータの belly プロファイルの `tangential` を 0〜0.2 でスイープし、実測に最も合う値を出す（図: `output/fit_sim.png`）。
    その値を config に書けば、以後シミュレータの移動量が実機に合う。**サンプルのダミー行は消すこと。**
    - 例: 300mm/周期なら ratio ≈ 0.054。予想の 200〜300mm/周期は ratio 0.05〜0.10 に当たる
    - 最適値がスイープ範囲の端に張り付いたら、モデルが実機を説明できていない（車輪の滑り方が違う等）。相談すること

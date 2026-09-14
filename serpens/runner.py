@@ -74,6 +74,9 @@ class Snapshot:
     blockers: list[str] = field(default_factory=list)      # 自律走行を許可できない理由
     fault: str = ""                     # 制御スレッドの例外・停止失敗
     head_link: str = "なし"
+    commanded: dict[str, float] = field(default_factory=dict)   # PC が出した角度
+    measured: dict[str, float] = field(default_factory=dict)    # 読み戻した角度
+    device: Any = None                  # 機体（ESP32）の状態。直接経路では None
     frame: np.ndarray | None = None           # カメラ画像（BGR）
     detections: list[tuple[float, float, float, float]] = field(default_factory=list)
     tracked_bbox: tuple[float, float, float, float] | None = None
@@ -212,6 +215,8 @@ class ControlLoop(threading.Thread):
             servo=dict(s.poller.fresh_states(s.t)),
             servo_age_s={sid: s.poller.age_s(sid, s.t) for sid in s.servo_ids},
             telemetry_source=s.poller.source, missing_axes=s.poller.missing_axes(s.t),
+            commanded=dict(s.anim.last_output), measured=s.robot.positions_by_name(),
+            device=s.robot.device_status(),
             drive_state=s.stop.state.value, drive_text=s.stop.status_text(), latched=s.stop.latched,
             blockers=s.blockers(), fault=self.fault,
             head_link=("なし" if s.head is None else ("接続" if s.head.link_ok() else "断")),

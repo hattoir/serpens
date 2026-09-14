@@ -11,6 +11,9 @@ from typing import Any, Protocol
 from serpens.link.faults import FaultInjector
 
 
+MAX_CATCHUP_S = 1.0        # 時計が飛んだときに機体を回し続けない上限（試験で時刻を大きく進めた場合）
+
+
 class Transport(Protocol):
     """PC 側から見た経路。読みは非ブロッキング（無ければ空）。"""
 
@@ -36,6 +39,7 @@ class LoopbackTransport:
         self._to_dev = bytearray()
         self._to_pc = bytearray()
         self._now = 0.0
+        self._last_tick = 0.0
         self.tx_bytes = 0
         self.rx_bytes = 0
 
@@ -96,9 +100,18 @@ class LoopbackTransport:
         take = len(self._to_dev) if self.chunk <= 0 else min(self.chunk, len(self._to_dev))
         data, self._to_dev = bytes(self._to_dev[:take]), self._to_dev[take:]
         out = b""
+        # **機体は自分の制御周期で回る**（PC のループ周期に引きずられない）。
+        # これをしないと、PC が 50Hz で回すだけで機体が「周期超過」を誤検出する
+        dt = float(getattr(self.device, "ctrl_dt", 0.0) or 0.0)
+        t = max(self._last_tick, now - MAX_CATCHUP_S)
+        while dt > 0.0 and t + dt < now:
+            t += dt
+            out += self.device.tick(t)
+        self._last_tick = t
         if self.connected and data:
             out += self.device.feed(data, now)
         out += self.device.tick(now)
+        self._last_tick = now
         if self.connected:
             self._to_pc += out
 

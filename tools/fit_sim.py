@@ -1,4 +1,4 @@
-"""Sim-to-Real 校正: 実測の前進量から sim.tangential_drag_ratio を同定する。
+"""Sim-to-Real 校正: 実測の前進量から belly プロファイルの摩擦（tangential）を同定する。
 
 実機が届いたら最初にこれを回す。床材ごとに1行ずつ data/real_runs.csv に足していく。
 
@@ -11,7 +11,7 @@ CSV の列（1行目はヘッダ。Excel で保存するなら「CSV UTF-8」を
   date         日付
   note         メモ
 
-処理: tangential_drag_ratio を sim.fit_ratio_min〜max でスイープし、
+処理: いま選ばれている belly プロファイルの tangential を sim.fit_ratio_min〜max でスイープし、
       シミュレータの「1周期あたりの前進量」と実測の差の二乗和が最小になる値を求める。
 出力: 床材ごとの最適値・残差、比較グラフ（output/fit_sim.png）
 
@@ -95,7 +95,8 @@ def sweep(cfg: dict, runs: list[Run], ratios: np.ndarray) -> dict[tuple[str, flo
         vals = []
         for ratio in ratios:
             c = copy.deepcopy(cfg)
-            c["sim"]["tangential_drag_ratio"] = float(ratio)
+            prof = c["belly"]["profiles"][c["belly"]["type"]][c["belly"]["friction_profile"]]
+            prof["tangential"] = float(ratio)
             p = gait_with_period(c, key[0], key[1])
             vals.append(per_cycle_advance(c, p, float(s["fit_warmup_cycles"]), float(s["fit_measure_cycles"])).per_cycle_mm)
         curves[key] = np.array(vals)
@@ -141,7 +142,7 @@ def main() -> None:
         best, loss, resid = fit(fr, curves, ratios)
         rms = float(np.sqrt(np.mean(resid ** 2)))
         edge = best <= ratios[0] + 1e-9 or best >= ratios[-1] - 1e-9
-        print(f"\n[{floor}] 最適 tangential_drag_ratio = {best:.4f}   残差 RMS = {rms:.1f} mm/周期"
+        print(f"\n[{floor}] 最適 tangential（belly プロファイル） = {best:.4f}   残差 RMS = {rms:.1f} mm/周期"
               + ("   ※スイープ範囲の端。モデルか実測を見直すこと" if edge else ""))
         print(f"  {'歩容':<10}{'周期':>6}{'実測':>12}{'シム':>12}{'差':>9}")
         for r, e in zip(fr, resid):
@@ -152,7 +153,7 @@ def main() -> None:
             ax.axhline(r.per_cycle_mm, color="k", ls=":", lw=1)
             ax.plot([best], [r.per_cycle_mm], "k*", ms=12)
         ax.axvline(best, color="tab:red", lw=2, label=f"最適 {best:.3f}")
-        ax.set_xlabel("sim.tangential_drag_ratio")
+        ax.set_xlabel("belly の tangential")
         ax.set_ylabel("1周期あたりの前進量 [mm]")
         ax.set_title(f"床材: {floor}（点線 = 実測）  残差 RMS {rms:.1f}mm")
         ax.grid(alpha=0.3)
@@ -161,7 +162,8 @@ def main() -> None:
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.out, dpi=90)
     print(f"\nsaved {args.out}")
-    print("→ 採用するなら config/robot.yaml の sim.tangential_drag_ratio を書き換える（床材ごとに値が違えば展示会場の床に合わせる）")
+    print("→ 採用するなら config/robot.yaml の belly.profiles[type][profile].tangential を書き換える"
+      "（床材ごとに値が違えば展示会場の床に合わせる）")
 
 
 if __name__ == "__main__":

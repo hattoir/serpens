@@ -34,7 +34,8 @@ def test_default_is_wheel_belly_and_matches_previous_model(cfg: dict) -> None:
     assert cfg["belly"]["type"] == "wheel" and cfg["belly"]["friction_profile"] == "MEDIUM"
     prof = cfg["belly"]["profiles"]["wheel"]["MEDIUM"]
     assert prof["lateral"] == 1.0
-    assert prof["tangential"] == pytest.approx(cfg["sim"]["tangential_drag_ratio"])
+    assert prof["tangential"] == pytest.approx(0.02)     # 2026-09-12 までと同じ推定値
+    assert "tangential_drag_ratio" not in cfg["sim"], "摩擦の値が2か所にある"
     adv = per_cycle_advance(cfg, FORWARD, 2.0, 3.0)
     assert adv.per_cycle_mm == pytest.approx(384.0, abs=15.0), "接触モデルが変わっている"
 

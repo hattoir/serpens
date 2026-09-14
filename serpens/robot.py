@@ -53,6 +53,19 @@ class MotionCommand:
         )
 
 
+@dataclass(frozen=True)
+class DeviceStatus:
+    """機体（ESP32）の状態。**直接経路には無い**ので None になる。"""
+
+    state_ja: str
+    reason_ja: str
+    simulated: bool             # True = 値がシミュレーション由来
+    age_s: float | None         # テレメトリの古さ
+    loop_period_us: int
+    overruns: int
+    missing_axes: int
+
+
 @runtime_checkable
 class TorqueSink(Protocol):
     """トルク比を受け取れるもの（脱力の演出が使う）。ServoBus も LinkRobot も満たす。"""
@@ -86,6 +99,9 @@ class RobotInterface(Protocol):
 
     def poll(self) -> None:
         """状態の読み出し（停止中も続ける）。"""
+
+    def device_status(self) -> "DeviceStatus | None":
+        """機体側の状態（駆動リンクがあるときだけ）。"""
 
     def close(self, torque_off: bool) -> list[str]:
         """出力を切る。失敗は文字列で返す（握りつぶさない）。"""
@@ -168,6 +184,10 @@ class DirectRobot:
         """関節名 → 角度（読めているものだけ）。"""
         pos = self.telemetry.positions
         return {n: pos[i] for n, i in self._ids.items() if i in pos}
+
+    def device_status(self) -> DeviceStatus | None:
+        """直接経路に機体側の状態は無い（サーボへ直接書いているだけ）。"""
+        return None
 
     def _guard(self, fn: Any, what: str) -> bool:
         try:

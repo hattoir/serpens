@@ -185,14 +185,10 @@ sim:
   wheel_links: [0, 1, 2, 3, 4, 5, 6]
   # 頭部の接地パッド（PTFE / フェルト、等方摩擦）。9 = J9→頭先端。横方向も拘束しない
   pad_links: [9]
-  pad_drag_ratio: 0.05        # パッドの等方摩擦 / 車輪の横拘束 の重み比（推定値。要実機校正）
   contact_height_mm: 10.0     # リンク中点がこれより高ければ床から浮いている（鎌首の頭側）
   lstsq_rcond: 1.0e-6         # 最小二乗の打ち切り（まっすぐな胴体で前後が不定のとき 0 にする）
-  # 車輪の接線方向（進行方向）の転がり抵抗 / 横方向の拘束 の重み比。
-  # 小径受動輪の転がり抵抗係数 0.01〜0.05 の下寄りとして 0.02。
-  # **HARDWARE_UNVERIFIED。** belly.profiles の既定値と同じ値を置いてある（fit_sim.py が同定する）
-  tangential_drag_ratio: 0.02
-  # Sim-to-Real 校正（tools/fit_sim.py）: tangential_drag_ratio をこの範囲でスイープして実測に合わせる
+  # **摩擦の値は belly 節が持つ**（ここには置かない。二重管理をやめた）
+  # Sim-to-Real 校正（tools/fit_sim.py）: belly プロファイルの tangential をこの範囲でスイープする
   fit_ratio_min: 0.0
   fit_ratio_max: 0.2
   fit_ratio_steps: 21

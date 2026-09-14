@@ -117,14 +117,14 @@ def test_tangential_drag_limits_gliding(big: dict) -> None:
     travel, fwd = [], []
     for ratio in (0.0, 0.02):
         c = copy.deepcopy(big)
-        c["sim"]["tangential_drag_ratio"] = ratio
+        c["belly"]["profiles"]["wheel"]["MEDIUM"]["tangential"] = ratio
         w = World(c, BodyPose(5e4, 5e4, 0.0))
         c0 = w.centroid()
         for k in range(301):
             w.step({j: v * ease_in_out(k / 300) for j, v in coil.items()}, dt)
         travel.append(float(np.linalg.norm(w.centroid() - c0)))
         fwd.append(walk(c, "forward", BodyPose(5e4, 5e4, 0.0))[1])
-    assert big["sim"]["tangential_drag_ratio"] == 0.02
+    assert big["belly"]["profiles"]["wheel"]["MEDIUM"]["tangential"] == 0.02
     assert travel[1] < 0.7 * travel[0]       # 14輪+頭パッドでは 394mm → 226mm（2026-09-12 測定）
     assert fwd[1] > 0.8 * fwd[0]
 

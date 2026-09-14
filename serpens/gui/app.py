@@ -16,6 +16,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QApplication, QFrame, QGridLayout, QWidget
 
+from serpens.gui.joints import JointsPane
 from serpens.gui.panes import CameraPane, MapPane
 from serpens.gui.style import ACCENT, BAR_BG, BG, BODY, PANEL, SUBTEXT, TEXT, WARN, font
 from serpens.gui.wording import head_distance_mm, sentence
@@ -171,9 +172,14 @@ class MainWindow(QWidget):
         self.setStyleSheet(f"background:{BG.name()};")
         self.camera, self.map = CameraPane(), MapPane(cfg)
         self.state, self.thought = StatePane(cfg), ThoughtPane(cfg)
+        self.joints = JointsPane(cfg)          # 9軸の指令角・実測角と機体の状態
         grid = QGridLayout(self)
         grid.setSpacing(8)
-        for widget, pos in ((self.camera, (0, 0)), (self.map, (0, 1)), (self.state, (1, 0)), (self.thought, (1, 1))):
+        grid.setRowStretch(0, 3)
+        grid.setRowStretch(1, 3)
+        grid.setRowStretch(2, 2)
+        for widget, pos in ((self.camera, (0, 0)), (self.map, (0, 1)), (self.state, (1, 0)),
+                            (self.thought, (1, 1)), (self.joints, (2, 0, 1, 2))):
             frame = QFrame()
             frame.setStyleSheet(f"background:{PANEL.name()}; border-radius:8px;")
             inner = QGridLayout(frame)
@@ -187,7 +193,7 @@ class MainWindow(QWidget):
     def refresh(self) -> None:
         snap = self.runner.latest()
         snap.message = self.runner.message
-        for pane in (self.map, self.state, self.thought):
+        for pane in (self.map, self.state, self.thought, self.joints):
             pane.snap = snap
             pane.update()
         if self.frame_source is not None:

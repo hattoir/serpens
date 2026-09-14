@@ -2,8 +2,8 @@
 
 物理エンジンは使わず、次の運動学だけで推進を再現する:
   1. 受動輪のあるリンク（sim.wheel_links）は横滑りしない（非ホロノミック拘束）。
-     進行方向には転がり抵抗ぶんの小さな重み（sim.tangential_drag_ratio）をかける
-  2. 頭部のパッド（sim.pad_links）は等方の軽い摩擦（sim.pad_drag_ratio）。横方向を拘束しない
+     進行方向には転がり抵抗ぶんの小さな重みをかける（belly.profiles）
+  2. 頭部のパッド（sim.pad_links）は等方の軽い摩擦（belly.pad）。横方向を拘束しない
   3. これらをまとめて最小二乗で満たす胴体全体の剛体速度 (vx, vy, ω) を毎ステップ解き、全体を動かす
 床から浮いたリンク（鎌首の頭側）は何も拘束しない。
 
@@ -67,14 +67,10 @@ class World:
         胴体のリンク全部が異方性摩擦で接地する。重みは最小二乗の係数なので平方根で入れる。
         """
         s = cfg["sim"]
-        b = cfg.get("belly")
+        b = cfg["belly"]                    # 摩擦の値はここが唯一の出どころ
         wheel_links = [int(k) for k in s["wheel_links"]]
         pad_links = [int(k) for k in s["pad_links"]]
         self.body_links = wheel_links       # 重心の代わりに使う接地リンク
-        if b is None:                       # 古い設定（belly 節が無い）との互換
-            tan = math.sqrt(float(s["tangential_drag_ratio"]))
-            pad = math.sqrt(float(s["pad_drag_ratio"]))
-            return [(k, 1.0, tan) for k in wheel_links] + [(k, pad, pad) for k in pad_links]
         prof = b["profiles"][b["type"]][b["friction_profile"]]
         lat, tan = math.sqrt(float(prof["lateral"])), math.sqrt(float(prof["tangential"]))
         pad_lat = math.sqrt(float(b["pad"]["lateral"]))

@@ -120,7 +120,7 @@ def main() -> None:
     out = Path(args.out_dir)
     out.mkdir(parents=True, exist_ok=True)
 
-    print(f"=== 1周期あたりの推進量（横滑りなし・転がり抵抗 {cfg['sim']['tangential_drag_ratio']} のシミュレータ値）")
+    print(f"=== 1周期あたりの推進量（belly={cfg['belly']['type']}/{cfg['belly']['friction_profile']} のシミュレータ値）")
     print(f"{'歩容':<11}{'指令角のまま':>16}{'モックサーボ経由':>20}")
     for g in cfg["gait"]["presets"]:
         a = measure_per_cycle(cfg, g, via_servo=False)

@@ -123,9 +123,11 @@ def test_gui_paints_offscreen(cfg: dict) -> None:
     loop._publish()
     app = QApplication.instance() or QApplication([])
     win = MainWindow(loop, cfg, lambda: np.zeros((90, 160, 3), np.uint8))
-    win.resize(1200, 760)
+    win.resize(1280, 1000)                       # 関節ペインを足したぶん縦に伸びた
     win.refresh()
     img = win.grab().toImage()
-    assert img.width() == 1200 and img.height() == 760
+    assert img.width() == 1280 and img.height() == 1000
+    # 関節ペインが指令角と実測角を受け取っていること（描けているかは目視）
+    assert win.joints.snap is not None and win.joints.names[0] == cfg["joints"][0]["name"]
     win.close()
     app.processEvents()

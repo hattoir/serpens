@@ -17,7 +17,7 @@ from serpens.link.client import LinkClient
 from serpens.link.messages import BODY_MAX, Telemetry
 from serpens.link.protocol import State
 from serpens.motion.gait import body_joint_names
-from serpens.robot import MotionCommand, Pose
+from serpens.robot import DeviceStatus, MotionCommand, Pose
 from serpens.safety import DriveState
 
 HEAD_SLOTS = 3            # HEAD 指令が運べる軸数（protocol の固定長）
@@ -209,6 +209,16 @@ class LinkRobot:
         pos = self.telemetry.positions
         names = [j["name"] for j in self.cfg["joints"]]
         return {n: pos[sid] for n, sid in zip(names, self._ids) if sid in pos}
+
+    def device_status(self) -> DeviceStatus | None:
+        """機体の状態を GUI 用にまとめる。**模擬か実測かも一緒に返す。**"""
+        tel = self.client.telemetry
+        if tel is None:
+            return None
+        return DeviceStatus(state_ja=tel.state_ja, reason_ja=tel.reason_ja, simulated=tel.simulated,
+                            age_s=self.client.age_s(self._clock()),
+                            loop_period_us=tel.loop_period_us, overruns=tel.overruns,
+                            missing_axes=len(self._ids) - len(tel.axes))
 
     @property
     def link_ok(self) -> bool:
