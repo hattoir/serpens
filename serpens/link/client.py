@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 import random
+import struct
 from typing import Any
 
 from serpens.link import messages as m
+from serpens.link.faults import finite
 from serpens.link.protocol import (Cmd, FrameReader, Nack, Rep, State, StopMode, StopReason,
                                    encode)
 
@@ -42,8 +44,21 @@ class LinkClient:
         self.nacks: list[tuple[float, Cmd, Nack]] = []
         self.rtt_ms: float | None = None
         self.events = 0
+        self.rejected: list[Any] = []              # 送らずに捨てた指令（NaN / Inf / 桁あふれ）
 
     # ---- 送信 -----------------------------------------------------------------------
+    def _pack(self, build: Any) -> bytes | None:
+        """payload を組み立てる。**表現できない値なら送らない。**
+
+        速度 9000°/s のような値は u16 に入らず `struct.pack` が例外を投げる。
+        そのまま投げると送信側（制御ループ）が落ちるので、ここで捨てて記録する。
+        """
+        try:
+            return build()
+        except (ValueError, OverflowError, struct.error) as e:
+            self.rejected.append(str(e))
+            return None
+
     def _send(self, cmd: Cmd, payload: bytes = b"", now: float = 0.0) -> int:
         self._seq = (self._seq + 1) & 0xFFFF or 1
         self.tr.write(encode(cmd, self._seq, payload))
@@ -80,7 +95,15 @@ class LinkClient:
 
     def set_drive(self, amplitude_deg: float, spatial_freq_deg: float, temporal_freq_hz: float,
                   gamma_deg: float = 0.0, ttl_ms: int | None = None) -> None:
-        """歩容を指示する。以後 `update` が期限付きで送り続ける（送信を止めれば機体は止まる）。"""
+        """歩容を指示する。以後 `update` が期限付きで送り続ける（送信を止めれば機体は止まる）。
+
+        **NaN / Inf は通信へ出す前に捨てる。** 上位の計算が壊れたときに壊れた値を機体へ渡さない
+        （`struct.pack` が例外を投げて通信スレッドごと落ちるのも防ぐ）。
+        """
+        if not finite(amplitude_deg, spatial_freq_deg, temporal_freq_hz, gamma_deg):
+            self.rejected.append((amplitude_deg, spatial_freq_deg, temporal_freq_hz, gamma_deg))
+            self.drive = None                      # 走らせない（前の指令も引き継がない）
+            return
         self.drive = m.Drive(ttl_ms if ttl_ms is not None else self.drive_ttl_ms, amplitude_deg,
                              spatial_freq_deg, temporal_freq_hz, gamma_deg)
 
@@ -90,14 +113,23 @@ class LinkClient:
 
     def head(self, now: float, j7: float, j8: float, j9: float, speed_dps: float,
              ttl_ms: int | None = None) -> int:
+        """頭部の目標角。NaN / Inf は送らない（-1 を返す）。"""
+        if not finite(j7, j8, j9, speed_dps):
+            self.rejected.append((j7, j8, j9, speed_dps))
+            return -1
         ttl = ttl_ms if ttl_ms is not None else self.drive_ttl_ms
-        return self._send(Cmd.HEAD, m.Head(ttl, j7, j8, j9, speed_dps).pack(), now)
+        payload = self._pack(lambda: m.Head(ttl, j7, j8, j9, speed_dps).pack())
+        return -1 if payload is None else self._send(Cmd.HEAD, payload, now)
 
     def body(self, now: float, angles_deg: tuple[float, ...], speed_dps: float,
              ttl_ms: int | None = None) -> int:
         """胴体の姿勢（とぐろ・鎌首）。**歩容中は機体が拒否する**ので、先に `clear_drive()`。"""
+        if not finite(*angles_deg, speed_dps):
+            self.rejected.append(tuple(angles_deg) + (speed_dps,))
+            return -1
         ttl = ttl_ms if ttl_ms is not None else self.drive_ttl_ms
-        return self._send(Cmd.BODY, m.Body(ttl, angles_deg, speed_dps).pack(), now)
+        payload = self._pack(lambda: m.Body(ttl, angles_deg, speed_dps).pack())
+        return -1 if payload is None else self._send(Cmd.BODY, payload, now)
 
     def torque(self, now: float, ratio: float) -> int:
         """トルク比（脱力の演出）。停止すると機体側で 100% に戻る。"""
@@ -122,7 +154,11 @@ class LinkClient:
             self._send(Cmd.HEARTBEAT, b"", now)
         if self.drive is not None and now - self._last_drive >= self.drive_dt:
             self._last_drive = now
-            self._send(Cmd.DRIVE, self.drive.pack(), now)
+            payload = self._pack(self.drive.pack)
+            if payload is None:
+                self.drive = None                  # 送れない歩容は捨てる（機体は TTL で止まる）
+            else:
+                self._send(Cmd.DRIVE, payload, now)
 
     def _on_frame(self, fr: Any, now: float) -> None:
         if not fr.crc_ok:

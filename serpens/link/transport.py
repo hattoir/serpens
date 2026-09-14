@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from serpens.link.faults import FaultInjector
+
 
 class Transport(Protocol):
     """PC 側から見た経路。読みは非ブロッキング（無ければ空）。"""
@@ -24,34 +26,50 @@ class Transport(Protocol):
 class LoopbackTransport:
     """偽経路。`pump(now)` を呼ぶまで機体は動かないので、時間を完全に制御できる。"""
 
-    def __init__(self, device: Any, chunk: int = 0) -> None:
+    def __init__(self, device: Any, chunk: int = 0, faults: FaultInjector | None = None) -> None:
         self.device = device
         self.chunk = chunk              # 0 = 一度に届く。>0 ならこのバイト数ずつ刻んで届く
         self.connected = True
-        self.drop_next = 0              # 次の n フレームぶんの書き込みを捨てる
-        self.duplicate_next = 0         # 次の n 回の書き込みを二重に届ける
-        self.corrupt_next = 0           # 次の n 回の書き込みの末尾1バイトを壊す
+        self.faults = faults or FaultInjector()   # 落とす・遅らせる・壊す・重複・順序入れ替え
         self.pc_alive = True            # False = PC のプロセスが落ちた（送信が止まる）
+        self._queue: list[tuple[float, bytes]] = []   # (届く時刻, バイト列)
         self._to_dev = bytearray()
         self._to_pc = bytearray()
+        self._now = 0.0
         self.tx_bytes = 0
         self.rx_bytes = 0
+
+    # 故障注入の実体は FaultInjector。短く書けるように別名も残す
+    @property
+    def drop_next(self) -> int:
+        return self.faults.drop_next
+
+    @drop_next.setter
+    def drop_next(self, n: int) -> None:
+        self.faults.drop_next = n
+
+    @property
+    def duplicate_next(self) -> int:
+        return self.faults.duplicate_next
+
+    @duplicate_next.setter
+    def duplicate_next(self, n: int) -> None:
+        self.faults.duplicate_next = n
+
+    @property
+    def corrupt_next(self) -> int:
+        return self.faults.corrupt_next
+
+    @corrupt_next.setter
+    def corrupt_next(self, n: int) -> None:
+        self.faults.corrupt_next = n
 
     # ---- PC 側の口 -------------------------------------------------------------------
     def write(self, data: bytes) -> None:
         """PC → 機体。USB を抜いていたり PC が落ちていたら、そのまま消える。"""
         if not self.connected or not self.pc_alive:
             return
-        if self.drop_next > 0:
-            self.drop_next -= 1
-            return
-        if self.corrupt_next > 0:
-            self.corrupt_next -= 1
-            data = data[:-1] + bytes([data[-1] ^ 0xFF])
-        self._to_dev += data
-        if self.duplicate_next > 0:
-            self.duplicate_next -= 1
-            self._to_dev += data
+        self._queue.extend(self.faults.on_write(data, self._now))
         self.tx_bytes += len(data)
 
     def read(self) -> bytes:
@@ -70,6 +88,11 @@ class LoopbackTransport:
     # ---- 機体側を進める ---------------------------------------------------------------
     def pump(self, now: float) -> None:
         """溜まったバイトを機体へ渡し、機体の周期処理を1回まわす。"""
+        self._now = now
+        ready = [e for e in self._queue if e[0] <= now]     # 遅延・順序入れ替えはここで効く
+        self._queue = [e for e in self._queue if e[0] > now]
+        for _, chunk in ready:
+            self._to_dev += chunk
         take = len(self._to_dev) if self.chunk <= 0 else min(self.chunk, len(self._to_dev))
         data, self._to_dev = bytes(self._to_dev[:take]), self._to_dev[take:]
         out = b""
@@ -83,6 +106,7 @@ class LoopbackTransport:
     def unplug(self) -> None:
         """USB を抜く（完了条件 3）。機体は動き続けるが、以後の指令は届かない。"""
         self.connected = False
+        self._queue.clear()
         self._to_dev.clear()
         self._to_pc.clear()
 
@@ -97,6 +121,7 @@ class LoopbackTransport:
     def reboot_device(self, now: float) -> None:
         """機体だけ電源が入り直す（完了条件 6）。"""
         self.device.reboot(now)
+        self._queue.clear()
         self._to_dev.clear()
 
 
