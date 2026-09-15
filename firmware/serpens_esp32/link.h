@@ -24,7 +24,7 @@ enum Rep : uint8_t { REP_TELEMETRY = 0x80, REP_ACK = 0x81, REP_NACK = 0x82, REP_
 enum NackReason : uint8_t {
   NACK_BAD_CRC = 1, NACK_BAD_VERSION = 2, NACK_BAD_LENGTH = 3, NACK_STALE_SEQ = 4,
   NACK_OUT_OF_RANGE = 5, NACK_DISARMED = 6, NACK_LATCHED = 7, NACK_UNKNOWN_CMD = 8,
-  NACK_NO_HEARTBEAT = 9, NACK_NONCE_REUSED = 10, NACK_BUSY = 11,
+  NACK_NO_HEARTBEAT = 9, NACK_NONCE_REUSED = 10, NACK_BUSY = 11, NACK_STALE_BOOT = 12,
 };
 
 // 7状態（docs/link_protocol.md §4 / serpens/link/protocol.py の State と同じ値）
@@ -66,7 +66,8 @@ static_assert(HEADER_LEN == 5, "フレームの見出しは ver+type+seq(2)+len 
 // payload の長さ（type ごと）。-1 = 検査しない
 inline int payloadLenFor(uint8_t type) {
   switch (type) {
-    case CMD_HEARTBEAT: case CMD_ARM: case CMD_DISARM: case CMD_PING: return 0;
+    case CMD_HEARTBEAT: case CMD_DISARM: case CMD_PING: return 0;
+    case CMD_ARM:   return 2;      // 名指しする boot_id（再起動後の自動再開を防ぐ）
     case CMD_DRIVE: return 10;      // ttl(u16) + 4 × i16
     case CMD_HEAD:  return 10;      // ttl(u16) + 3 × i16 + speed(u16)
     case CMD_BODY:  return 16;      // ttl(u16) + 6 × i16 + speed(u16)

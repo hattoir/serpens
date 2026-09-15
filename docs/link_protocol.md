@@ -39,7 +39,8 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 | 版違い | NACK(`BAD_VERSION`) |
 | len > 64、または payload 長が type と合わない | NACK(`BAD_LENGTH`) |
 | `seq` が**進んでいない**（重複・巻き戻り） | NACK(`STALE_SEQ`)。**指令は実行しない** |
-| いまの状態では受け付けられない（歩容中の `BODY`） | NACK(`BUSY`)。**状態は変えない** |
+| いまの状態では受け付けられない（歩容中の `BODY`・FAULT_HOLD 中の `ARM`） | NACK(`BUSY`)。**状態は変えない** |
+| `ARM` が名指しした boot_id が機体と違う | NACK(`STALE_BOOT`)。**再起動とすれ違った ARM を通さない** |
 | 値が上限外 | NACK(`OUT_OF_RANGE`)。**状態は変えない** |
 | DISARMED なのに DRIVE | NACK(`DISARMED`) |
 | EMERGENCY ラッチ中の ARM / DRIVE | NACK(`LATCHED`) |
@@ -52,7 +53,7 @@ Phase 2 の契約。**PC 側（`serpens/link/`）と ESP32 ファーム（`firmw
 | type | 名前 | payload | 意味 |
 |---|---|---|---|
 | 0x01 | `HEARTBEAT` | なし | 生存通知。**これで DRIVE の期限は延びない** |
-| 0x02 | `ARM` | なし | 走行可能状態へ（DISARMED → ARMED）。ラッチ中・heartbeat 無しでは拒否 |
+| 0x02 | `ARM` | boot_id(u16) | 走行可へ（DISARMED → ARMED_HOLD）。**名指しした boot_id が機体と違えば NACK(`STALE_BOOT`)**。ラッチ中・FAULT_HOLD・heartbeat 無しでも拒否 |
 | 0x03 | `DISARM` | なし | ARMED → DISARMED（保持） |
 | 0x10 | `DRIVE` | ttl_ms(u16), amp(i16 0.1°), spatial(i16 0.1°), freq(i16 0.001Hz 符号=前後), gamma(i16 0.1°) | 歩容パラメータ。ARMED のときだけ有効 |
 | 0x11 | `HEAD` | ttl_ms(u16), j7(i16 0.1°), j8(i16 0.1°), j9(i16 0.1°), speed(u16 0.1°/s) | 頭部の目標角 |
@@ -112,8 +113,11 @@ BOOT ─(heartbeat)─▶ DISARMED ─ARM─▶ ARMED_HOLD ─有効なDRIVE─�
 
 **不変条件**
 
-1. **起動時は必ず DISARMED。** `boot_id` は起動ごとに変わる。PC は `boot_id` の変化を見て
-   **自動で ARM しない**（条件 6）。
+1. **起動時は必ず BOOT。** `boot_id` は起動ごとに変わる。PC は `boot_id` の変化を見て
+   **自動で ARM しない**（条件 6）。さらに **`ARM` は boot_id を名指しする**ので、
+   PC が再起動に気付く前に出した `ARM` は機体が拒否する。
+   （PC 側の判断だけでは足りなかった: 再起動の telemetry が届く前の `ARM` が通り、
+   人の操作なしに 240ms で走行が再開する穴があった。2026-09-16 に塞いだ）
 2. `DRIVE` は TTL 付き。期限切れで**保持へ**（`stop_reason=DRIVE_TTL`）。`ttl_disarm_ms` を超えて
    DRIVE が来なければ DISARMED（条件 4）。
 3. heartbeat が `heartbeat_timeout_ms` 途絶 → 保持 + DISARMED（`HEARTBEAT_LOST`。条件 5）。

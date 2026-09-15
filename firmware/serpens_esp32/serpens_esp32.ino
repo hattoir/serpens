@@ -207,6 +207,8 @@ static void handleFrame(uint32_t now) {
   if (gState == ST_EMERGENCY_LATCHED) { sendNack(Serial, seq, type, NACK_LATCHED); return; }
   if (type == CMD_DISARM) { stopMotion(SR_OPERATOR_STOP, ST_DISARMED); sendAck(Serial, seq, type); return; }
   if (type == CMD_ARM) {
+    // **どの起動の機体を ARM するのかを名指しさせる。** 再起動とすれ違った ARM は通らない
+    if (rdU16(gRx.payload) != gBootId) { sendNack(Serial, seq, type, NACK_STALE_BOOT); return; }
     if (gState == ST_FAULT_HOLD) { sendNack(Serial, seq, type, NACK_BUSY); return; }
     if (!hbFresh(now))           { sendNack(Serial, seq, type, NACK_NO_HEARTBEAT); return; }
     setTorque(true);

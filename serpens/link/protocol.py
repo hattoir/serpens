@@ -64,6 +64,7 @@ class Nack(IntEnum):
     NO_HEARTBEAT = 9
     NONCE_REUSED = 10
     BUSY = 11          # いまの状態では受け付けられない（歩容中の BODY など）
+    STALE_BOOT = 12    # 知らない起動の機体を ARM しようとした（再起動後の自動再開を防ぐ）
 
 
 class State(IntEnum):
@@ -152,13 +153,15 @@ FMT_DRIVE = "<Hhhhh"      # ttl_ms, amp 0.1°, spatial 0.1°, freq 0.001Hz(符�
 FMT_HEAD = "<HhhhH"       # ttl_ms, j7, j8, j9 (0.1°), speed 0.1°/s
 FMT_BODY = "<H6hH"        # ttl_ms, 胴体ヨー 6軸 (0.1°), speed 0.1°/s
 FMT_TORQUE = "<H"         # トルク比 0.001（0=不可、1000=100%）
+FMT_ARM = "<H"            # ARM が名指しする boot_id（**PC が見ている機体と一致すること**）
 FMT_STOP = "<BB"          # mode, reason
 # テレメトリ v2。boot_id, uptime_ms, state, stop_reason, last_rx_seq, last_drive_seq, flags,
 # heartbeat_age_ms, drive_age_ms, drive_ttl_remaining_ms, loop_period_us, overruns, source, n_axes
 FMT_TELEM_HEAD = "<HIBBHHHHHHHHBB"
 FMT_AXIS = "<hhhBBBH"     # pos 0.1°, vel 0.1°/s, load 0.001, temp ℃, volt 0.1V, fault, current mA
 AGE_MAX_MS = 0xFFFF       # これ以上古い値は飽和させる（u16）
-PAYLOAD_LEN = {Cmd.HEARTBEAT: 0, Cmd.ARM: 0, Cmd.DISARM: 0, Cmd.PING: 0,
+PAYLOAD_LEN = {Cmd.HEARTBEAT: 0, Cmd.ARM: struct.calcsize(FMT_ARM), Cmd.DISARM: 0,
+               Cmd.PING: 0,
                Cmd.DRIVE: struct.calcsize(FMT_DRIVE), Cmd.HEAD: struct.calcsize(FMT_HEAD),
                Cmd.BODY: struct.calcsize(FMT_BODY), Cmd.TORQUE: struct.calcsize(FMT_TORQUE),
                Cmd.POSE: 1, Cmd.BREATH: 1, Cmd.STOP: 2, Cmd.EMERGENCY: 1, Cmd.CLEAR_FAULT: 4}

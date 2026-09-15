@@ -225,3 +225,33 @@ def test_normal_stop_keeps_torque(cfg: dict) -> None:
     h.client.stop(h.now, disable_torque=True)
     h.advance(0.3)
     assert not h.device.torque_on and h.device.state is State.TORQUE_DISABLED
+
+
+def test_arm_must_name_the_boot_id(cfg: dict) -> None:
+    """**再起動とすれ違った ARM を機体が拒否する。**（2026-09-16 に見つけた穴の回帰試験）
+
+    PC 側の「再起動に気付いたら ARM しない」だけでは足りなかった。再起動の telemetry が
+    届く前に出た ARM が通り、**人の操作なしに 240ms で走行が再開していた**。
+    ARM に boot_id を持たせ、知らない起動の機体は ARM できないようにした。
+    """
+    from serpens.link import messages as m
+    from serpens.link.protocol import FrameReader, Rep, encode
+
+    h = LinkHarness(cfg)
+    h.advance(0.3)
+    rd = FrameReader()
+    stale = rd.feed(h.device.feed(encode(Cmd.ARM, h.client._seq + 1,
+                                         m.pack_arm(h.device.boot_id + 1)), h.now))[0]
+    assert stale.type == Rep.NACK and m.unpack_nack(stale.payload)[2] == Nack.STALE_BOOT
+    assert h.device.state is State.DISARMED, "知らない起動の機体を ARM してしまった"
+    ok = rd.feed(h.device.feed(encode(Cmd.ARM, h.client._seq + 2,
+                                      m.pack_arm(h.device.boot_id)), h.now))[0]
+    assert ok.type == Rep.ACK and h.device.state is State.ARMED_HOLD
+
+
+def test_client_will_not_arm_a_machine_it_has_not_seen(cfg: dict) -> None:
+    """テレメトリを一度も受けていない機体は ARM しない（どの機体か分かっていない）。"""
+    h = LinkHarness(cfg)
+    assert h.client.boot_id is None
+    assert h.client.arm(h.now) == -1
+    assert h.client.rejected

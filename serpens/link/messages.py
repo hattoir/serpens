@@ -7,7 +7,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-from serpens.link.protocol import (AGE_MAX_MS, FMT_AXIS, FMT_BODY, FMT_DRIVE, FMT_HEAD,
+from serpens.link.protocol import (AGE_MAX_MS, FMT_ARM, FMT_AXIS, FMT_BODY, FMT_DRIVE, FMT_HEAD,
                                    FMT_STOP, FMT_TELEM_HEAD, FMT_TORQUE, REASON_JA, STATE_JA, Flag,
                                    Source, State, StopReason)
 
@@ -38,6 +38,15 @@ def pack_stop(mode: int, reason: int) -> bytes:
 
 def unpack_stop(payload: bytes) -> tuple[int, int]:
     return struct.unpack(FMT_STOP, payload)         # type: ignore[return-value]
+
+
+def pack_arm(boot_id: int) -> bytes:
+    """ARM が名指しする boot_id。**知らない起動の機体は ARM できない。**"""
+    return struct.pack(FMT_ARM, int(boot_id) & 0xFFFF)
+
+
+def unpack_arm(payload: bytes) -> int:
+    return int(struct.unpack(FMT_ARM, payload)[0])
 
 
 def pack_nonce(nonce: int) -> bytes:

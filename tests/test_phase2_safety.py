@@ -110,7 +110,7 @@ def test_arm_requires_heartbeat(cfg: dict) -> None:
     """heartbeat が来ていない機体は ARM できない（電源投入直後の暴走を防ぐ）。"""
     h = LinkHarness(cfg)
     rd = FrameReader()
-    reply = rd.feed(h.device.feed(encode(Cmd.ARM, 1, b""), h.now))[0]
+    reply = rd.feed(h.device.feed(encode(Cmd.ARM, 1, m.pack_arm(h.device.boot_id)), h.now))[0]
     assert reply.type == Rep.NACK and m.unpack_nack(reply.payload)[2] == Nack.NO_HEARTBEAT
     assert h.device.state is State.BOOT, "heartbeat を受ける前は BOOT"
 

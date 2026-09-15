@@ -166,7 +166,15 @@ class SimulatedDevice:
         return self._dispatch_motion(cmd, fr, now)
 
     def _arm(self, fr: Frame, now: float) -> bytes:
-        """走行可へ。**異常で止まっている間は ARM させない**（先に原因を解く）。"""
+        """走行可へ。**異常で止まっている間は ARM させない**（先に原因を解く）。
+
+        ARM は「どの起動の機体を ARM するのか」を boot_id で名指しする。
+        再起動後は boot_id が変わるので、**PC が再起動に気付く前に出した ARM は通らない**。
+        PC 側の判断だけでは、再起動とすれ違った ARM を止められない（実際に 240ms で
+        走行が再開する穴があった。2026-09-16）。
+        """
+        if m.unpack_arm(fr.payload) != self.boot_id:
+            return self._nack(fr, Nack.STALE_BOOT)
         if self.state is State.FAULT_HOLD:
             return self._nack(fr, Nack.BUSY)
         if not self._hb_fresh(now):

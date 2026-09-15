@@ -80,6 +80,18 @@
 | Belly（wheel / snake）と摩擦プロファイル | `SIMULATED` | `tests/test_belly_and_gait_config.py`。**係数は未実測** |
 | 歩容の掃引（速さ・蛇らしさ・滑らかさ・負荷） | `SIMULATED` | `tools/gait_sweep.py` |
 
+## 4.6 3D 物理・閉ループ（Stage F〜N）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| MuJoCo モデル（9軸・質量・可動域・トルク上限が config と一致） | `SOFTWARE_VERIFIED` | `tests/test_mujoco_model.py`（10） |
+| MuJoCo での推進・旋回・転倒しないこと | `SIMULATED` | `tests/test_mujoco_belly.py`（6）。**摩擦も質量も未実測** |
+| 等方摩擦では進まない / 異方性で進む | `SIMULATED` | 簡易シミュレータと **別モデルで独立に一致** |
+| サーボゲイン（未同定）で前進量が ±45% 変わる | `SIMULATED` | 実機が来たら最初に同定する（下記） |
+| World State の出どころ分離（真値 ≠ Vision） | `SOFTWARE_VERIFIED` | `tests/test_closed_loop.py` |
+| 閉ループ（行動 → 機体 → 世界）と故障注入で安全が勝つこと | `SIMULATED` | `tests/test_closed_loop.py`（13） |
+| run の記録から同じ run を作れること | `SOFTWARE_VERIFIED` | 同上（seed / config hash / model digest） |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

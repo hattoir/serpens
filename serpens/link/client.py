@@ -69,8 +69,15 @@ class LinkClient:
         return self._seq
 
     def arm(self, now: float) -> int:
-        """走行可能にする。**人が操作したときだけ呼ぶ**（再接続や再起動で自動で呼ばない）。"""
-        return self._send(Cmd.ARM, b"", now)
+        """走行可能にする。**人が操作したときだけ呼ぶ**（再接続や再起動で自動で呼ばない）。
+
+        いま見えている `boot_id` を添える。テレメトリを一度も受けていなければ送らない
+        （どの機体を ARM するのか分かっていない状態で走らせない）。
+        """
+        if self.boot_id is None:
+            self.rejected.append("boot_id 未取得のまま ARM しようとした")
+            return -1
+        return self._send(Cmd.ARM, m.pack_arm(self.boot_id), now)
 
     def disarm(self, now: float) -> int:
         self.drive = None
