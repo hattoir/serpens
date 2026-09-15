@@ -27,7 +27,7 @@
 | サーボ応答なし → FAULT_HOLD | `SIMULATED` | 模擬サーボを offline にして確認 |
 | 過熱・fault ビットでラッチ | `SIMULATED` | 模擬サーボの値。**実機の温度挙動は未測定** |
 | ファームと Python の値の一致 | `SOFTWARE_VERIFIED` | `tests/test_firmware_sync.py`（11） |
-| ファームのビルド | **未実施** | このリポジトリに C++ コンパイラが無い。`arduino-cli` で要確認 |
+| ファームのビルド | `SOFTWARE_VERIFIED` | `tools/build_firmware.py`（arduino-cli + esp32 core 2.0.17, XIAO_ESP32S3）。フラッシュ 7% / RAM 5%。**書き込みはしていない** |
 
 ## 2. 機構・サーボ
 

@@ -51,7 +51,7 @@ static const JointCfg JOINTS[N_AXES] = {
 };
 
 // 起動時の姿勢（config/robot.yaml の poses.home）。J7 = +8° は呼吸が下限で切れないため
-static const float HOME_DEG[N_AXES] = {0f, 0f, 0f, 0f, 0f, 0f, 8f, 0f, 0f};
+static const float HOME_DEG[N_AXES] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.0f, 0.0f, 0.0f};
 
 // ---- サーボ（docs/sts3215_registers.md） ----
 static const uint32_t SERVO_BAUD      = 1000000;    // TTL バス

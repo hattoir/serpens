@@ -2,9 +2,18 @@
 
 PC が死んでも機体だけでヘビを止めるための基板側。仕様は [`docs/link_protocol.md`](../../docs/link_protocol.md) v1。
 
-## 状態: **未コンパイル・未書き込み・未検証**
+## 状態: **コンパイル可・未書き込み・実機未検証**
 
-実機（ESP32-S3 と STS3215）が手元に無いため、このスケッチは**一度もビルドしていない**。
+2026-09-16: `arduino-cli` で**コンパイルが通ることを確認**（`SOFTWARE_VERIFIED`）。
+
+```bash
+.venv/Scripts/python.exe tools/build_firmware.py
+```
+
+結果（esp32 core 2.0.17 / FQBN `esp32:esp32:XIAO_ESP32S3`）:
+フラッシュ **255,809 バイト（7%）** / RAM **18,632 バイト（5%）**。
+
+**書き込みは一度もしていない。** 実機（ESP32-S3 と STS3215）が手元に無いため、
 振る舞いの正しさは Python の参照実装（`serpens/link/device.py`）で検証してある
 （`tests/test_phase2_device.py` / `tests/test_phase2_safety.py`、48 件）。
 このスケッチは**その参照実装を同じ判断順で C++ に写したもの**で、実機が来たら
@@ -14,7 +23,10 @@ PC が死んでも機体だけでヘビを止めるための基板側。仕様�
 |---|---|
 | `link.h` | フレーム・CRC・enum（`serpens/link/protocol.py` の写し） |
 | `config.h` | 時定数・上限・関節（`config/robot.yaml` の写し） |
-| `serpens_esp32.ino` | 状態機械・watchdog・歩容生成・テレメトリ |
+| `serpens_esp32.ino` | 状態機械（7状態）・watchdog・歩容生成・テレメトリ v2 |
+
+コンパイル時にも大きさを検査している（`link.h` の `static_assert`）:
+テレメトリ 9軸 = 26 + 9×11 = **125 バイト ≤ MAX_PAYLOAD 192**。
 
 **三つ（robot.yaml / protocol.py / この二つのヘッダ）は同じ値を持つ。片方だけ直さないこと。**
 

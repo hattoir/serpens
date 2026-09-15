@@ -148,6 +148,25 @@ def test_home_pose_matches_config(config_h: str) -> None:
     assert fw == pytest.approx(want)
 
 
+def test_telemetry_sizes_match(link_h: str) -> None:
+    """テレメトリの大きさがファームと Python で一致する（C++ 側は static_assert でも守る）。"""
+    import struct
+
+    from serpens.link.protocol import FMT_AXIS, FMT_TELEM_HEAD
+
+    assert const_value(link_h, "TELEM_HEAD_BYTES") == struct.calcsize(FMT_TELEM_HEAD)
+    assert const_value(link_h, "TELEM_AXIS_BYTES") == struct.calcsize(FMT_AXIS)
+
+
+def test_float_literals_are_valid_cpp(config_h: str) -> None:
+    """**C++ として妥当な float リテラルであること。**
+
+    生成器が `0f` を吐いてビルドが落ちた（2026-09-16）。`0.0f` でなければならない。
+    """
+    for lit in re.findall(r"[-+]?\d+(?:\.\d+)?f", config_h):
+        assert "." in lit, f"不正な float リテラル: {lit}（0f ではなく 0.0f）"
+
+
 def test_firmware_declares_hardware_source() -> None:
     """**実機ファームは SIMULATED を立てず、SRC_HARDWARE を返す。**"""
     ino = source("serpens_esp32.ino")

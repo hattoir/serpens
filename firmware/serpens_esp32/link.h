@@ -53,6 +53,16 @@ enum Flags : uint16_t {
 
 static const uint16_t AGE_MAX_MS = 0xFFFF;   // 古さ・周期の飽和値
 
+// テレメトリ v2 の大きさ（docs/link_protocol.md §3 / serpens/link/protocol.py の FMT_*）
+static const uint8_t TELEM_HEAD_BYTES = 26;  // boot_id(2)+uptime(4)+state+reason+seq(2)+drive_seq(2)
+                                             // +flags(2)+hb_age(2)+drive_age(2)+ttl(2)+period(2)
+                                             // +overruns(2)+source+n_axes
+static const uint8_t TELEM_AXIS_BYTES = 11;  // pos(2)+vel(2)+load(2)+temp+volt+fault+current(2)
+// **コンパイル時に確かめる。** payload に入らない大きさで送ろうとしたらビルドが失敗する
+static_assert(MAX_PAYLOAD >= TELEM_HEAD_BYTES + 9 * TELEM_AXIS_BYTES,
+              "テレメトリ（9軸）が payload に入らない");
+static_assert(HEADER_LEN == 5, "フレームの見出しは ver+type+seq(2)+len の 5 バイト");
+
 // payload の長さ（type ごと）。-1 = 検査しない
 inline int payloadLenFor(uint8_t type) {
   switch (type) {
