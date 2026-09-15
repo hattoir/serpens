@@ -16,10 +16,10 @@
 | Actuation | 部分 | STS3215 の仕様を一次情報で確認（[docs/sts3215_registers.md](sts3215_registers.md)）。トルク・速度・分解能・電圧の値は config 済み | ギア比・スリップ機構・実測トルク余裕は未検討。**サーボ実機ゼロ** |
 | Electronics | **未着手** | MCU は ESP32-S3 を前提に置いただけ。回路図・PCB・部品表は無い | ドライバ・電流検出・IMU・温度・配電の設計が無い。KiCad 未着手 |
 | Power | **未着手** | 12V テザー給電の注意書きのみ（README §2.4） | バッテリ・BMS・電流監視・突入電流・電圧降下の設計が無い |
-| Embedded | 部分 | 駆動リンク v2（[link_protocol.md](link_protocol.md)）、**Virtual ESP32（7状態）+ 仮想サーボバス**、故障注入、ファームとの値の一致検査 | **ファームは未コンパイル・未書き込み**（C++ コンパイラが無い）。サーボ読み書きと配線が未確定 |
-| Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**Belly（wheel/snake）× 摩擦プロファイル**、[gait_sweep.py](../tools/gait_sweep.py) | 摩擦はすべて未実測。3D 物理は未導入（[phase3b_physics_sim.md](phase3b_physics_sim.md) で MuJoCo を第一候補に選定） |
+| Embedded | 部分 | 駆動リンク v2、Virtual ESP32（7状態）+ 仮想サーボバス、故障注入、値の一致検査、**ファームのコンパイル成功**（フラッシュ7%/RAM5%） | **未書き込み**。サーボ読み書き（writeServos/readServos）と配線が未確定 |
+| Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**MuJoCo の 3D モデル**（任意依存）、Belly 3種、歩容掃引（Pareto 候補） | 摩擦もサーボ応答もすべて未実測。**サーボゲインで前進量が ±45% 変わる**ので、実機での同定が最優先 |
 | Sensors | 部分 | 頭部 I/O の行プロトコル（ToF・タッチ×2・LED×2）とモック（[head_io.py](../serpens/hw/head_io.py)）、サーボの位置/負荷/温度/電圧の読み出し（[state_poller.py](../serpens/hw/state_poller.py)） | **IMU が無い。** 搭載カメラも無い。電流センサも無い |
-| Vision | 実装済み（外部カメラ前提） | ArUco による自己位置、床ホモグラフィ、YOLO 人物検出（[perception/](../serpens/perception/)） | **上方に固定した外部カメラが前提。** 室内を動き回る前提だと成立しない。所有者の個人識別は無い |
+| Vision | 実装済み（外部カメラ前提） | ArUco・床ホモグラフィ・YOLO。**World State に出どころを持たせた**（真値 ≠ Vision） | 上方の外部カメラ前提。室内を動き回る前提では成立しない。所有者の個人識別は無い |
 | Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |
 | Behavior | 実装済み（模擬） | 内部状態 4 種 + 効用による状態選択、10 状態、しぐさ（[behavior/](../serpens/behavior/)） | 充電要求・所有者探索の状態が無い。LLM は不使用（憲章どおり） |
 | Charging | **未着手** | 無し | ドック・姿勢・接点・充電制御のすべて |

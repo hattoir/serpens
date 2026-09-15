@@ -17,6 +17,58 @@
 
 ---
 
+## 2026-09-16 — ARM に boot_id を持たせ、再起動後の自動再走行を機体側で拒否する
+
+**Decision**: `ARM` の payload に「どの起動の機体を ARM するのか」を示す `boot_id`(u16) を持たせ、
+機体は自分の `boot_id` と違う ARM を **NACK(`STALE_BOOT`)** で拒否する。
+
+**Why**: 「機体が再起動したら PC は自動で ARM しない」を **PC 側の判断だけ**で実装していたため、
+再起動の telemetry が届く前に出た ARM が通っていた。閉ループ試験で
+**人の操作なしに 240ms で走行が再開する**ことを実際に観測した（`test_reboot_during_following...`）。
+送り手の遠慮では守れない。受け手（機体）が拒否して初めて保証になる。
+
+**Alternatives**:
+(1) PC 側で「telemetry を受けるまで ARM しない」→ すれ違いは残る（送信は非同期）。
+(2) 再起動後しばらく ARM を受け付けない（時間で守る）→ 時間は環境で変わる。根拠が弱い。
+
+**Trade-offs**: `ARM` の payload が 0 → 2 バイトに増え、テレメトリを一度も受けていない PC は
+ARM できなくなった（どの機体か分からないので、正しい制約）。
+
+**Context**: 2026-09-16。Stage M（閉ループ）で発見。ファームにも同じ検査を入れ、
+`tests/test_phase2_invariants.py` に回帰試験を 2 件追加。
+
+## 2026-09-16 — 可動域を「意味の違う3つ」に分け、±50°（CONDITIONAL）を clamp にした
+
+**Decision**: CAD の最新情報（64.8° 干渉なし / 64.9° 干渉）を受けて、可動域を
+`geometry_collision_onset`（64.8〜64.9 の bracket）/ `mechanical_design_limit`（±55 PROVISIONAL）/
+`software_operational_limit`（±50 CONDITIONAL）に分け、**clamp に使うのは最後のものだけ**にした。
+`verified_in_cad` / `verified_with_cable` / `verified_with_hardware` を保持する。
+
+**Why**: 「±64° = 安全限界」と扱っていたのは誤りだった。64.8/64.9 は **nominal geometry で
+干渉が始まる境界**であって、運用してよい角度ではない。Cable Routing も不合格のまま。
+名前を分けないと、また同じ取り違えが起きる。
+
+**Trade-offs**: 旧とぐろ（J1=83°）が入らなくなった。**clamp して同じ名前で使わない**と決め、
+`legacy_poses`（SIMULATION_LEGACY_ONLY）へ移して、R03 用の緩い弧（`rest_arc`）を作った。
+展示用のとぐろは R03 の範囲で別途再設計する。
+
+**Context**: `docs/safety_limits.md` / `tests/test_safety_limits.py`。±50° は
+**物理試験へ進むための候補**であって、実機で許可された値ではない。
+
+## 2026-09-16 — サーボは STS3215-C044（7.4V/1:191）。トルクは4つに分ける
+
+**Decision**: `servo` を C044 プロファイルへ置き換え、旧 12V・1:345（30kgf·cm）の値を削除した。
+トルクは `rated_torque_reference`(0.510N·m) / `stall_torque_reference`(1.569N·m) /
+`software_torque_limit`(0.450N·m) / `measured_safe_torque`(**null = UNKNOWN**) に分ける。
+
+**Why**: ストールトルクを連続安全トルクとして使うと、実機で確実に焼く。
+また REFERENCE 値（CAD 資料）と実測値を同じ場所に置くと、いつのまにか「確定値」として扱われる。
+
+**Trade-offs**: 上限が 1.18N·m → 0.450N·m に下がり、MuJoCo では**トルク飽和が 12%** 出た。
+これは「歩容がサーボの定格に対して重い」という設計上の信号なので、隠さず残す。
+
+**Context**: 実測前に安全トルクを確定しない。`hardware_verified: false`。
+
 ## 2026-09-15 — 機体の状態を7つにし、機体の中に仮想サーボバスを置いた
 
 **Decision**: Virtual ESP32 の状態を `BOOT / DISARMED / ARMED_HOLD / DRIVING / FAULT_HOLD /

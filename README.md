@@ -359,6 +359,8 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\link_check.py
 # 歩容パラメータの掃引（速さ・旋回性・蛇らしさ・滑らかさ・負荷・電力目安）
 .\.venv\Scripts\python.exe tools\gait_sweep.py
+# ファームのコンパイル（**書き込みはしない**）
+.\.venv\Scripts\python.exe tools\build_firmware.py
 # ファームと突き合わせる参照角度列 → data/gait_reference.csv
 .\.venv\Scripts\python.exe tools\make_gait_reference.py
 ```
@@ -404,6 +406,33 @@ GUI 下段の関節ペインに、9軸の指令角・実測角・安全状態・
   ArUco → World State の結線は Phase 4
 - テレメトリは軸ごとに最終取得時刻を持ち、`behavior.safety.telemetry.stale_after_s` より古い軸は
   GUI で「—」になる。値の出どころ（MockServoBus / FeetechServoBus）も表示する
+
+### 3D 物理シミュレーション（任意 / MuJoCo）
+
+`serpens/` 本体は MuJoCo に依存しない。**入っていなくても全機能が動く**（モックファースト）。
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-sim3d.txt
+.\.venv\Scripts\python.exe tools\gait_sweep_mujoco.py           # 歩容の掃引（Pareto 候補つき）
+```
+
+| 場所 | 中身 |
+|---|---|
+| `simulation/mujoco/model.py` | `config/robot.yaml` から MJCF を生成（手書きしない） |
+| `simulation/mujoco/belly.py` | WHEEL / SNAKE_ISOTROPIC / SNAKE_ANISOTROPIC（異方性摩擦） |
+| `simulation/mujoco/runner.py` | 走らせて測る（前進・トルク・エネルギー・追従誤差・飽和率） |
+| `simulation/record.py` | run の記録（source / config hash / model digest / seed） |
+| `simulation/bridge.py` `virtual_person.py` | World State への橋渡しと仮想の来場者 |
+
+**結果には必ず `source` が付く**（`KINEMATIC_SIM` / `MUJOCO_SIM` / `HARDWARE`）。
+簡易シミュレータと MuJoCo の数値を混ぜない。どちらも**現実ではない**。
+
+### World State（Phase 4 の入口）
+
+`serpens/world_state.py` の姿勢は**出どころ**を持つ:
+`GROUND_TRUTH_SIM` / `ARUCO` / `PERSON_DETECTOR` / `DEAD_RECKONING` / `UNKNOWN`。
+シミュレーションの真値を「Vision が成功した」として数えないため。
+カメラを繋いだら、同じ World State の中身が差し替わるだけで行動側は変わらない。
 
 ### GUI の設計（STEP 7）
 
