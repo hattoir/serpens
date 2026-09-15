@@ -17,7 +17,7 @@ import logging
 import os
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -229,8 +229,15 @@ class ControlLoop(threading.Thread):
             self.snapshot = snap
 
     def latest(self) -> Snapshot:
+        """いまの状態。**`fault` と `message` は必ず最新の値を載せる。**
+
+        `self.fault = ...` と `_publish()` の間には僅かな隙間がある。そこで読まれると
+        「異常を検知したのに、画面には異常なしと出ている」瞬間が生まれる（実際に
+        テストが 60 回に 1〜2 回の頻度で捕まえた）。読み出し側で上書きして隙間を消す。
+        """
         with self._lock:
-            return self.snapshot
+            snap = self.snapshot
+        return replace(snap, fault=self.fault, message=self.message)
 
     # ---- 操作（キーボードから呼ぶ） ------------------------------------------------
     def add_person(self, x: float, y: float) -> None:

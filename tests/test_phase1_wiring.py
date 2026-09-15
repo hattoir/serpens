@@ -247,3 +247,20 @@ def test_assign_ids_enter_does_write(cfg: dict, monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(servo_setup, "ask", lambda *a, **k: "")
     servo_setup.assign_ids(bus, cfg)
     assert bus.id_changes and bus.id_changes[0][0] == 5
+
+
+def test_latest_always_reports_the_current_fault(cfg: dict) -> None:
+    """**異常の合図が「公開の隙間」で消えない。**（2026-09-16 に見つけた race の回帰試験）
+
+    `_on_fault` は `self.fault` を立ててから `_publish()` する。その隙間で `latest()` を
+    読むと、異常を検知したのに画面には「異常なし」と出る瞬間があった
+    （60 回中 3 回再現）。`latest()` 側で必ず最新値を載せて隙間を消した。
+    """
+    s, _bus = make_session(cfg)
+    loop = ControlLoop(s, realtime=False)
+    loop._publish()                                   # 異常が無い状態の snapshot を作る
+    assert loop.latest().fault == ""
+    loop.fault = "制御ループ例外: テスト"              # publish せずに fault だけ立てる
+    assert loop.latest().fault == loop.fault, "公開前の snapshot が異常なしを返した"
+    loop.message = "メッセージ"
+    assert loop.latest().message == "メッセージ"

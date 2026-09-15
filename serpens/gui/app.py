@@ -191,8 +191,7 @@ class MainWindow(QWidget):
         self.timer.start(int(1000 / GUI_FPS))
 
     def refresh(self) -> None:
-        snap = self.runner.latest()
-        snap.message = self.runner.message
+        snap = self.runner.latest()          # fault / message は latest() が最新にしている
         for pane in (self.map, self.state, self.thought, self.joints):
             pane.snap = snap
             pane.update()
