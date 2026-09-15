@@ -85,10 +85,13 @@ class Keyframe:
         return self.order.index(name) * self.stagger_s if name in self.order else 0.0
 
 
-def coil_keyframe(poses: Poses) -> Keyframe:
-    """とぐろへのキーフレーム。尾から順に巻き、頭を最後に引き込む（poses.coil_sequence）。"""
+def rest_keyframe(poses: Poses) -> Keyframe:
+    """休憩姿勢（緩い弧）へのキーフレーム。尾から順に曲げ、頭を最後に引き込む。
+
+    旧「とぐろ」は R03 の可動域に入らないため `legacy_poses` にある（`Poses.legacy("coil")`）。
+    """
     seq = poses.coil_sequence()
-    return Keyframe(poses.coil(), float(seq["per_joint_s"]), Easing.IN_OUT,
+    return Keyframe(poses.rest(), float(seq["per_joint_s"]), Easing.IN_OUT,
                     order=tuple(seq["order"]), stagger_s=float(seq["stagger_s"]))
 
 

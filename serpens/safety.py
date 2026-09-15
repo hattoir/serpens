@@ -169,8 +169,8 @@ def autonomy_blockers(cfg: dict[str, Any], inputs: AutonomyInputs) -> list[str]:
     if bool(a["require_drive_link"]) and not inputs.drive_link_ok:
         out.append("駆動リンク（ESP32 heartbeat）が無い。Phase 2 まで実機の自律走行は禁止")
     if not inputs.torque_ceiling_ok:
-        out.append("トルク上限を全軸へ設定できていない"
-                   f"（safety_limits.torque_ratio_max = {cfg['safety_limits']['torque_ratio_max']}）")
+        ratio = cfg["safety_limits"]["torque"]["software_torque_limit_ratio"]
+        out.append(f"トルク上限を全軸へ設定できていない（ストール比 {ratio}）")
     if inputs.telemetry_axes < inputs.expected_axes:
         out.append(f"テレメトリ不足: {inputs.telemetry_axes}/{inputs.expected_axes} 軸しか読めていない")
     elif inputs.telemetry_age_s is not None and inputs.telemetry_age_s > float(t["stale_after_s"]):

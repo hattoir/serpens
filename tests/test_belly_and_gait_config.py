@@ -102,23 +102,14 @@ def test_pitch_amplitude_stays_zero_without_body_pitch_axes(cfg: dict) -> None:
 
 
 # ---- サーボの版数 ----------------------------------------------------------------------
-def test_selected_servo_variant_has_a_known_stall_torque(cfg: dict) -> None:
-    """**未確認のトルクで安全上限を計算しない。**
+def test_servo_profile_is_c044_and_unverified(cfg: dict) -> None:
+    """**採用候補は STS3215-C044（7.4V / 1:191）で、未購入・未実測。**
 
-    第一候補は STS3215 7.4V 1:191 だが、その版のストールトルクを確認できていない。
-    variant を切り替えるなら、先に実測かデータシートで値を埋めること。
+    旧 12V 1:345 の値（30kgf·cm など）を流用しない。詳しい検査は
+    `tests/test_safety_limits.py::test_c044_profile_is_not_polluted_by_the_12v_servo`。
     """
     s = cfg["servo"]
-    variant = s["variants"][s["variant"]]
-    assert variant["stall_torque_kgfcm"] is not None, (
-        f"{s['variant']} のストールトルクが未確認。安全のトルク上限を計算できない")
-    assert variant["stall_torque_kgfcm"] == pytest.approx(s["stall_torque_kgfcm"])
-    assert variant["supply_voltage_v"] == pytest.approx(s["supply_voltage_v"])
-
-
-def test_candidate_variant_is_listed_even_if_unknown(cfg: dict) -> None:
-    """候補（7.4V 1:191）が設定に載っていて、未確認だと分かること。"""
-    v = cfg["servo"]["variants"]
-    assert "7.4V_1:191" in v
-    assert v["7.4V_1:191"]["stall_torque_kgfcm"] is None
-    assert not any(x["verified"] for x in v.values()), "実機で確認していないのに verified になっている"
+    assert s["model"] == "STS3215-C044"
+    assert s["hardware_verified"] is False
+    assert "variants" not in s, "版数の一覧が残っている（C044 に一本化した）"
+    assert cfg["safety_limits"]["torque"]["measured_safe_torque_nm"] is None

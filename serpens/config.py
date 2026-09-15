@@ -26,27 +26,29 @@ def load_config(path: str | Path | None = None) -> dict[str, Any]:
 
 
 def check_joint_limits(cfg: dict[str, Any]) -> None:
-    """可動域の包含関係 geometry ⊇ mechanical ⊇ operational を確かめる。
+    """可動域の包含関係を確かめる（意味の違う3つを取り違えないため）。
 
-    **ソフトの都合で operational を機構の外へ広げられないようにする。**
-    出典: CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW`（±64° 干渉なし / ±65° 干渉）。
+        software_operational_limit ⊆ mechanical_design_limit ⊆ geometry_collision_onset
+
+    出典は CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` / `Serpens_R03_COUPON_CABLE_PREP`。
+    **geometry_collision_onset（干渉が始まる境界）を指令のクランプ値として使わない。**
+    クランプに使うのは `min_deg` / `max_deg`（software_operational_limit）だけ。
+    onset が null の関節（頭部）は CAD の干渉検査をしていない = UNKNOWN。
     """
+    policy = cfg.get("joint_limit_policy", {})
+    if policy.get("clamp_source", "software_operational_limit") != "software_operational_limit":
+        raise ValueError("clamp_source は software_operational_limit でなければならない"
+                         f"（現在: {policy.get('clamp_source')}）")
     for j in cfg.get("joints", []):
-        g = (float(j["geometry_min_deg"]), float(j["geometry_max_deg"]))
-        m = (float(j["mechanical_min_deg"]), float(j["mechanical_max_deg"]))
-        o = (float(j["min_deg"]), float(j["max_deg"]))
-        if not g[0] <= m[0] < m[1] <= g[1]:
-            raise ValueError(f"{j['name']}: mechanical {m} が geometry {g} の外")
-        if not m[0] <= o[0] < o[1] <= m[1]:
-            raise ValueError(f"{j['name']}: operational {o} が mechanical {m} の外"
-                             "（CAD の干渉検査を超えた角度をソフトから出そうとしている）")
-
-
-def joint_names(cfg: dict[str, Any]) -> list[str]:
-    """関節名の一覧（J1〜J9）を返す。"""
-    return [j["name"] for j in cfg["joints"]]
-
-
-def servo_ids(cfg: dict[str, Any]) -> list[int]:
-    """サーボ ID の一覧を関節順で返す。"""
-    return [int(j["servo_id"]) for j in cfg["joints"]]
+        mech = (float(j["mechanical_min_deg"]), float(j["mechanical_max_deg"]))
+        oper = (float(j["min_deg"]), float(j["max_deg"]))
+        if not mech[0] <= oper[0] < oper[1] <= mech[1]:
+            raise ValueError(f"{j['name']}: software_operational_limit {oper} が "
+                             f"mechanical_design_limit {mech} の外")
+        onset = j.get("onset_deg")
+        if onset is None:
+            continue                      # 頭部は CAD 未検証（UNKNOWN）
+        onset = float(onset)
+        if max(abs(mech[0]), abs(mech[1])) > onset:
+            raise ValueError(f"{j['name']}: mechanical_design_limit {mech} が "
+                             f"干渉の始まる角度 ±{onset}° を超えている")

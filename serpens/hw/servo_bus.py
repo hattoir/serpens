@@ -44,9 +44,7 @@ class JointSpec:
     horn_offset_deg: float   # サーボホーン取付角のずれ（サーボ角 = direction×関節角 + これ）
     min_deg: float           # ソフトリミット
     max_deg: float
-    geometry_min_deg: float  # 機構的に到達しうる角度（干渉検査なし）
-    geometry_max_deg: float
-    mech_min_deg: float      # CAD で干渉なしを確認した角度
+    mech_min_deg: float      # mechanical_design_limit（PROVISIONAL）
     mech_max_deg: float
     max_speed_dps: float
 
@@ -58,7 +56,6 @@ class JointSpec:
             x_mm=float(d["x_mm"]), direction=int(d["direction"]),
             horn_offset_deg=float(d["horn_offset_deg"]),
             min_deg=float(d["min_deg"]), max_deg=float(d["max_deg"]),
-            geometry_min_deg=float(d["geometry_min_deg"]), geometry_max_deg=float(d["geometry_max_deg"]),
             mech_min_deg=float(d["mechanical_min_deg"]), mech_max_deg=float(d["mechanical_max_deg"]),
             max_speed_dps=float(d["max_speed_dps"]),
         )
@@ -83,8 +80,9 @@ class ServoBus(ABC):
         self.joints: dict[int, JointSpec] = {
             j.servo_id: j for j in (JointSpec.from_cfg(d) for d in cfg["joints"])
         }
-        # 安全の絶対上限（構想設計書 16章の L0 トルク上限）。ここを超える出力は出せない
-        self.torque_ceiling = float(cfg["safety_limits"]["torque_ratio_max"])
+        # トルクの上限（ストールトルクに対する比）。**出どころは REFERENCE 値で、実測ではない**
+        # （safety_limits.torque。measured_safe_torque_nm が埋まるまで暫定）
+        self.torque_ceiling = float(cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
         self.torque_ceiling_applied = False
 
     # ---- 共通処理 ------------------------------------------------------------
@@ -173,7 +171,7 @@ class ServoBus(ABC):
         """トルクの ON/OFF。"""
 
     def set_torque_limit(self, servo_id: int, ratio: float) -> None:
-        """出力トルクの上限。**ratio 1.0 = 安全上限**（safety_limits.torque_ratio_max）。
+        """出力トルクの上限。**ratio 1.0 = 安全上限**（safety_limits.torque.software_torque_limit_ratio）。
 
         脱力演出はこの上限に対する割合で、ここを通して全力へ戻すことはできない。
         """

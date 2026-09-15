@@ -6,7 +6,7 @@ import pytest
 
 from serpens.config import load_config
 from serpens.hw.mock_bus import MockServoBus
-from serpens.motion.animator import (Animator, Easing, Keyframe, coil_keyframe, ease_in_out, ease_out,
+from serpens.motion.animator import (Animator, Easing, Keyframe, rest_keyframe, ease_in_out, ease_out,
                                      overshoot_value)
 from serpens.motion.poses import Poses
 from tests.helpers import FakeClock
@@ -78,14 +78,14 @@ def test_per_axis_speed_limit_stretches_keyframe(cfg: dict) -> None:
 def test_staggered_coil_goes_tail_first(cfg: dict) -> None:
     """とぐろは尾(J1)から順に巻き、頭が最後。"""
     anim = quiet(cfg)
-    kf = coil_keyframe(Poses(cfg))
+    kf = rest_keyframe(Poses(cfg))
     seq = cfg["poses"]["coil_sequence"]
     total = anim.play(kf, 0.0)
     assert total == pytest.approx(seq["per_joint_s"] + seq["stagger_s"] * (len(seq["order"]) - 1))
     _, trace = run(anim, 0.0, seq["stagger_s"] * 2.5)
     assert trace[-1]["J1"] > 20 and abs(trace[-1]["J4"]) < 1e-9      # J4 はまだ動いていない
     _, trace = run(anim, seq["stagger_s"] * 2.5, total + 0.1)
-    assert trace[-1]["J6"] == pytest.approx(Poses(cfg).coil()["J6"])
+    assert trace[-1]["J6"] == pytest.approx(Poses(cfg).rest()["J6"])
 
 
 def test_breathing_on_all_axes(cfg: dict) -> None:
@@ -136,7 +136,7 @@ def test_scenario_9axis_sequence_is_reasonable(cfg: dict) -> None:
     seg(anim.play(Keyframe(poses.home(), 0.5), t) + 0.2)
     anim.gait.start("forward"); walk = seg(4.0)
     anim.gait.stop(); seg(1.5)
-    coil = seg(anim.play(coil_keyframe(poses), t) + 0.2)
+    coil = seg(anim.play(rest_keyframe(poses), t) + 0.2)
     rear = seg(anim.play(Keyframe(poses.rear_up(60), 1.5), t) + 0.2)
     look = seg(anim.play(Keyframe(poses.head_look(40, 15), 0.8, Easing.OUT_OVERSHOOT, 4.0), t) + 0.2)
     relax = seg(anim.play(Keyframe(poses.relax().angles, 0.5), t) + 0.2)
@@ -151,7 +151,7 @@ def test_scenario_9axis_sequence_is_reasonable(cfg: dict) -> None:
         assert np.abs(np.diff(arr[:, i])).max() <= (v[n] + extra) * DT, n
     assert max(abs(p["J3"]) for p in walk[-50:]) > 20
     assert all(abs(p["J7"] - 8) < 3 for p in walk)
-    assert coil[-1]["J1"] == pytest.approx(poses.coil()["J1"], abs=2.5)
+    assert coil[-1]["J1"] == pytest.approx(poses.rest()["J1"], abs=2.5)
     assert rear[-1]["J7"] == pytest.approx(60, abs=2.5)
     assert look[-1]["J8"] == pytest.approx(40, abs=2.5) and max(p["J8"] for p in look) > 42
     assert relax[-1]["J7"] == pytest.approx(cfg["poses"]["relax"]["neck_deg"], abs=2.5)

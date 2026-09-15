@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
 from serpens.config import load_config  # noqa: E402
-from serpens.motion.animator import Animator, Easing, Keyframe, coil_keyframe  # noqa: E402
+from serpens.motion.animator import Animator, Easing, Keyframe, rest_keyframe  # noqa: E402
 from serpens.motion.kinematics import min_self_clearance  # noqa: E402
 from serpens.motion.poses import Poses  # noqa: E402
 
@@ -35,7 +35,7 @@ def scenario(cfg: dict) -> tuple[np.ndarray, np.ndarray, list[tuple[float, str]]
         ("前進", lambda t: anim.gait.start("forward"), 5.0),
         ("左旋回", lambda t: anim.gait.start("turn_left"), 4.0),
         ("停止", lambda t: anim.gait.stop(), 1.5),
-        ("とぐろ", lambda t: anim.play(coil_keyframe(poses), t), 6.0),
+        ("休憩の弧", lambda t: anim.play(rest_keyframe(poses), t), 6.0),
         ("鎌首60°", lambda t: anim.play(Keyframe(poses.rear_up(60), 1.5), t), 2.5),
         ("左を見る+かしげ", lambda t: anim.play(Keyframe(poses.head_look(40, 15), 0.8, Easing.OUT_OVERSHOOT, 4.0), t), 2.5),
         ("脱力", lambda t: anim.play(Keyframe(poses.relax().angles, 0.5), t), 2.0),
@@ -76,7 +76,7 @@ def main() -> None:
     ax.grid(alpha=0.3)
 
     sc = cfg["self_collision"]
-    shapes = [("home", poses.home()), ("とぐろ", poses.coil()), ("鎌首60° (胴体S字)", poses.rear_up(60))]
+    shapes = [("home", poses.home()), ("休憩の弧", poses.rest()), ("鎌首60° (胴体S字)", poses.rear_up(60))]
     for k, (label, pose) in enumerate(shapes):
         a2 = fig.add_subplot(2, 4, 5 + k)
         pts = poses.points(pose)

@@ -48,7 +48,7 @@ def run_tool(script: str) -> str:
 
 # ---- レジスタ定義 ------------------------------------------------------------------
 def test_register_definitions(cfg: dict) -> None:
-    assert reg.MAX_VOLTAGE.describe(80) == "8.0V"          # 資料どおりの初期値（12V の罠）
+    assert reg.MAX_VOLTAGE.describe(80) == "8.0V"          # 資料どおりの初期値（7.4V の罠）
     assert reg.MAX_TEMP.describe(70) == "70℃"
     assert reg.status_text(0) == "正常"
     assert "電圧" in reg.status_text(0b1) and "過負荷" in reg.status_text(0b100000)
@@ -57,7 +57,7 @@ def test_register_definitions(cfg: dict) -> None:
 
 # ---- モックのレジスタ --------------------------------------------------------------
 def test_mock_defaults_reproduce_the_8v_trap(bus: MockServoBus) -> None:
-    """初期値は資料どおり 8.0V。12V を入れると動かない、という罠を再現する。"""
+    """初期値は資料どおり 8.0V。7.4V を入れると動かない、という罠を再現する。"""
     assert bus.read_register(1, reg.MAX_VOLTAGE.addr, 1) == 80
     assert bus.read_register(1, reg.MAX_TEMP.addr, 1) == 70
 
@@ -98,11 +98,16 @@ def test_mock_supports_sync_read(bus: MockServoBus) -> None:
 
 # ---- ツール本体（モック相手に全メニュー） ----------------------------------------------
 def test_tool_scan_and_voltage_menu() -> None:
-    out = run_tool("2\n1-9\n3\n14.0\n4.5\n0\n")
+    """電圧メニュー。**C044（7.4V 公称）では 8.0V の初期値が電源を上回るので罠は発火しない。**
+
+    ただし 2S LiPo の満充電は 8.4V で、初期値 8.0V を**超える**。
+    電源の選び方が決まったら `servo.supply_voltage_v` を実際の最大電圧で設定し直すこと
+    （`docs/verification_status.md` の未確認項目）。
+    """
+    out = run_tool("2\n1-9\n3\n8.4\n4.5\n0\n")
     assert "応答: [1, 2, 3, 4, 5, 6, 7, 8, 9]" in out
-    assert "最高入力電圧 8.0V < 電源 12.0V" in out          # 罠の警告が出る
-    assert "PING に応答するのに動かない場合は、まずここを疑ってください" in out
-    assert out.count("最高入力電圧 → 14.0V　OK") == 9
+    assert "最高入力電圧 8.0V < 電源" not in out, "7.4V 公称では過電圧の警告は出ないはず"
+    assert out.count("最高入力電圧 → 8.4V　OK") == 9
     assert out.count("最低入力電圧 → 4.5V　OK") == 9
 
 

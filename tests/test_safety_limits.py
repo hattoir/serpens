@@ -78,26 +78,54 @@ def test_operational_limits_stay_inside_cad_verified_range(cfg: dict) -> None:
     check_joint_limits(cfg)                       # 現物は通る
     bad = copy.deepcopy(cfg)
     bad["joints"][0]["max_deg"] = bad["joints"][0]["mechanical_max_deg"] + 1.0
-    with pytest.raises(ValueError, match="operational"):
+    with pytest.raises(ValueError, match="software_operational_limit"):
         check_joint_limits(bad)
     worse = copy.deepcopy(cfg)
-    worse["joints"][0]["mechanical_max_deg"] = worse["joints"][0]["geometry_max_deg"] + 1.0
-    with pytest.raises(ValueError, match="mechanical"):
+    worse["joints"][0]["mechanical_max_deg"] = float(worse["joints"][0]["onset_deg"]) + 1.0
+    with pytest.raises(ValueError, match="干渉"):
         check_joint_limits(worse)
+    clamp = copy.deepcopy(cfg)
+    clamp["joint_limit_policy"]["clamp_source"] = "geometry_collision_onset"
+    with pytest.raises(ValueError, match="clamp_source"):
+        check_joint_limits(clamp)
 
 
-def test_body_operational_limit_matches_cad_review(cfg: dict) -> None:
-    """胴体ヨーの可動域が CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` と矛盾しない。
+def test_body_limits_match_the_cad_proposal(cfg: dict) -> None:
+    """胴体ヨーの3つの可動域が CAD R03 の最新提案と一致する。
 
-    ±64° 干渉なし / ±65° で Belly Shell 干渉。**±85° は過去の想定で、機械設計と一致しない。**
+    geometry_collision_onset は 64.8° < onset <= 64.9°（**clamp には使わない**）、
+    mechanical_design_limit ±55°（PROVISIONAL）、software_operational_limit ±50°（CONDITIONAL）。
     """
-    body = [j for j in cfg["joints"] if j["axis"] == "yaw" and j["name"] in
-            {f"J{k+1}" for k in range(6)}]
+    policy = cfg["joint_limit_policy"]
+    assert policy["onset_bracket_deg"] == [64.8, 64.9]
+    assert policy["status"]["mechanical_design_limit"] == "PROVISIONAL"
+    assert policy["status"]["software_operational_limit"] == "CONDITIONAL"
+    assert policy["verified_in_cad"] is True
+    assert policy["verified_with_cable"] is False and policy["verified_with_hardware"] is False
+    body = [j for j in cfg["joints"] if j["name"] in {f"J{k+1}" for k in range(6)}]
     assert body, "胴体ヨーが見つからない"
     for j in body:
-        assert abs(float(j["mechanical_max_deg"])) <= 64.0, f"{j['name']}: CAD の干渉検査を超えている"
-        assert abs(float(j["max_deg"])) <= abs(float(j["mechanical_max_deg"]))
-        assert abs(float(j["max_deg"])) < 85.0, "±85° 想定が残っている"
+        assert float(j["onset_deg"]) == 64.8 and float(j["onset_collides_deg"]) == 64.9
+        assert abs(float(j["mechanical_max_deg"])) == 55.0
+        assert abs(float(j["max_deg"])) == 50.0, "clamp 値が ±50°（CONDITIONAL）でない"
+        assert abs(float(j["max_deg"])) < abs(float(j["onset_deg"])), "干渉境界を clamp に使っている"
+
+
+def test_legacy_poses_are_not_reachable_through_normal_paths(cfg: dict) -> None:
+    """**旧とぐろを clamp して「同じとぐろ」として扱わない。**
+
+    R03 の可動域に入らない旧モーションは `legacy_poses`（SIMULATION_LEGACY_ONLY）にあり、
+    通常の姿勢（`poses`）からは消えている。
+    """
+    from serpens.motion.poses import Poses
+
+    assert "coil" not in cfg["poses"], "旧とぐろが通常の姿勢に残っている"
+    assert cfg["legacy_poses"]["status"] == "SIMULATION_LEGACY_ONLY"
+    legacy = Poses(cfg).legacy("coil")
+    body_max = max(abs(float(j["max_deg"])) for j in cfg["joints"][:6])
+    assert max(legacy[f"J{k+1}"] for k in range(6)) > body_max, "legacy が可動域内に収まっている"
+    rest = Poses(cfg).rest()
+    assert all(abs(rest[f"J{k+1}"]) <= body_max for k in range(6))
 
 
 def test_mass_budget_within_limit(cfg: dict, lim: dict) -> None:
@@ -121,21 +149,38 @@ def test_gait_cannot_wrap_around_anything(cfg: dict) -> None:
 
 
 # ---- 層2/3: 電気・ファームの上限 --------------------------------------------------------
-def test_torque_ceiling_matches_design_document(cfg: dict, lim: dict) -> None:
-    """トルク上限 1.2N·m。比率はストールトルクからの換算で、安全側に丸めてあること。"""
-    stall_nm = float(cfg["servo"]["stall_torque_kgfcm"]) * KGFCM_TO_NM
-    assert stall_nm == pytest.approx(float(lim["stall_torque_nm"]), abs=0.01)
-    ceiling = float(lim["torque_ratio_max"])
-    assert ceiling * stall_nm <= float(lim["torque_nm_max"]) + 1e-9, "上限が 1.2N·m を超えている"
-    assert ceiling >= 0.35, "安全側に丸めすぎて動かない可能性がある（実機で要確認）"
+def test_torque_model_keeps_reference_and_measured_apart(cfg: dict, lim: dict) -> None:
+    """**REFERENCE 値と実測値を混ぜない。** ストールトルクを連続安全トルクとして使わない。"""
+    t = lim["torque"]
+    assert t["source"] == "SIMULATED_FROM_REFERENCE"
+    assert t["hardware_verified"] is False
+    assert t["measured_safe_torque_nm"] is None, "実測していないのに値が入っている"
+    rated = float(t["rated_torque_reference_nm"])
+    stall = float(t["stall_torque_reference_nm"])
+    soft = float(t["software_torque_limit_nm"])
+    assert soft <= rated, "ソフト上限が定格を超えている（ストールを常用値にしている疑い）"
+    assert soft <= float(lim["torque_nm_max"]), "構想設計書16章の 1.2N·m を超えている"
+    assert float(t["software_torque_limit_ratio"]) == pytest.approx(soft / stall, abs=0.005)
 
 
-def test_torque_ceiling_still_lifts_the_head(cfg: dict, lim: dict) -> None:
-    """上限を掛けても、首を持ち上げる分のトルクは残る（安全のために動けなくならない）。"""
+def test_c044_profile_is_not_polluted_by_the_12v_servo(cfg: dict) -> None:
+    """**旧 12V 1:345 の値が C044 プロファイルへ混ざっていない。**"""
+    s = cfg["servo"]
+    assert s["model"] == "STS3215-C044"
+    assert s["nominal_voltage_v"] == pytest.approx(7.4) and s["gear_ratio"] == "1:191"
+    assert s["hardware_verified"] is False
+    assert s["torque_reference_source"] == "CAD_REFERENCE"
+    assert "stall_torque_kgfcm" not in s, "旧 12V のストールトルクが残っている"
+    assert float(s["rated_torque_reference_kgfcm"]) == pytest.approx(5.2)
+    assert float(s["stall_torque_reference_kgfcm"]) == pytest.approx(16.0)
+    assert float(s["supply_voltage_v"]) == pytest.approx(7.4), "電源電圧が 12V のまま"
+
+
+def test_torque_limit_still_lifts_the_head(cfg: dict, lim: dict) -> None:
+    """上限を掛けても、首を持ち上げる分のトルクは残る（**REFERENCE 値での見積り**）。"""
     b = cfg["mass_budget_g"]
     need_nm = b["neck_lifted_mass"] / 1000.0 * 9.81 * b["neck_lifted_cog_mm"] / 1000.0
-    stall_nm = float(cfg["servo"]["stall_torque_kgfcm"]) * KGFCM_TO_NM
-    available_nm = float(lim["torque_ratio_max"]) * stall_nm
+    available_nm = float(lim["torque"]["software_torque_limit_nm"])
     assert available_nm > need_nm * 2.0, (
         f"首の必要トルク {need_nm:.2f}N·m に対し上限が {available_nm:.2f}N·m しかない")
 
@@ -145,7 +190,7 @@ def test_torque_limit_cannot_exceed_ceiling(cfg: dict, lim: dict) -> None:
     bus = MockServoBus(cfg, clock=FakeClock())
     bus.connect()
     bus.apply_torque_ceiling()
-    ceiling = float(lim["torque_ratio_max"])
+    ceiling = float(lim["torque"]["software_torque_limit_ratio"])
     for asked in (1.0, 2.0, 10.0):
         bus.set_torque_limit(1, asked)
         assert bus._axes[1].torque_ratio == pytest.approx(ceiling)
@@ -155,7 +200,8 @@ def test_session_applies_ceiling_and_blocks_without_it(cfg: dict, lim: dict) -> 
     """セッションが接続先へ必ず上限を書く。書けていない機体は自律走行させない。"""
     s = SimSession(cfg, BodyPose(150.0, 600.0, 0.0), seed=1)
     assert s.bus.torque_ceiling_applied and not s.errors
-    assert s.bus._axes[1].torque_ratio == pytest.approx(float(lim["torque_ratio_max"]))
+    assert s.bus._axes[1].torque_ratio == pytest.approx(
+        float(lim["torque"]["software_torque_limit_ratio"]))
     no_ceiling = AutonomyInputs(True, "aruco", 0.1, True, True, False, 9, 9, 0.2)
     assert any("トルク上限" in w for w in autonomy_blockers(cfg, no_ceiling))
 

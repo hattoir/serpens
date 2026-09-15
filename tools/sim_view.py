@@ -24,7 +24,7 @@ from matplotlib.animation import FuncAnimation, PillowWriter  # noqa: E402
 
 from serpens.config import load_config  # noqa: E402
 from serpens.hw.mock_bus import MockServoBus  # noqa: E402
-from serpens.motion.animator import Animator, Keyframe, coil_keyframe  # noqa: E402
+from serpens.motion.animator import Animator, Keyframe, rest_keyframe  # noqa: E402
 from serpens.motion.gait import GaitEngine, gait_period_s  # noqa: E402
 from serpens.motion.poses import Poses  # noqa: E402
 from serpens.sim.world import BodyPose, World  # noqa: E402
@@ -96,7 +96,7 @@ def demo_script(cfg: dict) -> list:
         ("前進", lambda a, p, t: a.gait.start("forward"), 1.5 * T),
         ("左旋回", lambda a, p, t: a.gait.start("turn_left"), 3.0 * T),
         ("停止", lambda a, p, t: a.gait.stop(), 1.5),
-        ("とぐろ", lambda a, p, t: a.play(coil_keyframe(p), t), COIL_S),
+        ("休憩の弧", lambda a, p, t: a.play(rest_keyframe(p), t), COIL_S),
     ]
 
 
@@ -133,7 +133,7 @@ def main() -> None:
          BodyPose(40.0, 600.0, 0.0), 0.5),
         ("左旋回 4周期", [("左旋回", lambda a, p, t: a.gait.start("turn_left"), 4 * T)],
          BodyPose(250.0, 250.0, 0.0), 1.0),
-        ("停止姿勢 → とぐろ", [("とぐろ", lambda a, p, t: a.play(coil_keyframe(p), t), COIL_S)],
+        ("停止姿勢 → とぐろ", [("休憩の弧", lambda a, p, t: a.play(rest_keyframe(p), t), COIL_S)],
          BodyPose(200.0, 400.0, 0.0), 0.5),
     ]
     fig, axes = plt.subplots(1, 3, figsize=(18, 6.6))

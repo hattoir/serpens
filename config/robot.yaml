@@ -20,27 +20,46 @@ body:
 #   horn_offset_deg サーボホーン取付角のずれ（実機で測って吸収する。既定 0）
 #   max_speed_dps   その軸の最高角速度（頭部は丁寧に動かすため遅い）
 #
-# **可動域は3段**（geometry ⊇ mechanical ⊇ operational）。load_config が包含関係を検査する。
-#   geometry_*    機構的に到達しうる角度。干渉検査はしていない
-#   mechanical_*  CAD で干渉なしを確認した角度
-#   min/max_deg   operational。**ソフトが指令してよい角度**（ここでクランプ）
+# **可動域は意味の違う3つを別々に持つ**（joint_limit_policy に状態と出典）。
+#   onset_deg / onset_collides_deg
+#       geometry_collision_onset。CAD nominal geometry で干渉が始まる境界の bracket。
+#       **指令のクランプ値として使わない。** 64.8° は干渉なし、64.9° で干渉（R03 検査姿勢）
+#   mechanical_min/max_deg
+#       mechanical_design_limit。**PROVISIONAL**（ケーブル経路が不合格のため確定していない）
+#   min_deg / max_deg
+#       software_operational_limit。**CONDITIONAL**。指令はここでクランプする。
+#       物理試験へ進むための候補値であって、実機で許可された値ではない
 #
-# 胴体ヨー（J1〜J6）の根拠: CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` で
-#   ±64° 干渉なし / ±65° で Belly Shell 干渉 → mechanical ±64°。
-#   operational は呼吸 ±2° とサーボの追従誤差を見て **±60°（暫定）**。最終値は機械側の確定待ち。
-#   曲率半径 R = 95 / (2·tan30°) = 82.3mm（自由な穴の直径 114mm。構想設計書16章の 80mm 以上を満たす）
-# 頭部（J7〜J9）の mechanical は **CAD 未検証**。geometry と同じ値を置いてあるだけ
+# 実機の 9軸構成（コードから確認。2026-09-16）: 胴体ヨー J1〜J6 / 首ピッチ J7 / 頭ヨー J8 / 頭ロール J9。
+# **胴体に pitch 軸は無い**（垂直波＝螺旋歩容を作れない）
 # TODO: 外皮ニット装着後に可動範囲を再測定する（README 参照）
 joints:
-  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
-  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
-  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
-  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
-  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
-  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -90.0, geometry_max_deg: 90.0, mechanical_min_deg: -64.0, mechanical_max_deg: 64.0, min_deg: -60.0, max_deg: 60.0, max_speed_dps: 240.0}
-  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -10.0, geometry_max_deg: 95.0, mechanical_min_deg: -10.0, mechanical_max_deg: 95.0, min_deg: -8.0,  max_deg: 90.0, max_speed_dps: 120.0}
-  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -85.0, geometry_max_deg: 85.0, mechanical_min_deg: -85.0, mechanical_max_deg: 85.0, min_deg: -80.0, max_deg: 80.0, max_speed_dps: 90.0}
-  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, horn_offset_deg: 0.0, geometry_min_deg: -40.0, geometry_max_deg: 40.0, mechanical_min_deg: -40.0, mechanical_max_deg: 40.0, min_deg: -35.0, max_deg: 35.0, max_speed_dps: 90.0}
+  - {name: J1, servo_id: 1, axis: yaw,   x_mm: 100, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 195, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 290, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 385, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 480, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 575, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J7, servo_id: 7, axis: pitch, x_mm: 670, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: -10.0, mechanical_max_deg: 95.0, min_deg: -8.0,  max_deg: 90.0, max_speed_dps: 120.0}
+  - {name: J8, servo_id: 8, axis: yaw,   x_mm: 725, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: -85.0, mechanical_max_deg: 85.0, min_deg: -80.0, max_deg: 80.0, max_speed_dps: 90.0}
+  - {name: J9, servo_id: 9, axis: roll,  x_mm: 765, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: -40.0, mechanical_max_deg: 40.0, min_deg: -35.0, max_deg: 35.0, max_speed_dps: 90.0}
+
+# ---------------------------------------------------------------------------
+# 可動域の状態と出典（CAD 側の最新提案。2026-09-16）
+# **どれも実機で確かめていない。** software_operational_limit は「物理試験へ進むための候補」
+# ---------------------------------------------------------------------------
+joint_limit_policy:
+  cad_sources: [Serpens_BELLY_R03_TWO_LINK_REVIEW, Serpens_R03_COUPON_CABLE_PREP]
+  status:
+    geometry_collision_onset: CAD_VERIFIED    # nominal geometry のみ。実物・ケーブル込みではない
+    mechanical_design_limit: PROVISIONAL      # ±55°（暫定）
+    software_operational_limit: CONDITIONAL   # ±50°（条件つき候補）
+  verified_in_cad: true
+  verified_with_cable: false                  # Cable Routing が不合格
+  verified_with_hardware: false               # 実機ゼロ
+  onset_bracket_deg: [64.8, 64.9]             # この間で干渉が始まる（64.8 なし / 64.9 あり）
+  # **clamp に使ってよいのは software_operational_limit だけ。**
+  clamp_source: software_operational_limit
 
 # 首（J7）の使い分け
 neck:
@@ -127,10 +146,9 @@ gait:
 poses:
   # J7 = +8°: 頭をわずかに浮かせる（呼吸が下限で切れず、上下にゆっくり揺れて生きて見える）
   home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 8, J8: 0, J9: 0}
-  # とぐろ: J1〜J6 のみで平面の渦。**operational ±60° 内で作り直した**（旧値は ±85° 前提で CAD と不一致）
-  # 合計 260°巻き（尾から頭へ 0.92 で減衰）。**呼吸 ±2° を足した状態**で自己クリアランス 89.6mm、
-  # 最大関節角 54.8° ≤ operational 60°。旧値（329°巻き・J1=83°）は CAD の可動域と一致しない
-  coil: {J1: 52.8, J2: 48.6, J3: 44.7, J4: 41.1, J5: 37.9, J6: 34.8, J7: 8, J8: 0, J9: 0}
+  # **R03 の休憩姿勢**: 緩い弧（合計 240°）。とぐろではない。
+  # 旧とぐろ（329°巻き・J1=83°）は R03 の可動域に入らないので legacy_poses へ移した
+  rest_arc: {J1: 45.3, J2: 43.0, J3: 40.9, J4: 38.8, J5: 36.9, J6: 35.1, J7: 8, J8: 0, J9: 0}
   # とぐろへの移り方: 尾から順に巻き、頭（J7 以降）を最後に引き込む
   coil_sequence:
     order: [J1, J2, J3, J4, J5, J6, J7, J8, J9]
@@ -142,13 +160,24 @@ poses:
     default_base: s_curve
     bases:
       s_curve:      {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}   # 仮
-      partial_coil: {J1: 55, J2: 48, J3: 40, J4: 0, J5: 0, J6: 0}    # 後方を軽く巻く（仮。呼吸ぶん余裕を残す）
+      arc:          {J1: 40, J2: 34, J3: 28, J4: 0, J5: 0, J6: 0}    # 後方を軽く曲げる（R03 の範囲内）
   # 脱力（タッチ時）: 首を下げ、トルクを落とす
   relax:
     neck_deg: 0.0             # J7 を下げる
     head_roll_deg: 0.0
     torque_ratio: 0.6
     duration_s: 2.0
+
+# ---------------------------------------------------------------------------
+# **SIMULATION_LEGACY_ONLY**: R03 の可動域（±50° CONDITIONAL）に入らない旧モーション。
+# 実機では使わない。クランプして「同じとぐろ」として扱わないこと（形が別物になるため）。
+# 展示用のとぐろは、R03 geometry と ±50° 候補の範囲で**別途再設計する**
+# ---------------------------------------------------------------------------
+legacy_poses:
+  status: SIMULATION_LEGACY_ONLY
+  reason: "R03 では胴体ヨーが ±50°（CONDITIONAL）。旧値は 83° / 55° で入らない"
+  coil: {J1: 83.0, J2: 68.9, J3: 57.2, J4: 47.5, J5: 39.4, J6: 32.7, J7: 8, J8: 0, J9: 0}
+  partial_coil: {J1: 60, J2: 50, J3: 40, J4: 0, J5: 0, J6: 0}
 
 # ---------------------------------------------------------------------------
 # アニメーション
@@ -414,11 +443,20 @@ behavior:
 # **ソフトの都合で緩めない。** 導出と現状の達成度は docs/safety_limits.md
 # ---------------------------------------------------------------------------
 safety_limits:
-  torque_nm_max: 1.2          # L0（ファーム）のトルク上限。構想設計書 16章
-  stall_torque_nm: 2.94       # STS3215 30kgf·cm @12V の換算（servo.stall_torque_kgfcm と同じ値）
-  # トルク比の上限 = torque_nm_max / stall_torque_nm = 0.408 → 安全側へ 0.40 に丸める。
-  # **これが 100%。** 脱力演出の比率はこの上限に対する割合で、素通りして全力に戻せない
-  torque_ratio_max: 0.40
+  # ---- トルク: 出どころの違う4つを別々に持つ ----
+  torque:
+    # REFERENCE（CAD 資料の STS3215-C044 7.4V 値。実測ではない）
+    rated_torque_reference_nm: 0.510      # 5.2 kgf·cm
+    stall_torque_reference_nm: 1.569      # 16 kgf·cm。**連続安全トルクとして使わない**
+    # ソフトが出してよい上限。rated 以下に取る（構想設計書16章の 1.2N·m より、サーボの定格が先に効く）
+    software_torque_limit_nm: 0.450
+    # サーボのトルク制限レジスタへ書く比（ストール基準。= software / stall_reference）
+    software_torque_limit_ratio: 0.287
+    # **実測して初めて埋まる。** 埋まるまで実機の自律走行は許可しない
+    measured_safe_torque_nm: null
+    hardware_verified: false
+    source: SIMULATED_FROM_REFERENCE
+  torque_nm_max: 1.2          # 構想設計書16章の L0 上限（サーボ非依存の上限）
   min_bend_radius_mm: 40.0    # 中心線の最小曲げ半径。巻き付きを機構で不可能にする（16章の最重要）
   mass_total_g_max: 1700
   near_person_mm: 1000        # この半径内では
@@ -431,13 +469,16 @@ safety_limits:
 # サーボ STS3215（出典は docs/sts3215_registers.md）
 # ---------------------------------------------------------------------------
 servo:
-  # **第一候補は STS3215 7.4V 1:191（CAD 側の検討）。ストールトルクが未確認なので、
-  # 安全のトルク上限（safety_limits）を出し直すまで variant を切り替えない。**
-  # 切り替えると tests/test_safety_limits.py が落ちる（未確認の値で安全設計をしないため）
-  variant: "12V_1:345"        # 12V_1:345 / 7.4V_1:191
-  variants:
-    "12V_1:345": {stall_torque_kgfcm: 30.0, supply_voltage_v: 12.0, verified: false}
-    "7.4V_1:191": {stall_torque_kgfcm: null, supply_voltage_v: 7.4, verified: false}   # 未確認
+  # **採用候補: FEETECH STS3215-C044（7.4V / 1:191）。未購入・未実測。**
+  # 旧 12V・1:345（30kgf·cm）の値を C044 へ流用しないこと。値の出どころが違う
+  model: STS3215-C044
+  nominal_voltage_v: 7.4
+  gear_ratio: "1:191"
+  hardware_verified: false
+  # CAD 側資料の REFERENCE 値（7.4V 時）。**実測ではない。データシート確認も未**
+  rated_torque_reference_kgfcm: 5.2      # 連続で出せるとされる値
+  stall_torque_reference_kgfcm: 16.0     # **連続安全トルクとして使わない**（起動・拘束時の最大）
+  torque_reference_source: CAD_REFERENCE
   baudrate: 1000000
   steps_per_rev: 4096
   center_step: 2047          # [W] の中立位置。[M] の「2048 校正」とは 1step 差
@@ -455,9 +496,7 @@ servo:
   load_sign_bit: 10
   torque_limit_full: 1000    # トルク制限 1000 = 100%
   temperature_limit_c: 70    # [M] 最高温度の初期値
-  supply_voltage_v: 12.0     # 電源電圧（tools/servo_setup.py が EEPROM の電圧設定と比べる）
-  stall_torque_kgfcm: 30.0   # 12V 時
-  continuous_torque_ratio: 0.333  # 連続実用トルク = ストールの 1/3
+  supply_voltage_v: 7.4      # 電源電圧（tools/servo_setup.py が EEPROM の電圧設定と比べる）
   sync_read: true            # SYNC READ を使う（非対応なら自動で個別 READ に落ちる）
 
 # 状態の読み出し頻度。SYNC READ 非対応（個別 READ）だと遅いので頻度を落とす
@@ -479,7 +518,7 @@ mock_servo:
   heat_tau_s: 300.0          # 温度の一次遅れ時定数（Energy の演出テストでは短くする）
   heat_gain_c: 30.0          # 負荷率 1.0 を続けたときの温度上昇（平衡値）
   holding_heat_c: 2.0        # トルク ON で静止しているときの温度上昇（平衡値）
-  voltage_nominal_v: 12.0
+  voltage_nominal_v: 7.4
   voltage_sag_v: 0.6         # 負荷率 1.0 あたりの電圧降下
 
 # ---------------------------------------------------------------------------

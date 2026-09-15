@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from serpens.config import load_config
-from serpens.motion.animator import Animator, coil_keyframe
+from serpens.motion.animator import Animator, rest_keyframe
 from serpens.motion.gait import GaitEngine, GaitParams, gait_period_s  # noqa: F401
 from serpens.motion.kinematics import min_self_clearance
 from serpens.motion.poses import Poses
@@ -96,7 +96,7 @@ def test_coil_in_sim(cfg: dict) -> None:
     w, anim, poses = World(cfg, BodyPose(350.0, 400.0, 0.0)), Animator(cfg), Poses(cfg)
     anim.set_breathing(False)
     anim._breath_env = 0.0
-    dur = anim.play(coil_keyframe(poses), 0.0)
+    dur = anim.play(rest_keyframe(poses), 0.0)
     t = 0.0
     while t < dur + 0.3:
         t += dt
@@ -112,7 +112,7 @@ def test_tangential_drag_limits_gliding(big: dict) -> None:
     """転がり抵抗 0.02 で、全関節同時のとぐろ化による「滑走」が減り、前進の低下は 2 割未満。"""
     from serpens.motion.animator import ease_in_out
 
-    coil = Poses(big).coil()
+    coil = Poses(big).rest()
     dt = big["sim"]["dt_s"]
     travel, fwd = [], []
     for ratio in (0.0, 0.02):

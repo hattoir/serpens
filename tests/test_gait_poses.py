@@ -136,7 +136,7 @@ def test_engine_blends_in_and_out(cfg: dict) -> None:
 def test_presets_within_soft_limits(cfg: dict) -> None:
     poses = Poses(cfg)
     lim = limits(cfg)
-    all_poses = [poses.home(), poses.coil(), poses.full_rear_up(), poses.head_look(80, 50, 90),
+    all_poses = [poses.home(), poses.rest(), poses.full_rear_up(), poses.head_look(80, 50, 90),
                  poses.relax().angles] + [poses.rear_up(60, b) for b in poses.rear_up_bases]
     for pose in all_poses:
         for n, v in pose.items():
@@ -144,24 +144,24 @@ def test_presets_within_soft_limits(cfg: dict) -> None:
     assert poses.home()["J7"] == 8 and all(v == 0 for k, v in poses.home().items() if k != "J7")
 
 
-def test_coil_leaves_room_for_breathing(cfg: dict) -> None:
+def test_rest_arc_leaves_room_for_breathing(cfg: dict) -> None:
     """とぐろ ± 呼吸振幅 でもソフトリミット内。"""
     amp = cfg["breath"]["amplitude_deg"]
     lim = limits(cfg)
-    for n, v in Poses(cfg).coil().items():
+    for n, v in Poses(cfg).rest().items():
         assert lim[n][0] <= v - amp and v + amp <= lim[n][1], n
 
 
-def test_coil_has_no_self_intersection(cfg: dict) -> None:
-    """とぐろ: J1〜J6 で 250° 以上巻き、呼吸で ±振れても中心線間隔が下限以上。
+def test_rest_arc_has_no_self_intersection(cfg: dict) -> None:
+    """R03 の休憩姿勢: 合計 200° 以上曲げ、呼吸で ±振れても中心線間隔が下限以上。
 
-    巻き数は operational limit（現在 ±60°、CAD R03 の ±64° 由来）で決まる。
-    可動域が変われば、ここと config の coil を作り直す。
+    曲げ量は software_operational_limit（現在 ±50° CONDITIONAL、CAD R03 由来）で決まる。
+    **旧とぐろ（329°巻き）は R03 では作れない。** `legacy_poses` を参照。
     """
     poses = Poses(cfg)
     sc = cfg["self_collision"]
-    coil = poses.coil()
-    assert sum(coil[f"J{k}"] for k in range(1, 7)) > 250
+    coil = poses.rest()
+    assert sum(coil[f"J{k}"] for k in range(1, 7)) > 200
     for d in (-cfg["breath"]["amplitude_deg"], 0.0, cfg["breath"]["amplitude_deg"]):
         pose = {k: v + d for k, v in coil.items()}
         pts = poses.points(pose)
@@ -174,7 +174,7 @@ def test_coil_has_no_self_intersection(cfg: dict) -> None:
 def test_rear_up_bases_have_no_self_intersection(cfg: dict) -> None:
     poses = Poses(cfg)
     sc = cfg["self_collision"]
-    assert set(poses.rear_up_bases) == {"s_curve", "partial_coil"}
+    assert set(poses.rear_up_bases) == {"s_curve", "arc"}
     for b in poses.rear_up_bases:
         pts = poses.points(poses.rear_up(60, b))
         assert min_self_clearance(pts[:, :2], sc["arc_skip_mm"], sc["sample_mm"]) >= sc["min_clearance_mm"]

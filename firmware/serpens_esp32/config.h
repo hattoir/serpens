@@ -37,13 +37,14 @@ struct JointCfg {
 };
 
 static const JointCfg JOINTS[N_AXES] = {
-  // **operational limit**（config/robot.yaml の min/max_deg）。CAD R03: 胴体ヨーは ±64° で干渉なし
-  {1,  -60.0f,  60.0f, 240.0f, 1, 0.0f}, // J1 尾側
-  {2,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
-  {3,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
-  {4,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
-  {5,  -60.0f,  60.0f, 240.0f, 1, 0.0f},
-  {6,  -60.0f,  60.0f, 240.0f, 1, 0.0f}, // J6 頭側の胴体ヨー
+  // **software_operational_limit**（config/robot.yaml の min/max_deg。CONDITIONAL）。
+  // CAD R03: 干渉の始まりは 64.8〜64.9°、mechanical_design_limit は ±55°（PROVISIONAL）
+  {1,  -50.0f,  50.0f, 240.0f, 1, 0.0f}, // J1 尾側
+  {2,  -50.0f,  50.0f, 240.0f, 1, 0.0f},
+  {3,  -50.0f,  50.0f, 240.0f, 1, 0.0f},
+  {4,  -50.0f,  50.0f, 240.0f, 1, 0.0f},
+  {5,  -50.0f,  50.0f, 240.0f, 1, 0.0f},
+  {6,  -50.0f,  50.0f, 240.0f, 1, 0.0f}, // J6 頭側の胴体ヨー
   {7,   -8.0f,  90.0f, 120.0f, 1, 0.0f}, // J7 首 pitch
   {8,  -80.0f,  80.0f,  90.0f, 1, 0.0f}, // J8 頭 yaw
   {9,  -35.0f,  35.0f,  90.0f, 1, 0.0f}, // J9 頭 roll
@@ -54,6 +55,7 @@ static const float HOME_DEG[N_AXES] = {0f, 0f, 0f, 0f, 0f, 0f, 8f, 0f, 0f};
 
 // ---- サーボ（docs/sts3215_registers.md） ----
 static const uint32_t SERVO_BAUD      = 1000000;    // TTL バス
+// サーボ: FEETECH STS3215-C044（7.4V / 1:191）。**未購入・未実測**
 static const int      STEPS_PER_REV   = 4096;
 static const int      CENTER_STEP     = 2047;
 

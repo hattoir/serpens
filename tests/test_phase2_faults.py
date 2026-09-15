@@ -144,7 +144,8 @@ def test_servo_overload_is_visible_to_the_pc(cfg: dict) -> None:
     h.advance(0.5)
     tel = h.client.telemetry
     assert tel is not None
-    assert max(abs(a.load) for a in tel.axes) > 0.3, "外力がテレメトリに出ていない"
+    ceiling = float(cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
+    assert max(abs(a.load) for a in tel.axes) >= ceiling * 0.9, "外力がテレメトリに出ていない"
 
 
 # ---- 指令値 ----------------------------------------------------------------------------

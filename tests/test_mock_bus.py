@@ -122,12 +122,12 @@ def test_load_while_moving_and_external(rig: tuple[MockServoBus, FakeClock]) -> 
 
 def test_torque_limit_is_relative_to_safety_ceiling(rig: tuple[MockServoBus, FakeClock],
                                                     cfg: dict) -> None:
-    """トルク比は**安全上限（safety_limits.torque_ratio_max）に対する割合**。
+    """トルク比は**安全上限（safety_limits.torque.software_torque_limit_ratio）に対する割合**。
 
     脱力演出でも、ここを通して全力（ストールトルク）へは戻せない。
     """
     bus, clock = rig
-    ceiling = float(cfg["safety_limits"]["torque_ratio_max"])
+    ceiling = float(cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
     bus.set_torque_limit(1, 0.6)
     bus.set_external_load(1, 0.9)
     clock.advance(0.01)

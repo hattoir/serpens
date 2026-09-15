@@ -23,7 +23,7 @@ from serpens.behavior.internal_state import InternalState, Stimuli
 from serpens.behavior.utility import COIL_STATES, STATE_LABELS_JA, Context, UtilityModel, thought_line
 from serpens.hw.head_io import HeadIO
 from serpens.hw.servo_bus import ServoBus
-from serpens.motion.animator import Animator, Keyframe, coil_keyframe
+from serpens.motion.animator import Animator, Keyframe, rest_keyframe
 from serpens.motion.kinematics import Chain, forward, point_at_body_x
 from serpens.motion.poses import HEAD_YAW, NECK, Poses
 from serpens.perception.snake_pose import SnakePose, wrap_pi
@@ -281,7 +281,7 @@ class Brain:
         elif s == "PETTED":
             self.expr.petted(t)
         elif s in COIL_STATES:
-            self.anim.play(coil_keyframe(self.poses), t)
+            self.anim.play(rest_keyframe(self.poses), t)
         self.expr.set_eyes(s)
 
     def _on_tick(self, t: float, snake: SnakePose | None, person: np.ndarray | None, head_dist: float | None) -> None:

@@ -35,6 +35,7 @@ class Poses:
     """config の poses / neck からプリセット姿勢を作る。"""
 
     def __init__(self, cfg: dict[str, Any]) -> None:
+        self.cfg = cfg
         self._p = cfg["poses"]
         self._neck = cfg["neck"]
         self._limits = {j["name"]: (float(j["min_deg"]), float(j["max_deg"])) for j in cfg["joints"]}
@@ -52,9 +53,24 @@ class Poses:
         """まっすぐ・頭は床。"""
         return self._from_cfg(self._p["home"])
 
-    def coil(self) -> Pose:
-        """とぐろ（J1〜J6 で平面の渦）。"""
-        return self._from_cfg(self._p["coil"])
+    def rest(self) -> Pose:
+        """休憩の姿勢（R03: 緩い弧）。**旧「とぐろ」ではない。**
+
+        旧とぐろ（329°巻き・J1=83°）は R03 の可動域（±50° CONDITIONAL）に入らないので、
+        `legacy_poses` へ移した。クランプして同じ名前で使うと形が別物になるため分けてある。
+        """
+        return self._from_cfg(self._p["rest_arc"])
+
+    def legacy(self, name: str) -> Pose:
+        """**SIMULATION_LEGACY_ONLY** の姿勢（旧とぐろなど）。実機では使わない。
+
+        可動域の外なので、そのまま指令すると `_clamp` で形が変わる。
+        シミュレーションで昔の動きを再現したいときだけ、意図して呼ぶこと。
+        """
+        legacy = self.cfg.get("legacy_poses", {})
+        if name not in legacy:
+            raise KeyError(f"legacy_poses に {name} が無い")
+        return {k: float(v) for k, v in legacy[name].items()}
 
     def coil_sequence(self) -> dict[str, Any]:
         """とぐろへの移り方（順番・遅れ・各関節の時間）。"""

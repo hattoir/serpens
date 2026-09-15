@@ -181,7 +181,7 @@ def test_tilt_surprise_distraction_and_petted(cfg: dict) -> None:
     end = ex.petted(5.0)
     assert end == pytest.approx(5.0 + x["petted_s"])
     assert bus._axes[1].torque_ratio == pytest.approx(
-        cfg["poses"]["relax"]["torque_ratio"] * cfg["safety_limits"]["torque_ratio_max"])
+        cfg["poses"]["relax"]["torque_ratio"] * cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
     ex.update(end + 0.01)
     assert bus._axes[1].torque_ratio == pytest.approx(
-        cfg["safety_limits"]["torque_ratio_max"])   # 演出が終わっても安全上限まで
+        cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])   # 演出が終わっても安全上限まで

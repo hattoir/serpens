@@ -33,8 +33,8 @@ def nacks(h: LinkHarness) -> set[Nack]:
 def test_body_pose_moves_body_when_not_driving(cfg: dict) -> None:
     """歩容を使っていないときは、胴体の姿勢を機体が速度制限つきで作る。"""
     h = armed(cfg)
-    coil = cfg["poses"]["coil"]
-    angles = tuple(float(coil[n]) for n in h.device.mo.body)
+    rest = cfg["poses"]["rest_arc"]
+    angles = tuple(float(rest[n]) for n in h.device.mo.body)
     h.client.body(h.now, angles, 20.0, ttl_ms=800)      # ゆっくり動かして途中を見る
     h.advance(0.5)
     assert 0.0 < h.device.goals["J1"] < angles[0], "速度制限つきで移っている途中のはず"
@@ -47,8 +47,8 @@ def test_body_pose_moves_body_when_not_driving(cfg: dict) -> None:
 def test_body_reaches_pose_when_refreshed(cfg: dict) -> None:
     """期限を更新し続ければ、とぐろの角度まで到達する。"""
     h = armed(cfg)
-    coil = cfg["poses"]["coil"]
-    angles = tuple(float(coil[n]) for n in h.device.mo.body)
+    rest = cfg["poses"]["rest_arc"]
+    angles = tuple(float(rest[n]) for n in h.device.mo.body)
     for _ in range(40):
         h.client.body(h.now, angles, 120.0, ttl_ms=500)
         h.advance(0.1)
