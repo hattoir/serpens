@@ -95,6 +95,18 @@
 | 閉ループ（行動 → 機体 → 世界）と故障注入で安全が勝つこと | `SIMULATED` | `tests/test_closed_loop.py`（13） |
 | run の記録から同じ run を作れること | `SOFTWARE_VERIFIED` | 同上（seed / config hash / model digest） |
 
+## 4.7 Vision Bridge（Phase 4、`docs/phase4_vision_bridge.md`）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| 仮想カメラ画像 → ArUco → 自己位置 → 行動 → 仮想機体 の閉ループ | `SIMULATED` | `tests/test_vision_bridge.py`（9）。位置誤差 p95 約 31mm（**模擬画像**） |
+| 模擬 Vision を実機の開始条件として通さない（`aruco_sim`） | `SOFTWARE_VERIFIED` | 同上 |
+| 自己位置が 0.5s 古くなったら保持し、自動で再開しない | `SIMULATED` | 暗転 3 秒で確認。停止までの惰性 約 31mm |
+| 同じ ID の重複を使わない / 位置の飛びを捨てる | `SOFTWARE_VERIFIED` | 同上 |
+| 近い偽マーカの区別 | **未対策** | 方式の限界。運用規則で避ける |
+| 実カメラでの誤差・遅れ | **未測定** | `vision_sim.latency_s` / `frame_hz` は想定値 |
+| 実カメラ → 自己位置 → セッション | **未実装** | `RealCamera` は人の位置だけを渡している |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

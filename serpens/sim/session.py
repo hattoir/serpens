@@ -27,14 +27,14 @@ from serpens.hw.mock_bus import MockServoBus
 from serpens.hw.servo_bus import Goal, ServoBus, ServoCommError
 from serpens.hw.state_poller import ServoStatePoller
 from serpens.motion.animator import Animator
-from serpens.perception.person_detector import PersonDetection, PersonTracker, TrackedPerson
+from serpens.perception.person_detector import PersonTracker, TrackedPerson
 from serpens.robot import DirectRobot, MotionCommand, RobotInterface
 from serpens.perception.snake_pose import SnakePose, SnakePoseTracker
 from serpens.safety import AutonomyInputs, DriveState, StopSupervisor, autonomy_blockers
+from serpens.sim.sim_vision import GroundTruthObserver, Observation
 from serpens.sim.virtual_camera import SimPerson
 from serpens.sim.world import BodyPose, World
 
-BBOX_NONE = (0.0, 0.0, 0.0, 0.0)
 
 
 class ManualClock:
@@ -53,7 +53,8 @@ class SimSession:
     def __init__(self, cfg: dict[str, Any], start: BodyPose | None = None, seed: int | None = None,
                  overrides: dict[str, dict[str, Any]] | None = None, bus: ServoBus | None = None,
                  head: HeadIO | None = None, robot_is_real: bool = False, pose_source: str = "sim",
-                 robot: RobotInterface | None = None, clock: "ManualClock | None" = None) -> None:
+                 robot: RobotInterface | None = None, clock: "ManualClock | None" = None,
+                 observer: Any | None = None) -> None:
         cfg = copy.deepcopy(cfg)
         for section, values in (overrides or {}).items():
             cfg[section].update(values)
@@ -63,7 +64,11 @@ class SimSession:
         self.ctrl_dt = 1.0 / float(cfg["behavior"]["tick_hz"])
         self.sub = max(int(round(self.ctrl_dt / float(cfg["sim"]["dt_s"]))), 1)
         self.robot_is_real = robot_is_real
-        self.pose_source = pose_source            # "sim"（仮想世界）/ "aruco"（実観測）
+        # 観測の経路。既定はシミュレータの真値。SimVisionObserver で「画像 → ArUco」を通す（Phase 4）
+        self.observer = observer if observer is not None else GroundTruthObserver()
+        # "sim"（真値）/ "aruco_sim"（模擬画像の Vision）/ "aruco"（実観測）
+        self.pose_source = pose_source if observer is None else str(self.observer.pose_source)
+        self.pose_max_age_s = float(cfg["behavior"]["safety"]["autonomy"]["pose_max_age_s"])
         self.world = World(cfg, start)
         # --- 出力先（注入されたものをそのまま全員で使う） ---
         # 駆動リンク経路（robot を注入）ではローカルのサーボバスを作らない。
@@ -86,13 +91,16 @@ class SimSession:
         self.brain = Brain(cfg, self.anim, self.robot.torque_sink, self.head, random.Random(seed))
         self.snake_tracker = SnakePoseTracker(cfg)
         self.person_tracker = PersonTracker(cfg)
-        # 実機は必ず待機から始める。シミュレーションのデモは従来どおりすぐ動く
-        self.stop = StopSupervisor(cfg, self.clock,
-                                   initial=DriveState.HOLD if robot_is_real else DriveState.RUN)
+        # 実機と、Vision を通す模擬は待機から始める（自己位置が入ってから開始操作で動く）。
+        # 真値のシミュレーションのデモは従来どおりすぐ動く
+        self.observes_truth = isinstance(self.observer, GroundTruthObserver)
+        waits = robot_is_real or not self.observes_truth
+        self.stop = StopSupervisor(cfg, self.clock, initial=DriveState.HOLD if waits else DriveState.RUN)
         self.drive_link_ok = self.robot.link_ok or not robot_is_real
         self.people: list[SimPerson] = []
         self.snake: SnakePose | None = None
         self.target: TrackedPerson | None = None
+        self.last_observation: Observation | None = None
         self._serial = 0
         self._switches = 0
         self._ids = {j["name"]: int(j["servo_id"]) for j in cfg["joints"]}
@@ -134,7 +142,18 @@ class SimSession:
 
     def blockers(self) -> list[str]:
         """いま自律走行を許可できない理由（空なら開始できる）。"""
-        return autonomy_blockers(self.cfg, self.autonomy_inputs())
+        return autonomy_blockers(self.cfg, self.autonomy_inputs()) + self.pose_blockers()
+
+    def pose_blockers(self) -> list[str]:
+        """自己位置が無い・古い（**模擬でも**。見えていない位置で走らせない）。真値は常に最新。"""
+        if self.observes_truth:
+            return []
+        age = self.snake_tracker.age_s(self.t)
+        if self.snake is None:
+            return ["自己位置が未取得"]
+        if age > self.pose_max_age_s:
+            return [f"自己位置が古い（{age:.2f}s > {self.pose_max_age_s}s）"]
+        return []
 
     def request_start(self, source: str = "操作") -> tuple[bool, list[str]]:
         """走行を開始する（実機は条件を満たさないと開始しない）。"""
@@ -172,6 +191,9 @@ class SimSession:
             self.world.step(self._world_angles(), self.ctrl_dt / self.sub)
         t = self.clock.t
         self._observe(t)
+        lost = self.pose_blockers() if self.stop.moving_allowed else []
+        if lost:
+            self.request_stop(f"自己位置を見失った: {lost[0]}", source="知覚")   # 復帰は開始操作で
         if not self.stop.moving_allowed:
             self.enforce_stop_output()
             return self.status
@@ -195,10 +217,15 @@ class SimSession:
     def _observe(self, t: float) -> None:
         """ヘビと人の位置を更新する（停止中も更新して、画面と復旧判断に使う）。"""
         j8 = self.poller.positions.get(self._ids["J8"], 0.0)
-        self.snake = self.snake_tracker.update(t, self.world.marker_xy("neck"), self.world.marker_xy("tail"), j8)
-        dets = [PersonDetection(BBOX_NONE, 1.0, np.array([p.x_mm, p.y_mm])) for p in self.people]
+        obs = self.observer.observe(self, t)
+        if obs is None:                                   # 新しい観測なし: 前回値を保持（古さは増える）
+            self.snake = self.snake_tracker.update(t, None, None, j8)
+            return
+        self.last_observation = obs
+        self.snake = self.snake_tracker.update(obs.t_capture, obs.neck_mm, obs.tail_mm, j8)
         before = self.target
-        self.target = self.person_tracker.update(t, dets, None if self.snake is None else np.array([self.snake.x, self.snake.y]))
+        ref = None if self.snake is None else np.array([self.snake.x, self.snake.y])
+        self.target = self.person_tracker.update(obs.t_capture, obs.people, ref)
         if (before is None and self.target is not None) or self.person_tracker.switches != self._switches:
             self._serial += 1
             self._switches = self.person_tracker.switches

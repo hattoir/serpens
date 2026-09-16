@@ -44,6 +44,7 @@ class Pose2D:
     source: PoseSource = PoseSource.UNKNOWN
     at_s: float = 0.0                     # いつの観測か
     confidence: float = 1.0               # 0〜1（Vision では検出スコア）
+    simulated: bool = False               # 模擬画像から得た推定（ARUCO でも実カメラではない）
 
     def distance_to(self, other: "Pose2D") -> float:
         return math.hypot(self.x_mm - other.x_mm, self.y_mm - other.y_mm)
@@ -67,6 +68,12 @@ class WorldState:
     def sources(self) -> set[PoseSource]:
         poses = [p for p in (self.robot, self.head, self.target) if p is not None]
         return {p.source for p in poses} | {p.source for p in self.people}
+
+    @property
+    def any_real_vision(self) -> bool:
+        """**実カメラ**由来の推定が入っているか（模擬画像の Vision は数えない）。"""
+        poses = [p for p in (self.robot, self.head, self.target) if p is not None] + self.people
+        return any(p.source.is_vision and not p.simulated for p in poses)
 
     @property
     def any_vision(self) -> bool:

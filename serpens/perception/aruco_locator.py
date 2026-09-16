@@ -24,6 +24,7 @@ class MarkerObservation:
     tail_mm: np.ndarray | None = None
     corners_px: dict[int, np.ndarray] = field(default_factory=dict)   # 描画用
     rejected_gap: bool = False     # 2枚の距離が離れすぎていて捨てた
+    duplicate_ids: tuple[int, ...] = ()   # 同じ ID が複数写った（どれが本物か分からないので使わない）
 
 
 def make_detector(cfg: dict[str, Any]) -> cv2.aruco.ArucoDetector:
@@ -58,10 +59,12 @@ class ArucoLocator:
         obs = MarkerObservation()
         if ids is None:
             return obs
-        for c, i in zip(corners, ids.flatten()):
-            obs.corners_px[int(i)] = c.reshape(4, 2)
+        flat = [int(i) for i in ids.flatten()]
+        obs.duplicate_ids = tuple(sorted({i for i in flat if flat.count(i) > 1}))
+        for c, i in zip(corners, flat):
+            obs.corners_px[i] = c.reshape(4, 2)
         for mid, attr in ((self.neck_id, "neck_mm"), (self.tail_id, "tail_mm")):
-            if mid in obs.corners_px:
+            if mid in obs.corners_px and mid not in obs.duplicate_ids:   # 検出順で偶然選ばない
                 center = obs.corners_px[mid].mean(axis=0)
                 p = self.homography.image_to_floor(center)[0]
                 setattr(obs, attr, correct_height(p, self.height_mm, self.camera_mm))

@@ -92,8 +92,20 @@ class VirtualCamera:
 
     def _draw_marker(self, img: np.ndarray, world: World, which: str, tex: np.ndarray) -> None:
         """胴体上面にマーカを貼る（胴体の接線方向に向ける）。"""
-        c = world.marker_xy(which)
-        t = world.marker_tangent(which)
+        self._draw_marker_at(img, world.marker_xy(which), world.marker_tangent(which), tex)
+
+    def draw_extra_marker(self, img: np.ndarray, which: str, floor_xy: np.ndarray, tangent: np.ndarray) -> None:
+        """**故障注入用**: 胴体と無関係な場所に同じ ID のマーカを描く（誤検出の再現）。"""
+        key = "neck_id" if which == "neck" else "tail_id"
+        self._draw_marker_at(img, np.asarray(floor_xy, float), np.asarray(tangent, float), self._tex[key])
+
+    def occlude(self, img: np.ndarray, floor_xy: np.ndarray, radius_mm: float) -> None:
+        """**故障注入用**: 床の一点の上（マーカの高さ）を塗りつぶす（手や物で隠れた状態）。"""
+        c = self._to_px(np.asarray(floor_xy, float), self.marker_h)[0]
+        r = radius_mm * self.homography.px_per_mm_at(np.asarray(floor_xy, float))
+        cv2.circle(img, (int(c[0]), int(c[1])), max(int(r), 1), PERSON_BGR, -1)
+
+    def _draw_marker_at(self, img: np.ndarray, c: np.ndarray, t: np.ndarray, tex: np.ndarray) -> None:
         n = np.array([-t[1], t[0]])
         half = (self.marker_mm / 2 + self.margin_mm)
         corners = np.array([c - t * half + n * half, c + t * half + n * half,

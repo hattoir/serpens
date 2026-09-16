@@ -1,10 +1,10 @@
 """World State への橋渡し（Phase 4 の入口）。
 
-    Simulated Vision（いまは Ground Truth）→ **World State** → Behavior → Motion Planner
+    Simulated Vision（真値 or 模擬画像の ArUco）→ **World State** → Behavior → Motion Planner
     → RobotInterface → SimulatedSnake → Virtual ESP32 → 仮想サーボ → 世界
 
-**いまは真値をそのまま流している。** Phase 4 でカメラを繋いだら、`PoseSource` が
-`GROUND_TRUTH_SIM` から `ARUCO` / `PERSON_DETECTOR` へ変わるだけで、上位は変わらない。
+観測器が真値なら `GROUND_TRUTH_SIM`、模擬画像の Vision（`SimVisionObserver`）なら
+`ARUCO` / `PERSON_DETECTOR` に **simulated=True** を付ける。実カメラなら simulated=False。
 真値を「Vision が成功した」として数えないために、出どころを必ず付けて回す。
 """
 from __future__ import annotations
@@ -15,25 +15,37 @@ from serpens.world_state import Pose2D, PoseSource, WorldState
 from simulation.virtual_person import VirtualPerson
 
 # セッションの pose_source（"sim" / "aruco"）→ World State の出どころ
-SESSION_SOURCE = {"sim": PoseSource.GROUND_TRUTH_SIM, "aruco": PoseSource.ARUCO}
+SESSION_SOURCE = {"sim": PoseSource.GROUND_TRUTH_SIM, "aruco": PoseSource.ARUCO,
+                  "aruco_sim": PoseSource.ARUCO}
+SIMULATED_SOURCES = {"sim", "aruco_sim"}
 
 
 def world_state_from_session(session: Any) -> WorldState:
     """`SimSession` の見ているものを World State にする。"""
     t = session.t
-    src = SESSION_SOURCE.get(getattr(session, "pose_source", "sim"), PoseSource.UNKNOWN)
+    name = getattr(session, "pose_source", "sim")
+    src = SESSION_SOURCE.get(name, PoseSource.UNKNOWN)
+    sim = name in SIMULATED_SOURCES
     ws = WorldState(t=t)
     snake = session.snake
     if snake is not None:
-        ws.robot = Pose2D(snake.x, snake.y, snake.theta_body, src, at_s=t)
-        ws.head = Pose2D(snake.x, snake.y, snake.theta_head, src, at_s=t)
+        # 観測の時刻は「マーカが最後に見えた時刻」（古さを隠さない）
+        at = snake.t if src.is_vision else t
+        ws.robot = Pose2D(snake.x, snake.y, snake.theta_body, src, at_s=at, simulated=sim)
+        ws.head = Pose2D(snake.x, snake.y, snake.theta_head, src, at_s=at, simulated=sim)
     # 人は、シミュレーションでは真値。実機では人物検出（PERSON_DETECTOR）へ差し替わる
     person_src = PoseSource.GROUND_TRUTH_SIM if src is PoseSource.GROUND_TRUTH_SIM \
         else PoseSource.PERSON_DETECTOR
-    ws.people = [Pose2D(p.x_mm, p.y_mm, 0.0, person_src, at_s=t) for p in session.people]
+    if src.is_vision and getattr(session, "last_observation", None) is not None:
+        obs = session.last_observation              # 検出器が見た人（真値ではない）
+        ws.people = [Pose2D(float(d.floor_mm[0]), float(d.floor_mm[1]), 0.0, person_src,
+                            at_s=obs.t_capture, confidence=d.conf, simulated=sim) for d in obs.people]
+    else:
+        ws.people = [Pose2D(p.x_mm, p.y_mm, 0.0, person_src, at_s=t, simulated=sim) for p in session.people]
     if session.target is not None:
         xy = session.target.floor_mm
-        ws.target = Pose2D(float(xy[0]), float(xy[1]), 0.0, person_src, at_s=t)
+        at = session.target.last_seen_t if src.is_vision else t
+        ws.target = Pose2D(float(xy[0]), float(xy[1]), 0.0, person_src, at_s=at, simulated=sim)
     return ws
 
 

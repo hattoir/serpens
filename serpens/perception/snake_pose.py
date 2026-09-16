@@ -9,6 +9,11 @@
   首だけ  … 位置は更新、向きは前回値を保持
   尾だけ  … 前回の「尾→首」の距離と向きで首の位置を推定、向きは保持（estimated=True）
   両方×  … 前回値を保持（stale 判定は age で）
+
+位置の飛び: 前回の位置から `max_speed_mm_s × 経過時間 + jump_margin_mm` を超えて動いた観測は
+**誤検出（偽マーカ等）として捨てる**（前回値を保持し、古さが増える → 止まる）。
+stale_after_s を過ぎて位置不明になった後は、**首と尾の両方が見えたとき**だけ新しい位置を受け入れる
+（持ち上げて置き直した等）。片方だけでは初期化しない（偽マーカ 1 枚で位置を作らない）。
 """
 from __future__ import annotations
 
@@ -52,6 +57,9 @@ class SnakePoseTracker:
         period = 1.0 / abs(float(ref["temporal_freq_hz"]))
         self.tau_s = float(sp["heading_tau_periods"]) * period
         self.stale_after_s = float(sp["stale_after_s"])
+        self.max_speed_mm_s = float(sp["max_speed_mm_s"])
+        self.jump_margin_mm = float(sp["jump_margin_mm"])
+        self.rejected_jumps = 0
         self.method = str(sp["heading_filter"])
         if self.method not in HEADING_FILTERS:
             raise ValueError(f"snake_pose.heading_filter: {self.method}（{HEADING_FILTERS}）")
@@ -64,12 +72,16 @@ class SnakePoseTracker:
     def update(self, t: float, neck: np.ndarray | None, tail: np.ndarray | None, j8_deg: float) -> SnakePose | None:
         """観測を1回取り込む。neck / tail は見えなければ None。"""
         prev = self.pose
+        if prev is not None and self.stale(t) and (neck is None or tail is None):
+            prev = None                                   # 位置不明から戻るには両方要る
+            neck = tail = None
         raw = prev.theta_body_raw if prev else None
         est = False
+        span: float | None = None
         if neck is not None and tail is not None:
             d = np.asarray(neck, float) - np.asarray(tail, float)
             raw = math.atan2(float(d[1]), float(d[0]))
-            self._span_mm = float(np.linalg.norm(d))
+            span = float(np.linalg.norm(d))
             pos = np.asarray(neck, float)
         elif neck is not None:
             pos = np.asarray(neck, float)
@@ -82,6 +94,11 @@ class SnakePoseTracker:
                 self.pose = SnakePose(prev.x, prev.y, prev.theta_body_raw, prev.theta_body,
                                       wrap_pi(prev.theta_body + math.radians(j8_deg)), prev.t, False, False)
             return self.pose
+        if prev is not None and not self.stale(t) and self._jumped(prev, pos, t):
+            self.rejected_jumps += 1
+            return self.update(t, None, None, j8_deg)     # 観測なしと同じ扱い
+        if span is not None:
+            self._span_mm = span
         if raw is None:          # 最初の観測で向きが分からない
             return None
         body = self._lowpass(raw, t)
@@ -89,6 +106,10 @@ class SnakePoseTracker:
                               wrap_pi(body + math.radians(j8_deg)), t,
                               neck is not None, tail is not None, est)
         return self.pose
+
+    def _jumped(self, prev: SnakePose, pos: np.ndarray, t: float) -> bool:
+        limit = self.max_speed_mm_s * max(t - prev.t, 0.0) + self.jump_margin_mm
+        return float(np.hypot(pos[0] - prev.x, pos[1] - prev.y)) > limit
 
     def _lowpass(self, raw: float, t: float) -> float:
         """単位ベクトルでフィルタする（±π の折り返しで暴れない）。

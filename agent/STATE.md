@@ -4,7 +4,14 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-16 更新）
+## Current Goal（2026-09-16 Phase 4 更新）
+
+**Phase 4 Vision Bridge（模擬）が閉じた。** 仮想カメラ画像 → 本物の ArUco 検出 → 自己位置 → 行動 →
+仮想 ESP32 → 世界。故障注入（欠落・暗転・遮蔽・偽マーカ・偽の人）で、見失ったら保持・自動再開しないことを確認。
+`ELECTRICAL_SAFETY_GATE`（8項目すべて INCOMPLETE）が実機の自律走行を止めている。
+次: 実カメラ用の観測器（RealCamera → session の自己位置）、再開前の位置確認の手順、電子系 BOM。
+
+## Current Goal（2026-09-16 更新・旧）
 
 Phase 2/3 の仮想実機は安定し、**MuJoCo の 3D モデルと閉ループ**まで繋がった。
 次は実機が来た日に前へ進むための準備（電子系 BOM / 接触→脱力の機体側実装 / サーボ層）。
@@ -58,6 +65,10 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 
 ## Current Problems
 
+0. （2026-09-16 Phase 4）**実カメラの自己位置がセッションへ入らない**（`RealCamera` は人だけ渡す）。
+   近い偽マーカは区別できない（`docs/phase4_vision_bridge.md` §4）。接触→脱力は要求未確定
+   （`docs/contact_release_requirements.md`）。電気安全ゲートは全項目未実測
+
 1. **実 ESP32 が無い。** リンク経路は模擬機体でしか動かしていない（`--robot link --link-port COMx` は未検証）
 2. **接触 → 脱力が 800ms**（構想設計書の目標 20ms）。PC を経由する限り届かない。機体側で負荷を見る必要がある
 3. **電気的制限（層2）が無い**。電流検出も、独立して電源を切る安全 MCU も無い（`docs/safety_limits.md` §3）
@@ -88,7 +99,14 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions
+## Next Best Actions（2026-09-16 Phase 4 後）
+
+1. 実カメラ用の観測器（`observer` を `RealCamera` のスレッドから受け取る形）。録画ファイルで試せるようにする
+2. 位置不明からの再開前に、GUI で推定位置を確かめさせる（偽マーカでの再取得対策）
+3. 電子系のブロック図と BOM（ゲートの independent_power_cut / physical_estop / overcurrent を埋める設計）
+4. 接触→脱力の Q1〜Q5 を決めてもらう（製品・機構の判断）
+
+## Next Best Actions（旧）
 
 1. **接触 → 脱力を機体側へ**（`link.faults` に負荷しきい値、100Hz で判定）。20ms 目標への唯一の道
 2. 電子系のブロック図と BOM（MCU・ドライバ・配電・電流検出・IMU）。層2 が丸ごと無い

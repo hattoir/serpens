@@ -102,6 +102,10 @@ snake_pose:
   # lowpass: 一次遅れ（定常旋回で ω·τ 遅れる。旋回中は 40° 近く遅れた = STEP 5 の測定）
   heading_filter: moving_average
   stale_after_s: 1.0          # マーカがこれ以上見えなければ「位置不明」扱い
+  # 位置の飛びの門（偽マーカ対策）。模擬の最速（MuJoCo WHEEL で約 160mm/s）の 2.5 倍と、
+  # 検出誤差（模擬で p95 約 30mm）+ 遅れぶんの余裕。**実カメラで測り直す**
+  max_speed_mm_s: 400.0
+  jump_margin_mm: 80.0
 
 # 自己干渉チェック（とぐろ等のポーズ検証）
 self_collision:
@@ -306,6 +310,12 @@ virtual_camera:
   position_mm: [600.0, 1370.0, 1100.0]   # 仮想カメラの位置（実カメラと同じ。視差の再現用）
   person_height_mm: 1650.0
   person_width_mm: 450.0
+
+# 模擬 Vision（Phase 4。serpens/sim/sim_vision.py）。仮想カメラの画像に本物の ArUco 検出を通す。
+# **どちらも想定値（未実測）。** 実カメラが来たら処理時間を測って置き換える
+vision_sim:
+  frame_hz: 10.0              # 撮影と検出の頻度
+  latency_s: 0.10             # 撮影から結果が制御へ入るまで（推論・転送の想定）
 
 # ---------------------------------------------------------------------------
 # 内部状態と行動（STEP 6）。数値は全部ここ。実機を見ながら必ず変える
