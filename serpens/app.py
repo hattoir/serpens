@@ -207,6 +207,10 @@ def _make_link_robot(cfg: dict[str, Any], port: str | None, session_clock: Any) 
 
     if port:
         print(f"RealSnake: {port} へ接続します（**HARDWARE_UNVERIFIED**）")
+        from serpens.electrical_gate import electrical_gate_blockers
+        gate = electrical_gate_blockers(cfg)
+        if gate:
+            print(f"ELECTRICAL_SAFETY_GATE: 未完了 {len(gate)} 項目。自律走行は開始できません")
         return RealSnake(cfg, session_clock, port)
     print("SimulatedSnake: 仮想 ESP32 + 仮想サーボ（serpens/link/device.py）。実機は --link-port COMx")
     return SimulatedSnake(cfg, session_clock)

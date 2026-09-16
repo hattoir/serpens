@@ -34,11 +34,14 @@
 | 項目 | レベル | 根拠 |
 |---|---|---|
 | 可動域 geometry ±90° | `HARDWARE_UNVERIFIED` | 設計値 |
-| 可動域 mechanical ±64°（±65° で Belly Shell 干渉） | `HARDWARE_UNVERIFIED` | CAD `Serpens_BELLY_R03_TWO_LINK_REVIEW` の検討結果。**実物での確認は未** |
-| operational ±60°（暫定） | `HARDWARE_UNVERIFIED` | 上記から呼吸 ±2° ぶんの余裕を引いた値。最終値は機械側の決定待ち |
+| 干渉の始まり 64.8°（干渉なし）〜 64.9°（干渉） | `HARDWARE_UNVERIFIED` | CAD R03 の検討結果（verified_in_cad）。**clamp には使わない。** ケーブル込み・実物では未確認 |
+| mechanical_design_limit ±55°（PROVISIONAL） | `HARDWARE_UNVERIFIED` | CAD R03 の提案値 |
+| software_operational_limit ±50°（CONDITIONAL） | `HARDWARE_UNVERIFIED` | 実機試験の**候補値**であって実機運転の許可ではない。`config/robot.yaml` の `joint_limit_policy` |
 | 最小曲げ半径 82.3mm / 輪の内径 114mm | `SOFTWARE_VERIFIED` | 幾何計算（`tests/test_safety_limits.py`）。**外皮を着せた実物では変わりうる** |
 | とぐろが自己干渉しない（クリアランス 89.6mm） | `SOFTWARE_VERIFIED` | 中心線の距離計算。外皮の厚みは未考慮 |
-| トルク上限 1.18N·m（ストール比 0.40） | `HARDWARE_UNVERIFIED` | **12V 版**の 30kgf·cm からの逆算。第一候補が **7.4V 1:191** に変わったため要再計算 |
+| ソフトのトルク上限 0.450N·m（ストール参照比 0.287） | `HARDWARE_UNVERIFIED` | C044（7.4V/1:191）の**参照値**（rated 5.2 / stall 16 kgf·cm）から。`measured_safe_torque_nm` は null |
+| ELECTRICAL_SAFETY_GATE（8項目） | **全項目 INCOMPLETE** | `docs/safety_limits.md` §5。閉じている間は実機の自律走行を拒否（`SOFTWARE_VERIFIED`: `tests/test_electrical_gate.py`） |
+| 接触 → 脱力 20ms | **未達・要求未確定** | `docs/contact_release_requirements.md` |
 | 挟み込み力 12.4N | `HARDWARE_UNVERIFIED` | 計算値。ISO/TS 15066 との比較も未（規格本文を参照できていない） |
 | サーボの応答（一次遅れ・速度上限・温度上昇） | `SIMULATED` | `mock_servo` の係数はすべて仮値 |
 | STS3215 のレジスタ仕様 | `HARDWARE_UNVERIFIED` | 一次資料（Waveshare/Feetech）で確認済みだが実機で試していない。`docs/sts3215_registers.md` |

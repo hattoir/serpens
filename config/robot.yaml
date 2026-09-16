@@ -464,6 +464,19 @@ safety_limits:
   servo_temp_stop_c: 80       # 構想設計書の L0。本機は link.faults.temp_limit_c(60) で手前から止める
   contact_release_ms: 20      # 接触検知 → 脱力の目標。**現状 800ms。未達**（docs/safety_limits.md）
   comms_loss_safe_ms: 3000    # 構想設計書の目標。本機は 400ms で保持（より厳しい）
+  # ---- ELECTRICAL_SAFETY_GATE（docs/safety_limits.md §5）----
+  # 実機で測って証拠（日付・条件・測定器）を書くまで COMPLETE にしない。
+  # **1 項目でも INCOMPLETE なら実機の自律走行は許可しない**（serpens/electrical_gate.py）。
+  # 模擬の結果でここを埋めない。
+  electrical_safety_gate:
+    real_current:          {status: INCOMPLETE, evidence: null, what: "9軸の実電流（待機・歩容・ストール）"}
+    power_capacity:        {status: INCOMPLETE, evidence: null, what: "電源容量と電圧降下（全軸同時の突入を含む）"}
+    overcurrent_protection: {status: INCOMPLETE, evidence: null, what: "過電流保護（ヒューズ/ポリスイッチ/電子遮断）が働くこと"}
+    wiring_heat:           {status: INCOMPLETE, evidence: null, what: "配線・コネクタの発熱（連続運転）"}
+    independent_power_cut: {status: INCOMPLETE, evidence: null, what: "ESP32 に依存しないサーボ電源の遮断経路"}
+    physical_estop:        {status: INCOMPLETE, evidence: null, what: "人が手で押せる物理の緊急停止"}
+    servo_temperature:     {status: INCOMPLETE, evidence: null, what: "実サーボの温度上昇と 60℃ 停止の実働"}
+    real_stop_time:        {status: INCOMPLETE, evidence: null, what: "緊急停止・通信断から実際に止まるまでの時間"}
 
 # ---------------------------------------------------------------------------
 # サーボ STS3215（出典は docs/sts3215_registers.md）

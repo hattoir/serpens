@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable
 
+from serpens.electrical_gate import electrical_gate_blockers
+
 Clock = Callable[[], float]
 
 
@@ -171,6 +173,7 @@ def autonomy_blockers(cfg: dict[str, Any], inputs: AutonomyInputs) -> list[str]:
     if not inputs.torque_ceiling_ok:
         ratio = cfg["safety_limits"]["torque"]["software_torque_limit_ratio"]
         out.append(f"トルク上限を全軸へ設定できていない（ストール比 {ratio}）")
+    out.extend(electrical_gate_blockers(cfg))            # 実測が無い間は必ず止まる
     if inputs.telemetry_axes < inputs.expected_axes:
         out.append(f"テレメトリ不足: {inputs.telemetry_axes}/{inputs.expected_axes} 軸しか読めていない")
     elif inputs.telemetry_age_s is not None and inputs.telemetry_age_s > float(t["stale_after_s"]):

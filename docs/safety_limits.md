@@ -73,7 +73,7 @@ F = T / r = 0.450 N·m / 0.095 m ≒ 4.7 N
 
 ## 3. 未達の項目（隠さない）
 
-1. **接触 → 脱力 20ms。** いまは PC 側が負荷率 0.75 を 800ms 観測してから脱力する。
+1. **接触 → 脱力 20ms**（要求の穴と時間予算は [contact_release_requirements.md](contact_release_requirements.md)）。いまは PC 側が負荷率 0.75 を 800ms 観測してから脱力する。
    20ms は PC を経由する限り届かない（テレメトリ 10Hz + 往復）。**機体側で負荷を見て切る必要がある。**
    → `link.faults` に負荷のしきい値を足し、ファームの制御周期（100Hz = 10ms）で判定する設計にする。
 2. **電気的制限（層2）が丸ごと無い。** 電流検出も、独立電源でサーボバスを切る安全 MCU も無い。
@@ -97,6 +97,26 @@ F = T / r = 0.450 N·m / 0.095 m ≒ 4.7 N
   本機は**その場で保持**する（ホーム姿勢へも動かさない）。とぐろが要るのは充電ドッキングの文脈で、
   そちらは人の操作か機体の自己判断が確立してから足す。
 - **トルク比は「安全上限に対する割合」**に統一した。脱力演出（`poses.relax.torque_ratio: 0.6`）は
-  0.6 × 0.40 = **0.24**（ストールの 24%）になる。演出の経路から全力へ戻せない。
+  0.6 × 0.287 = **0.17**（ストール参照値の 17%）になる。演出の経路から全力へ戻せない。
 - 機体側の温度上限（60℃）は構想設計書の 80℃ より手前。サーボの最高温度の初期値は 70℃
   （`docs/sts3215_registers.md`）なので、**サーボ自身が止まるより先にこちらが止める**。
+
+## 5. ELECTRICAL_SAFETY_GATE（実機の前に必ず通す）
+
+`config/robot.yaml` の `safety_limits.electrical_safety_gate`。**8 項目すべてが INCOMPLETE（2026-09-16）。**
+1 項目でも未完了なら `autonomy_blockers()` が実機の自律走行を拒否する（`serpens/electrical_gate.py`、
+`tests/test_electrical_gate.py`）。COMPLETE にするには**証拠**（日付・条件・測定器）が要り、
+状態だけ書き換えても通らない。シミュレーションの結果では埋めない。
+
+| 項目 | 確かめること | 状態 |
+|---|---|---|
+| real_current | 9軸の実電流（待機・歩容・ストール） | INCOMPLETE |
+| power_capacity | 電源容量と電圧降下（全軸同時の突入を含む） | INCOMPLETE |
+| overcurrent_protection | 過電流保護が実際に働くこと | INCOMPLETE |
+| wiring_heat | 配線・コネクタの発熱（連続運転） | INCOMPLETE |
+| independent_power_cut | ESP32 に依存しないサーボ電源の遮断経路 | INCOMPLETE（回路が無い） |
+| physical_estop | 人が手で押せる物理の緊急停止 | INCOMPLETE（部品が無い） |
+| servo_temperature | 実サーボの温度上昇と 60℃ 停止の実働 | INCOMPLETE |
+| real_stop_time | 緊急停止・通信断から実際に止まるまでの時間 | INCOMPLETE |
+
+接触 → 脱力（20ms）は要求そのものが未確定なので別文書: [contact_release_requirements.md](contact_release_requirements.md)。

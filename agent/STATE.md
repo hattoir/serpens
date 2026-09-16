@@ -46,12 +46,12 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
   **アプリ経路でも PC 強制終了・USB 抜去で機体が自分で止まる**ことを試験で確認
 - Virtual ESP32（7状態）+ 仮想サーボバス + テレメトリ v2（source=SIMULATION）
 - 故障注入 4層（経路 / 機体 / サーボ / 指令値）と `docs/verification_status.md` の4段区分
-- 可動域を3段化し CAD R03（±64°）へ。輪の内径 114mm で構想設計書16章を満たした
+- 可動域を意味別に分割（干渉開始 64.8/64.9° / mechanical ±55° / software ±50° CONDITIONAL）
 - Belly（wheel/snake）× 摩擦プロファイル、歩容パラメータの掃引（`tools/gait_sweep.py`）
 - GUI 下段に関節ペイン（指令角・実測角・安全・機体状態）
 - 全 274 件が緑（`.venv/Scripts/python.exe -m pytest -q`、約 65 秒）
 - 安全の絶対値（構想設計書 16章）を `config/robot.yaml` の `safety_limits` と
-  `tests/test_safety_limits.py`（10件）に落とした。トルク上限 1.18N·m を**経路を問わず**強制
+  `tests/test_safety_limits.py`（10件）に落とした。トルク上限（C044 参照値から 0.450N·m、比 0.287）を**経路を問わず**強制
 - 駆動リンクに BODY（胴体姿勢）と TORQUE（脱力）を追加。とぐろ・鎌首・脱力がリンク越しに出せる
 - 胴体ヨーの本数と移動性能の関係を測定（`docs/product_status.md` §3）
 - 関節数の決め打ちを除去（`device_motion.py`。3軸構成で `KeyError` だったのを修正）
@@ -69,7 +69,7 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 
 ## 直近で判断が要ること
 
-- **胴体ヨーの operational limit ±60° は暫定**（CAD R03 の ±64° 由来）。とぐろの形がこれで決まる
+- **胴体ヨーの software limit ±50° は CONDITIONAL**。展示用とぐろは R03 の範囲で再設計が要る（機構担当）
 - **STS3215 7.4V 1:191 のストールトルクが未確認** → 安全のトルク上限を出し直せない
 - ESP32 ⇄ サーボバスの配線方式（ファームを書き込めない理由）
 

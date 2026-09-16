@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import sys
 import time
 from pathlib import Path
@@ -169,12 +170,17 @@ def test_sim_session_keeps_working(cfg: dict) -> None:
 def test_autonomy_blockers_list_reasons(cfg: dict) -> None:
     """不足している条件が個別に言葉で出る。"""
     bad = AutonomyInputs(True, "sim", None, False, False, False, 0, 9, None)
-    why = autonomy_blockers(cfg, bad)
+    why = [w for w in autonomy_blockers(cfg, bad) if "電気安全ゲート" not in w]
     assert len(why) == 5, why          # 自己位置・校正・駆動リンク・トルク上限・テレメトリ
     ok = AutonomyInputs(True, "aruco", 0.1, True, True, True, 9, 9, 0.2)
-    assert autonomy_blockers(cfg, ok) == []
+    # 電気の実測が無い既定の config では、他の条件がそろっても実機は走らない
+    assert autonomy_blockers(cfg, ok) and all("電気安全ゲート" in w for w in autonomy_blockers(cfg, ok))
+    measured = copy.deepcopy(cfg)
+    for item in measured["safety_limits"]["electrical_safety_gate"].values():
+        item.update(status="COMPLETE", evidence="試験用の仮の証拠")
+    assert autonomy_blockers(measured, ok) == []
     stale = AutonomyInputs(True, "aruco", 5.0, True, True, True, 9, 9, 9.0)
-    assert any("古い" in w for w in autonomy_blockers(cfg, stale))
+    assert any("古い" in w for w in autonomy_blockers(measured, stale))
 
 
 # ---- 6. 状態の欠損・鮮度 --------------------------------------------------------------
