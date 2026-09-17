@@ -121,3 +121,16 @@ class RecordingBus(MockServoBus):
     @property
     def last_pose(self) -> dict[int, float]:
         return self.goal_calls[-1] if self.goal_calls else {}
+
+
+def steady_patrol(cfg: dict) -> dict:
+    """巡回の stop-and-go を切った設定の写し（静止 0 秒 = 歩き続ける）。
+
+    リンク・Vision など**歩容が出ている最中の性質**を確かめる試験用。
+    間欠移動そのものは tests/test_behavior_sim.py で確かめる。
+    """
+    import copy
+
+    out = copy.deepcopy(cfg)
+    out["behavior"]["controller"]["patrol_pause_s"] = [0.0, 0.0]
+    return out

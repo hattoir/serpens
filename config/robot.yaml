@@ -427,6 +427,11 @@ behavior:
     patrol_radius_mm: 200.0
     patrol_lead_deg: 50.0         # 現在位置より何度先に目標点を置くか
     patrol_flip_s: [25.0, 60.0]   # この間隔で回る向きを変える（同じ向きに回り続けると単調）
+    # stop-and-go（間欠移動）。間欠移動する動物は移動時間の平均約50%（範囲6〜94%）を静止に費やす
+    # （Integr. Comp. Biol. 41(2):137）。歩き続けると「ルンバ」に見える。静止中も呼吸は続く。
+    # 期待値 3s 動いて 4s 止まる（歩容の立ち上がり・立ち下がり blend_s が動く側に乗る）。静止中は騒音ゼロ
+    patrol_move_s: [2.0, 4.0]
+    patrol_pause_s: [2.0, 6.0]
     lookahead_mm: 250.0
     recover_heading_ok_deg: 45.0  # 中央を向いたとみなす誤差
     retreat_distance_mm: 900.0    # 逃げるときの目標: 人から離れた点までの距離

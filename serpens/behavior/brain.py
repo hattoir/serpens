@@ -93,6 +93,8 @@ class Brain:
         self._waypoint: np.ndarray | None = None
         self._patrol_dir = 1.0
         self._patrol_flip_t = 0.0
+        self.patrol_paused = False           # 巡回の stop-and-go: いま立ち止まっているか
+        self._patrol_phase_until = -1.0
         self._approach_stage = 0
         self._stage_goal_dist = 0.0
         self._approach_start = np.zeros(2)
@@ -268,6 +270,8 @@ class Brain:
             self._waypoint = None
             lo, hi = self.b["controller"]["patrol_flip_s"]
             self._patrol_flip_t = t + self.rng.uniform(float(lo), float(hi))
+            self.patrol_paused = False
+            self._patrol_phase_until = t + self._u_ctrl("patrol_move_s")
             self.anim.play(Keyframe({NECK: self.poses.home()[NECK]}, 1.0), t)
         elif s in STILL_STATES and snake is not None and person is not None:
             neck = float(x["alert_neck_deg"] if s == "ALERT" else x["engage_neck_deg"])
@@ -297,7 +301,9 @@ class Brain:
         if snake is None:
             self._set_drive(DriveCommand(False, reason="位置不明: 停止"))
             return
-        if s == "PATROL":
+        if s == "PATROL" and self._patrol_pausing(t):
+            self._set_drive(DriveCommand(False, reason="巡回: 立ち止まって様子をうかがう"))
+        elif s == "PATROL":
             self._waypoint = self._patrol_target(t, snake)
             # 安全: 1m 以内の速度制限は「気づいたか」に関係なく、追跡中の人に対して必ずかける
             self._set_drive(self.ctrl.drive_to(t, snake, self._waypoint, float(c["speed_patrol_mm_s"]), self._last_person_raw))
@@ -310,6 +316,23 @@ class Brain:
         elif s in STILL_STATES and person is not None:
             self.expr.look_at(t, self._yaw_to(snake, person))
             self.expr.maybe_tilt(t)
+
+    def _u_ctrl(self, key: str) -> float:
+        lo, hi = self.b["controller"][key]
+        return self.rng.uniform(float(lo), float(hi))
+
+    def _patrol_pausing(self, t: float) -> bool:
+        """巡回の stop-and-go。動く → 止まる → 動く を乱数の長さで繰り返す（呼吸は止めない）。
+
+        マット端から後退で戻っている最中は止まらない（端に頭を向けたまま居座らないため）。
+        """
+        if self._patrol_phase_until < 0.0:               # 起動直後（_on_enter を通らない）は動くところから
+            self._patrol_phase_until = t + self._u_ctrl("patrol_move_s")
+        if t >= self._patrol_phase_until and not (not self.patrol_paused and self.ctrl.phase == "back"):
+            pause_s = 0.0 if self.patrol_paused else self._u_ctrl("patrol_pause_s")
+            self.patrol_paused = pause_s > 0.0           # 静止 0 秒の設定なら歩き続ける（試験・比較用）
+            self._patrol_phase_until = t + (pause_s if self.patrol_paused else self._u_ctrl("patrol_move_s"))
+        return self.patrol_paused
 
     def _patrol_target(self, t: float, snake: SnakePose) -> np.ndarray:
         """巡回の目標点: 中央の円の上を、いまの位置より patrol_lead_deg 先に置く（キャロット追従）。

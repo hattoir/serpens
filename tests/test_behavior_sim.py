@@ -127,7 +127,26 @@ def test_patrol_keeps_off_the_mat_edge(cfg: dict, seed: int) -> None:
     assert np.mean(clamped) < 0.01
     pts = np.array([m for m in moved if m is not None])
     travel = float(np.sum(np.linalg.norm(np.diff(pts, axis=0), axis=1)))
-    assert travel > 5000.0          # 止まって 0% になっていないこと（90秒で 5m 以上動く）
+    assert travel > 2000.0          # 止まったままになっていないこと（stop-and-go で約半分は静止している）
+
+
+def test_patrol_is_stop_and_go_and_keeps_breathing(cfg: dict) -> None:
+    """巡回は動いては止まる（静止 40〜60% 目標）。止まっている間も呼吸で首が動き続ける。"""
+    s = SimSession(cfg, BodyPose(150.0, 600.0, 0.0), seed=6)
+    paused, neck_while_paused, gait_while_paused = [], [], []
+
+    def watch(ss: SimSession) -> None:
+        if ss.brain.fsm.state != "PATROL":
+            return
+        paused.append(ss.brain.patrol_paused)
+        if ss.brain.patrol_paused and not ss.anim.gait.active:
+            neck_while_paused.append(ss.anim.last_output["J7"])
+            gait_while_paused.append(ss.anim.last_output["J3"] - ss.anim.last_base["J3"])
+
+    run_until(s, 120.0, hook=watch)
+    assert 0.35 <= float(np.mean(paused)) <= 0.70, np.mean(paused)
+    assert np.ptp(neck_while_paused) > 1.0            # 呼吸は続いている（物体に戻らない）
+    assert max(abs(g) for g in gait_while_paused) < 3.0   # 胴体は歩容していない（呼吸ぶんだけ）
 
 
 RUSH_MM_S = 1200.0       # 駆け込み（歩行 250〜500mm/s より明らかに速い）

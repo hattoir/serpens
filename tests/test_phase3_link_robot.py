@@ -15,13 +15,14 @@ from serpens.link.robot import LinkRobot
 from serpens.link.transport import LoopbackTransport
 from serpens.sim.session import ManualClock, SimSession
 from serpens.sim.world import BodyPose
+from tests.helpers import steady_patrol
 
 START = BodyPose(150.0, 600.0, 0.0)
 
 
 @pytest.fixture()
 def cfg() -> dict:
-    return load_config()
+    return steady_patrol(load_config())     # 歩容が出ている最中の性質を見る（stop-and-go は別の試験）
 
 
 class Rig:

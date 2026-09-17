@@ -21,13 +21,14 @@ from serpens.world_state import PoseSource
 from simulation.bridge import world_state_from_session
 from simulation.virtual_person import scenario
 from simulation.vision_loop import START, VisionLoop
+from tests.helpers import steady_patrol
 
 FAR_GHOST = (100.0, 1100.0)          # マットの奥の隅（胴体から遠い）
 
 
 @pytest.fixture(scope="module")
 def cfg() -> dict:
-    return load_config()
+    return steady_patrol(load_config())     # 歩容が出ている最中の性質を見る（stop-and-go は別の試験）
 
 
 def run(cfg: dict, faults: VisionFaults | None = None, seconds: float = 10.0) -> VisionLoop:
