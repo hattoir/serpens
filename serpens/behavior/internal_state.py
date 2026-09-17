@@ -84,6 +84,10 @@ class InternalState:
             a = 1.0 - math.exp(-dt / self._e_tau) if self._e_tau > 0 else 1.0
             self.energy += a * (target - self.energy)
 
+    def kick(self, name: str, amount: float) -> None:
+        """一度きりの出来事（驚きなど）で値を一段動かす。0〜1 にクランプ。"""
+        self.values[name] = min(max(self.values[name] + amount, 0.0), 1.0)
+
     def snapshot(self) -> dict[str, float]:
         """GUI・ログ用。"""
         d = dict(self.values)

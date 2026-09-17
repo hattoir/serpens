@@ -130,16 +130,30 @@ def test_patrol_keeps_off_the_mat_edge(cfg: dict, seed: int) -> None:
     assert travel > 5000.0          # 止まって 0% になっていないこと（90秒で 5m 以上動く）
 
 
-def test_person_rushing_in_causes_retreat(cfg: dict) -> None:
+RUSH_MM_S = 1200.0       # 駆け込み（歩行 250〜500mm/s より明らかに速い）
+WALK_MM_S = 450.0        # 普通に歩いて近づく来場者
+
+
+def _come_closer(cfg: dict, speed: float) -> list:
+    """検出範囲の中（-700）に立って気づかれた人が、12 秒後に -100 まで speed で近づく。"""
     s = SimSession(cfg, BodyPose(200.0, 600.0, 0.0), seed=7)
-    s.people = [SimPerson(600.0, -1000.0)]
+    s.people = [SimPerson(600.0, -700.0)]
     run_until(s, 12.0)
+    assert s.brain.noticed
     ev: list = []
 
-    def rush(ss: SimSession) -> None:
-        k = min(max(ss.t - 12.0, 0.0), 2.0)
-        ss.people = [SimPerson(600.0, -1000.0 + 450.0 * k)]
+    def come(ss: SimSession) -> None:
+        ss.people = [SimPerson(600.0, min(-700.0 + speed * max(ss.t - 12.0, 0.0), -100.0))]
 
-    run_until(s, 20.0, ev, hook=rush)
-    assert any("→RETREAT" in e for _, e in ev)
+    run_until(s, 20.0, ev, hook=come)
     assert math.isfinite(s.brain.internal.stress)
+    return ev
+
+
+def test_person_rushing_in_causes_retreat(cfg: dict) -> None:
+    assert any("→RETREAT" in e for _, e in _come_closer(cfg, RUSH_MM_S))
+
+
+def test_person_walking_up_does_not_cause_retreat(cfg: dict) -> None:
+    """Bug-1 の回帰: 普通に歩いて近づく来場者から逃げない（旧 gain 0.90 ではここで RETREAT した）。"""
+    assert not any("→RETREAT" in e for _, e in _come_closer(cfg, WALK_MM_S))

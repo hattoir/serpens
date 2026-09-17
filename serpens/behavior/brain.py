@@ -89,6 +89,7 @@ class Brain:
         self._touch_until = -1.0
         self._last_person: np.ndarray | None = None
         self._approach_speed = 0.0
+        self._rush_rearm_t = -1.0
         self._waypoint: np.ndarray | None = None
         self._patrol_dir = 1.0
         self._patrol_flip_t = 0.0
@@ -218,6 +219,10 @@ class Brain:
             self._approach_speed += a * (v - self._approach_speed)
         self._last_person = np.asarray(person, float).copy()
         s.approach = min(max(self._approach_speed / float(self.st["approach_ref_mm_s"]), 0.0), 1.0)
+        if self._approach_speed > float(self.st["rush_mm_s"]) and self._last_t is not None                 and self._last_t >= self._rush_rearm_t:
+            self.internal.kick("stress", float(self.st["rush_stress_kick"]))     # 駆け込まれた（驚き）
+            self._rush_rearm_t = self._last_t + float(self.st["rush_rearm_s"])
+            self._events.append(f"駆け込み {self._approach_speed:.0f}mm/s → Stress 上昇")
         yaw_needed = self._yaw_to(p.snake, person)
         s.looking = 1.0 if abs(yaw_needed - self.anim.last_output.get(HEAD_YAW, 0.0)) <= float(self.st["looking_tolerance_deg"]) else 0.0
         return s

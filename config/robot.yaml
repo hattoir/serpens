@@ -329,7 +329,10 @@ behavior:
   internal:
     curiosity: {x0: 0.40, tau_s: 20.0, gains: {novelty: 0.60, alone: 0.015, proximity: -0.02}}
     affection: {x0: 0.30, tau_s: 60.0, gains: {touch: 0.25, proximity: 0.02, looking: 0.01}}
-    stress:    {x0: 0.05, tau_s: 6.0,  gains: {approach: 0.90, novelty: 0.05}}
+    # approach の平衡値 = x0 + gain × tau × approach = 0.05 + 0.72·approach → 普通に歩いて近づく人（0.5〜1.0）で
+    # 0.41〜0.77。**旧 0.90 は approach 0.18（毎秒 88mm）で 1.0 に飽和し、RETREAT だけが残って永久に逃げた**
+    # （外部レビュー Bug-1）。回帰テスト: tests/test_behavior_units.py。値は実機の来場者で要調整
+    stress:    {x0: 0.05, tau_s: 6.0,  gains: {approach: 0.12, novelty: 0.05}}
     attention: {x0: 0.10, tau_s: 3.0,  gains: {presence: 0.25, proximity: 0.30, looking: 0.20}}
   energy:                     # Energy はサーボの最高温度から決める（熱い = 疲れている）
     temp_fresh_c: 32.0        # これ以下なら 1.0
@@ -337,6 +340,11 @@ behavior:
     tau_s: 3.0                # 表示・判断のなめらかさ
   stimuli:
     approach_ref_mm_s: 500.0  # 人がこの速さで近づくと approach = 1
+    # 駆け込み（驚き）: 一次遅れは接近「距離」を積分するだけなので、approach だけでは歩行と突進を区別できない。
+    # 人がこの速さを超えて迫ったら Stress を一段上げる（→ RETREAT）。歩いて来る来場者は 250〜500mm/s。要調整
+    rush_mm_s: 700.0
+    rush_stress_kick: 0.45    # 「臆病さ」のつまみ。0.45 で RETREAT(1.8·s) が ENGAGE に勝つ
+    rush_rearm_s: 3.0         # 同じ突進で何度も上げない
     approach_lpf_s: 0.5       # 人の速度のローパス
     novelty_decay_s: 3.0
     looking_tolerance_deg: 15.0

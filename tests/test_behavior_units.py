@@ -43,6 +43,24 @@ def test_first_order_decay_and_gain(cfg: dict) -> None:
     assert st2.stress > 0.3 and st2.stress <= 1.0
 
 
+def test_stress_does_not_saturate_when_a_visitor_walks_up(cfg: dict) -> None:
+    """Bug-1 の回帰: 人が全速で近づき続けても Stress は飽和しない（飽和すると RETREAT だけが残る）。"""
+    st = InternalState(cfg)
+    for _ in range(int(10.0 / 0.02)):
+        st.update(0.02, Stimuli(approach=1.0, presence=1.0), None)
+    assert st.stress < 0.95
+    c = cfg["behavior"]["internal"]["stress"]
+    eq = c["x0"] + c["gains"]["approach"] * c["tau_s"]          # approach = 1 の平衡値
+    assert 0.6 <= eq <= 0.9, eq
+    # 歩いて 1.2m 近づいて立ち止まった人（approach 0.7 が 3.5 秒）とは、かかわれる
+    walked = InternalState(cfg)
+    for _ in range(int(3.5 / 0.02)):
+        walked.update(0.02, Stimuli(approach=0.7, presence=1.0), None)
+    walked.values.update(affection=0.6, attention=0.8)
+    ev = UtilityModel(cfg, random.Random(0)).evaluate(walked, Context(True, 300.0, 0.0, 0.0), 0.0)
+    assert ev.raw["ENGAGE"] > ev.raw["RETREAT"], ev.raw
+
+
 def test_energy_from_servo_temperature(cfg: dict) -> None:
     e = cfg["behavior"]["energy"]
     assert energy_from_temperature(e["temp_fresh_c"] - 5, e["temp_fresh_c"], e["temp_tired_c"]) == 1.0
