@@ -73,6 +73,24 @@ def test_energy_from_servo_temperature(cfg: dict) -> None:
     assert st.energy < 0.01 and st.heat_c == e["temp_tired_c"]
 
 
+def test_activity_fatigue_lowers_energy_and_rest_recovers_it(cfg: dict) -> None:
+    """Bug-2 の回帰: サーボが冷えていても、動き続けると Energy が下がり、休むと戻る。"""
+    cool = cfg["behavior"]["energy"]["temp_fresh_c"] - 5
+    st = InternalState(cfg)
+    for i in range(int(300.0 / 0.1)):
+        st.update(0.1, Stimuli(alone=1.0), cool, moving=(i // 40) % 2 == 0)     # 4秒動いて4秒止まる
+    assert st.energy < 0.65, st.energy
+    u = UtilityModel(cfg, random.Random(0))
+    u.noise = 0.0
+    ev = u.evaluate(st, Context(False, None, 0.0, 0.0), 0.0)
+    hyst = cfg["behavior"]["utility"]["hysteresis"]
+    assert ev.raw["COIL_REST_MOOD"] > hyst * ev.raw["PATROL"], ev.raw          # 気分の休憩が巡回に勝つ
+    for _ in range(int(120.0 / 0.1)):
+        st.update(0.1, Stimuli(alone=1.0), cool, moving=False)
+    assert st.energy > 0.8
+    assert st.snapshot()["fatigue"] == st.fatigue
+
+
 # ---- 効用 ------------------------------------------------------------------------
 def test_utility_noise_is_bounded_and_resampled(cfg: dict) -> None:
     u = UtilityModel(cfg, random.Random(0))

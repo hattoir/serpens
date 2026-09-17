@@ -121,7 +121,7 @@ class Brain:
             self._at_limit = False
         head_dist = None if (person is None or p.snake is None) else self.ctrl.head_distance(p.snake, person)
         stim = self._stimuli(p, person, head_dist, dt)
-        self.internal.update(dt, stim, p.max_temp_c)
+        self.internal.update(dt, stim, p.max_temp_c, moving=self.anim.gait.active)
         forced = self._safety(t, p)
         ev = self.utility.evaluate(self.internal, Context(person is not None, head_dist, stim.touch, self._novelty,
                                                           self._at_limit), t)

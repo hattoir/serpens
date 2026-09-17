@@ -2,8 +2,10 @@
 
 Curiosity・Affection・Stress・Attention は一次遅れ系:
     dx/dt = -(x - x0)/τ + Σ gain × 刺激        （0〜1 にクランプ）
-Energy だけはサーボの最高温度から決める（熱い = 疲れている）:
-    T ≤ temp_fresh → 1.0、T ≥ temp_tired → 0.0、その間は直線。表示用に τ でなめらかにする
+Energy は2成分の小さい方:
+    温度由来 … T ≤ temp_fresh → 1.0、T ≥ temp_tired → 0.0、その間は直線（τ でなめらかにする）
+    活動由来 … 1 − fatigue。d(fatigue)/dt = gain_move × (歩容が動いている) − fatigue / tau_recover
+  温度だけだと、サーボが冷えている間 Energy = 1.0 のままで「気分の休憩」が一度も起きない（Bug-2）
 係数はすべて config の behavior.internal / behavior.energy。
 """
 from __future__ import annotations
@@ -61,8 +63,12 @@ class InternalState:
             self._ch[name] = _Channel(float(c["x0"]), float(c["tau_s"]), gains)
         e = b["energy"]
         self._fresh, self._tired, self._e_tau = float(e["temp_fresh_c"]), float(e["temp_tired_c"]), float(e["tau_s"])
+        self._f_gain = float(e["fatigue"]["gain_move"])
+        self._f_tau = float(e["fatigue"]["tau_recover_s"])
         self.values: dict[str, float] = {n: ch.x0 for n, ch in self._ch.items()}
         self.energy = 1.0
+        self.fatigue = 0.0                  # 活動による疲れ（0〜1）
+        self._temp_energy = 1.0             # 温度由来の成分（なめらかにした値）
         self.heat_c: float | None = None
         self.last_stimuli = Stimuli()
 
@@ -71,8 +77,11 @@ class InternalState:
             return self.__dict__["values"][name]
         raise AttributeError(name)
 
-    def update(self, dt: float, s: Stimuli, max_temp_c: float | None) -> None:
-        """dt 秒ぶん進める。max_temp_c はサーボの最高温度（読めなければ None で据え置き）。"""
+    def update(self, dt: float, s: Stimuli, max_temp_c: float | None, moving: bool = False) -> None:
+        """dt 秒ぶん進める。max_temp_c はサーボの最高温度（読めなければ None で据え置き）。
+
+        moving は「歩容が動いているか」。動いているあいだ疲れがたまり、止まると回復する。
+        """
         self.last_stimuli = s
         for name, ch in self._ch.items():
             x = self.values[name]
@@ -82,7 +91,10 @@ class InternalState:
             self.heat_c = max_temp_c
             target = energy_from_temperature(max_temp_c, self._fresh, self._tired)
             a = 1.0 - math.exp(-dt / self._e_tau) if self._e_tau > 0 else 1.0
-            self.energy += a * (target - self.energy)
+            self._temp_energy += a * (target - self._temp_energy)
+        df = (self._f_gain if moving else 0.0) - self.fatigue / self._f_tau
+        self.fatigue = min(max(self.fatigue + df * dt, 0.0), 1.0)
+        self.energy = min(self._temp_energy, 1.0 - self.fatigue)
 
     def kick(self, name: str, amount: float) -> None:
         """一度きりの出来事（驚きなど）で値を一段動かす。0〜1 にクランプ。"""
@@ -92,4 +104,5 @@ class InternalState:
         """GUI・ログ用。"""
         d = dict(self.values)
         d["energy"] = self.energy
+        d["fatigue"] = self.fatigue
         return d

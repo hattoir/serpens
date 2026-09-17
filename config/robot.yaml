@@ -334,10 +334,16 @@ behavior:
     # （外部レビュー Bug-1）。回帰テスト: tests/test_behavior_units.py。値は実機の来場者で要調整
     stress:    {x0: 0.05, tau_s: 6.0,  gains: {approach: 0.12, novelty: 0.05}}
     attention: {x0: 0.10, tau_s: 3.0,  gains: {presence: 0.25, proximity: 0.30, looking: 0.20}}
-  energy:                     # Energy はサーボの最高温度から決める（熱い = 疲れている）
+  energy:                     # Energy = min(温度由来, 1 − 活動の疲れ)
     temp_fresh_c: 32.0        # これ以下なら 1.0
     temp_tired_c: 50.0        # これ以上なら 0.0
     tau_s: 3.0                # 表示・判断のなめらかさ
+    # 活動の疲れ（Bug-2: 温度だけだと冷えている間は気分の休憩が一度も起きない）
+    #   d(fatigue)/dt = gain_move × (歩容が動いている) − fatigue / tau_recover_s
+    # 巡回は stop-and-go で動いているのは約半分なので、平衡値 = gain × 0.5 × tau = 0.48。
+    # COIL_REST_MOOD が PATROL に勝つのは fatigue ≈ 0.42 → 巡回 約4分で休み、静止 20〜30 秒で戻る目安。
+    # （レビュー案の 0.004 は連続歩行の前提。stop-and-go では平衡 0.24 で一度も休まない）**実機で要調整**
+    fatigue: {gain_move: 0.008, tau_recover_s: 120.0}
   stimuli:
     approach_ref_mm_s: 500.0  # 人がこの速さで近づくと approach = 1
     # 駆け込み（驚き）: 一次遅れは接近「距離」を積分するだけなので、approach だけでは歩行と突進を区別できない。
