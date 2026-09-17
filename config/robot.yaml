@@ -378,7 +378,9 @@ behavior:
       require_drive_link: true      # ESP32 駆動リンク（heartbeat）が必要。Phase 2 までは実機走行不可
   # 効用（utility.py の式の係数）
   utility:
-    noise_ratio: 0.08         # 効用に ±8% の乱数
+    # ±15%。hysteresis 1.15 に対し最大比 1.15/0.85 = 1.35 → 拮抗した状態が入れ替わる（個体差・ゆらぎ）。
+    # 旧 0.08 は最大比 1.17 で hysteresis をぎりぎりしか超えず、ほぼ効いていなかった（Bug-3）
+    noise_ratio: 0.15
     noise_period_s: 2.0       # 乱数を引き直す間隔（毎周期だとチラつく）
     hysteresis: 1.15          # 今の状態の効用 × これ を超えないと切り替えない
     min_dwell_s: 4.0          # 最小継続時間

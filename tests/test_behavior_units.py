@@ -104,6 +104,13 @@ def test_utility_noise_is_bounded_and_resampled(cfg: dict) -> None:
     assert u.evaluate(st, ctx, period * 1.01).noisy != ev0.noisy
 
 
+def test_noise_is_large_enough_to_flip_near_ties(cfg: dict) -> None:
+    """Bug-3 の回帰: 乱数の最大比が hysteresis を十分に超える（ゆらぎが実際に効く）。"""
+    u = cfg["behavior"]["utility"]
+    ratio = (1.0 + u["noise_ratio"]) / (1.0 - u["noise_ratio"])
+    assert ratio >= u["hysteresis"] * 1.15, ratio
+
+
 def test_utility_picks_sensible_states(cfg: dict) -> None:
     u = UtilityModel(cfg, random.Random(0))
     st = InternalState(cfg)
