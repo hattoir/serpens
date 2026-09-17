@@ -78,92 +78,6 @@ class SimCamera(threading.Thread):
         self.join(timeout=1.0)
 
 
-class RealCamera(threading.Thread):
-    """実カメラを別スレッドで読み、ArUco と人を検出する。
-
-    ホモグラフィ（床の校正）や YOLO の重みが無くても落ちない。映像だけ表示して先へ進む。
-    """
-
-    def __init__(self, cfg: dict[str, Any], source: str, session: SimSession | None) -> None:
-        super().__init__(name="perception", daemon=True)
-        from serpens.perception.camera import open_source
-
-        self.cfg, self.session = cfg, session
-        self.hz = float(cfg["person"]["detect_hz"])
-        self.src = open_source(cfg, source)
-        self.frame: np.ndarray | None = None
-        self.notes: list[str] = []
-        self.locator = self.people = None
-        self.tracker = None
-        hpath = Path(cfg["homography"]["file"])
-        if hpath.exists():
-            from serpens.perception.aruco_locator import ArucoLocator
-            from serpens.perception.homography import FloorHomography
-
-            h = FloorHomography.load(hpath)
-            self.locator = ArucoLocator(cfg, h)
-            try:
-                from serpens.perception.person_detector import PersonTracker, YoloPersonDetector
-
-                self.people = YoloPersonDetector(cfg, h)
-                self.tracker = PersonTracker(cfg)
-            except FileNotFoundError as e:
-                self.notes.append(f"人物検出なし: {e}")
-        else:
-            self.notes.append(f"床の校正がありません（{hpath}）。映像のみ表示します")
-        self._stop_evt = threading.Event()   # Thread._stop と名前が衝突しないように
-
-    def stop(self) -> None:
-        self._stop_evt.set()
-
-    def run(self) -> None:
-        period = 1.0 / self.hz
-        hold_s = float(self.cfg["person"]["hold_s"])
-        last_ok = time.monotonic()
-        while not self._stop_evt.is_set():
-            t0 = time.perf_counter()
-            ok, frame = self.src.read()
-            if ok and frame is not None:
-                self.frame = frame
-                last_ok = time.monotonic()
-                if self.locator is not None:
-                    self._process(frame)
-            elif time.monotonic() - last_ok > hold_s and self.session is not None:
-                # カメラが止まったら、古い人物座標を新しい検出として使わせない
-                self.session.people = []
-                self.frame = None
-            time.sleep(max(period - (time.perf_counter() - t0), 0.0))
-
-    def release(self) -> None:
-        """スレッドを止めてカメラを解放する。"""
-        self.stop()
-        self.join(timeout=1.0)
-        try:
-            self.src.release()
-        except Exception as e:                    # noqa: BLE001 - 解放失敗も伝える
-            print(f"[注意] カメラの解放に失敗: {e}")
-
-    def _process(self, frame: np.ndarray) -> None:
-        import cv2
-
-        obs = self.locator.observe(frame)
-        for c in obs.corners_px.values():
-            cv2.polylines(frame, [c.astype(np.int32)], True, (0, 0, 255), 3)
-        if self.people is None or self.tracker is None or self.session is None:
-            return
-        dets = self.people.detect(frame)
-        target = self.tracker.update(time.monotonic(), dets, None)
-        for d in dets:
-            x1, y1, x2, y2 = (int(v) for v in d.bbox_px)
-            hit = target is not None and target.detection is d
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 220, 255) if hit else (200, 200, 200), 4 if hit else 2)
-        # 検出した人を、シミュレータのヘビが反応できるよう世界へ渡す
-        self.session.people = [SimPerson(float(d.floor_mm[0]), float(d.floor_mm[1])) for d in dets]
-
-    def latest(self) -> np.ndarray | None:
-        return self.frame
-
-
 def _demo_script(loop: ControlLoop) -> None:
     """展示のリハーサル: 人が来て、近づいて、撫でて、去る。"""
     steps = [(4.0, lambda: loop.add_person(600.0, -500.0)),
@@ -241,10 +155,16 @@ def build(args: argparse.Namespace) -> tuple[dict[str, Any], SimSession, Control
                   "モックを実センサーとしては使いません")
         clock = ManualClock()
         robot = _make_link_robot(cfg, args.link_port, clock) if use_link else None
+        cam: Any = None
+        if args.camera is not None:
+            from serpens.perception.camera_observer import CameraObserver
+
+            cam = CameraObserver(cfg, args.camera, clock)     # 実画像 → 自己位置・人（observer）
         session = SimSession(cfg, start, seed=args.seed, bus=bus, head=head, robot_is_real=real,
-                             robot=robot, clock=clock)
+                             robot=robot, clock=clock, observer=cam)
         loop = ControlLoop(session, realtime=True)
-        cam: Any = RealCamera(cfg, args.camera, session) if args.camera is not None else SimCamera(cfg, session)
+        if cam is None:
+            cam = SimCamera(cfg, session)
         cam.start()
         for n in getattr(cam, "notes", []):
             print(f"[注意] {n}")

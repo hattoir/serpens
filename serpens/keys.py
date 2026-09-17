@@ -10,6 +10,7 @@
   P … シミュレーションの一時停止（実機では使えない）
   R … ホーム復帰（走行中のみ）      H … ホーム姿勢（走行中のみ）
   D … デモの人を出す / 消す         C … カメラ再校正の案内
+  K … 自己位置の確認（Vision で最初と見失った後。画面の位置が合っていることを人が確かめる）
   T … タッチ（モックのみ）          Q / Esc … 終了
 """
 from __future__ import annotations
@@ -26,6 +27,7 @@ KEY_HELP = [
     ("R", "ホーム復帰"),
     ("H", "ホーム姿勢"),
     ("D", "デモの人"),
+    ("K", "位置確認"),
     ("T", "タッチ"),
     ("Q", "終了"),
 ]
@@ -81,6 +83,9 @@ def handle(runner: Any, key: str) -> str:
             return "人を消した"
         runner.add_person(*DEMO_PERSON_MM)
         return "デモ開始: 来場者側に人を置いた"
+    if k == "K":
+        _ok, msg = s.acknowledge_pose("操作")
+        return msg
     if k == "C":
         return "カメラ再校正: tools/calibrate_floor.py を実行してください（--sim では不要）"
     if k == "T":

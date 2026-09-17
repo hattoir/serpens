@@ -108,8 +108,10 @@ def test_camera_blackout_stops_and_does_not_auto_resume(cfg: dict) -> None:
     assert m.moved_while_stale_mm < 50.0, m.moved_while_stale_mm   # 止まるまでの惰性だけ
     assert loop.session.stop.state is DriveState.HOLD             # 映像は 7s で戻っている
     assert not loop.snake.device.driving
-    assert loop.session.pose_blockers() == []                     # 位置は戻った。再開は操作で
-    assert loop.session.request_start("操作")[0]
+    assert not loop.session.request_start("操作")[0]              # 位置は戻ったが、人の確認が先
+    assert any("確認待ち" in w for w in loop.session.pose_blockers())
+    assert loop.session.acknowledge_pose("操作")[0]
+    assert loop.session.request_start("操作")[0]                  # 確認 → 開始操作で再開
 
 
 def test_dropout_and_neck_occlusion_are_tolerated(cfg: dict) -> None:

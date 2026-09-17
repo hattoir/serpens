@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import copy
+import math
 import random
 from pathlib import Path
 from typing import Any
@@ -101,6 +102,9 @@ class SimSession:
         self.snake: SnakePose | None = None
         self.target: TrackedPerson | None = None
         self.last_observation: Observation | None = None
+        # Vision の位置は、最初と見失った後に**人が画面で確かめる**まで走行に使わない
+        # （偽マーカで再取得した位置のまま走らないため。docs/phase4_vision_bridge.md §4）
+        self.pose_needs_ack = not self.observes_truth
         self._serial = 0
         self._switches = 0
         self._ids = {j["name"]: int(j["servo_id"]) for j in cfg["joints"]}
@@ -153,7 +157,27 @@ class SimSession:
             return ["自己位置が未取得"]
         if age > self.pose_max_age_s:
             return [f"自己位置が古い（{age:.2f}s > {self.pose_max_age_s}s）"]
+        if self.pose_needs_ack:
+            return [f"自己位置の確認待ち（{self.pose_text()}）。画面の位置が合っていれば K で確認"]
         return []
+
+    def pose_text(self) -> str:
+        """推定した自己位置を人が読める形に。"""
+        if self.snake is None:
+            return "未取得"
+        return f"x={self.snake.x:.0f} y={self.snake.y:.0f} θ={math.degrees(self.snake.theta_body):.0f}°"
+
+    def acknowledge_pose(self, source: str = "操作") -> tuple[bool, str]:
+        """人が画面で自己位置を確かめた（新しい位置が入っていて古くないときだけ受け付ける）。"""
+        if self.observes_truth:
+            return True, "真値の模擬では確認は不要"
+        was = self.pose_needs_ack
+        self.pose_needs_ack = False
+        lost = self.pose_blockers()
+        if lost:
+            self.pose_needs_ack = was
+            return False, "確認できません: " + lost[0]
+        return True, f"自己位置を確認（{self.pose_text()}, {source}）"
 
     def request_start(self, source: str = "操作") -> tuple[bool, list[str]]:
         """走行を開始する（実機は条件を満たさないと開始しない）。"""
@@ -193,6 +217,7 @@ class SimSession:
         self._observe(t)
         lost = self.pose_blockers() if self.stop.moving_allowed else []
         if lost:
+            self.pose_needs_ack = True                                     # 戻った位置は人が確かめる
             self.request_stop(f"自己位置を見失った: {lost[0]}", source="知覚")   # 復帰は開始操作で
         if not self.stop.moving_allowed:
             self.enforce_stop_output()

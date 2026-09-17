@@ -14,12 +14,12 @@
 |---|---|---|---|
 | Mechanical | 部分 | 寸法・質量収支と**3段の可動域**（geometry / mechanical / operational）。CAD R03 の干渉開始 64.8/64.9° を境界として持ち、mechanical ±55°・software ±50°（CONDITIONAL） | 図面はリポジトリに無い。シェル・ケーブル経路・修理性・製造性の検討が無い。頭部の干渉検査は未 |
 | Actuation | 部分 | STS3215 の仕様を一次情報で確認（[docs/sts3215_registers.md](sts3215_registers.md)）。トルク・速度・分解能・電圧の値は config 済み | ギア比・スリップ機構・実測トルク余裕は未検討。**サーボ実機ゼロ** |
-| Electronics | **未着手** | MCU は ESP32-S3 を前提に置いただけ。回路図・PCB・部品表は無い | ドライバ・電流検出・IMU・温度・配電の設計が無い。KiCad 未着手 |
+| Electronics | 設計案 | ブロック図・ゲート 8 項目の測り方・BOM の骨格（[electronics.md](electronics.md)）。ESP32 に依存しない遮断器 + 常閉 E-STOP の構成 | 回路図・PCB・品番は無い。**C044 の電流値が UNKNOWN** なので容量・ヒューズ・閾値を決められない。KiCad 未着手 |
 | Power | **未着手** | 12V テザー給電の注意書きのみ（README §2.4） | バッテリ・BMS・電流監視・突入電流・電圧降下の設計が無い |
 | Embedded | 部分 | 駆動リンク v2、Virtual ESP32（7状態）+ 仮想サーボバス、故障注入、値の一致検査、**ファームのコンパイル成功**（フラッシュ7%/RAM5%） | **未書き込み**。サーボ読み書き（writeServos/readServos）と配線が未確定 |
 | Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**MuJoCo の 3D モデル**（任意依存）、Belly 3種、歩容掃引（Pareto 候補） | 摩擦もサーボ応答もすべて未実測。**サーボゲインで前進量が ±45% 変わる**ので、実機での同定が最優先 |
 | Sensors | 部分 | 頭部 I/O の行プロトコル（ToF・タッチ×2・LED×2）とモック（[head_io.py](../serpens/hw/head_io.py)）、サーボの位置/負荷/温度/電圧の読み出し（[state_poller.py](../serpens/hw/state_poller.py)） | **IMU が無い。** 搭載カメラも無い。電流センサも無い |
-| Vision | 実装済み（外部カメラ前提） | ArUco・床ホモグラフィ・YOLO。**模擬画像の Vision で閉ループ**（[phase4_vision_bridge.md](phase4_vision_bridge.md)）。World State は出どころと simulated を持つ | 上方の外部カメラ前提。室内を動き回る前提では成立しない。所有者の個人識別は無い |
+| Vision | 実装済み（外部カメラ前提） | ArUco・床ホモグラフィ・YOLO。**模擬画像の Vision で閉ループ**（[phase4_vision_bridge.md](phase4_vision_bridge.md)）。実画像経路 `CameraObserver`（カメラ / 録画 → 自己位置・人）を `--camera` に接続。見失い後は人が K で位置を確認 | 実カメラでは未測定。上方の外部カメラ前提。所有者の個人識別は無い |
 | Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |
 | Behavior | 実装済み（模擬） | 内部状態 4 種 + 効用による状態選択、10 状態、しぐさ（[behavior/](../serpens/behavior/)） | 充電要求・所有者探索の状態が無い。LLM は不使用（憲章どおり） |
 | Charging | **未着手** | 無し | ドック・姿勢・接点・充電制御のすべて |
@@ -77,7 +77,7 @@
 |---|---|---|---|
 | 1 | **安全の数値を決める**（最大力・最大トルク・電流制限・関節速度・停止距離）。STS3215 の 30kgf·cm から、指を挟んだときの力を計算して上限を決める | 決定不要 | `docs/safety_limits.md` + `config` の上限 |
 | 2 | **3 軸ベンチの構成を確定**（config プロファイル + 部品表）。サーボ 2 個が届いたら即日試せる状態にする | 決定 1 | `config/robot_bench3.yaml`、BOM |
-| 3 | **電子系のブロック図と BOM**（MCU・ドライバ・配電・電流検出・IMU） | 決定 2 | `docs/electronics.md`、`docs/bom.md` |
+| 3 | ~~電子系のブロック図と BOM~~ → **骨格まで完了 2026-09-18**（品番・容量は C044 の実測後） | 決定 2 | `docs/electronics.md` |
 | 4 | **ファームのサーボ層**（同期書き込み・状態読み出し）をモックで検証できる形に | 決定なし（配線は後） | `firmware/` + 偽サーボでの試験 |
 | 5 | ~~GUI/行動と駆動リンクの接続（Phase 3）~~ | **完了 2026-09-14** | `serpens/robot.py` + `serpens/link/robot.py` |
 | 6 | **IMU を前提にした自己位置**の検討（外部カメラ依存を外す道筋） | 決定 1・3 | `docs/localization.md` |

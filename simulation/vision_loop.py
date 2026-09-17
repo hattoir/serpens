@@ -79,7 +79,7 @@ class VisionLoop:
         """自己位置が入るまで待ってから開始操作をする（Vision の模擬は待機から始まる）。"""
         for _ in range(int(round(timeout_s / self.session.ctrl_dt))):
             self.step()
-            if not self.session.pose_blockers():
+            if self.session.snake is not None and self.session.acknowledge_pose("VisionLoop")[0]:
                 return self.session.request_start("VisionLoop")[0]
         return False
 

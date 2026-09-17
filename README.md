@@ -359,6 +359,8 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\link_check.py
 # 歩容パラメータの掃引（速さ・旋回性・蛇らしさ・滑らかさ・負荷・電力目安）
 .\.venv\Scripts\python.exe tools\gait_sweep.py
+# 制御周期 50Hz が知覚スレッド（描画 / ArUco+YOLO）と同時でも守れるか（このPCの測定）
+.\.venv\Scripts\python.exe tools\loop_timing.py
 # 模擬 Vision の閉ループを故障ごとに試す（Phase 4。実カメラの値ではない）
 .\.venv\Scripts\python.exe tools\vision_check.py
 # ファームのコンパイル（**書き込みはしない**）

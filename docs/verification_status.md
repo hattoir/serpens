@@ -105,7 +105,11 @@
 | 同じ ID の重複を使わない / 位置の飛びを捨てる | `SOFTWARE_VERIFIED` | 同上 |
 | 近い偽マーカの区別 | **未対策** | 方式の限界。運用規則で避ける |
 | 実カメラでの誤差・遅れ | **未測定** | `vision_sim.latency_s` / `frame_hz` は想定値 |
-| 実カメラ → 自己位置 → セッション | **未実装** | `RealCamera` は人の位置だけを渡している |
+| 実画像（録画ファイル）→ デコード → ArUco → 自己位置 → セッション | `SIMULATED` | `tests/test_camera_observer.py`（5）。仮想カメラの画像を MJPG 動画にして読み直した。p95 誤差 < 25mm。**実カメラの画像は未** |
+| 録画（`aruco_file`）は実機の開始条件を満たさない / 生きたカメラ（`aruco`）だけが満たす | `SOFTWARE_VERIFIED` | 同上 |
+| 見失った後（と最初）の自己位置は人が K で確認するまで走行に使わない | `SOFTWARE_VERIFIED` | `tests/test_vision_bridge.py` / `test_camera_observer.py` |
+| 50Hz 制御周期が知覚スレッド（ArUco + YOLO 59ms/枚）と同時でも遅れない | `SOFTWARE_VERIFIED`（このPC） | `tools/loop_timing.py`: 平均 19.96ms / 最悪 20.9ms / 遅れ 0/502（2026-09-18） |
+| 電子系（遮断器・E-STOP・電流検出）の設計 | **設計案のみ** | `docs/electronics.md`。C044 の電流値は **UNKNOWN**（12V 品の 2.7A は流用しない） |
 
 ## 5. 書くときの約束
 

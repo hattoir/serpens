@@ -4,7 +4,15 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-16 Phase 4 更新）
+## Current Goal（2026-09-18 更新）
+
+実機なしで進められるものを進めた: **実画像経路 `CameraObserver`**（カメラ / 録画 → 自己位置・人）、
+**見失い後の位置確認（K）**、**制御周期の実測**（知覚スレッド同時で遅れ 0）、**電子系の設計案**
+（`docs/electronics.md`。C044 の電流は UNKNOWN のまま）。
+次に実機が来たら: C044 1 個の電流実測（ゲートの real_current）→ 実カメラで `CameraObserver` の誤差・遅れ。
+それまでのソフト作業: 実カメラの校正手順の見直し、firmware のサーボ層（配線が決まってから）。
+
+## Current Goal（2026-09-16 Phase 4 更新・旧）
 
 **Phase 4 Vision Bridge（模擬）が閉じた。** 仮想カメラ画像 → 本物の ArUco 検出 → 自己位置 → 行動 →
 仮想 ESP32 → 世界。故障注入（欠落・暗転・遮蔽・偽マーカ・偽の人）で、見失ったら保持・自動再開しないことを確認。
@@ -65,9 +73,9 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 
 ## Current Problems
 
-0. （2026-09-16 Phase 4）**実カメラの自己位置がセッションへ入らない**（`RealCamera` は人だけ渡す）。
+0. （2026-09-18）実カメラ経路は接続したが**実カメラの画像では未検証**（録画は仮想カメラ製）。
    近い偽マーカは区別できない（`docs/phase4_vision_bridge.md` §4）。接触→脱力は要求未確定
-   （`docs/contact_release_requirements.md`）。電気安全ゲートは全項目未実測
+   （`docs/contact_release_requirements.md`）。電気安全ゲートは全項目未実測。C044 の電流値 UNKNOWN
 
 1. **実 ESP32 が無い。** リンク経路は模擬機体でしか動かしていない（`--robot link --link-port COMx` は未検証）
 2. **接触 → 脱力が 800ms**（構想設計書の目標 20ms）。PC を経由する限り届かない。機体側で負荷を見る必要がある
@@ -99,12 +107,13 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-16 Phase 4 後）
+## Next Best Actions（2026-09-18 後）
 
-1. 実カメラ用の観測器（`observer` を `RealCamera` のスレッドから受け取る形）。録画ファイルで試せるようにする
-2. 位置不明からの再開前に、GUI で推定位置を確かめさせる（偽マーカでの再取得対策）
-3. 電子系のブロック図と BOM（ゲートの independent_power_cut / physical_estop / overcurrent を埋める設計）
+1. ~~実カメラ用の観測器~~ 完了（`CameraObserver`）。実カメラが繋がったら `--camera 0` で誤差・遅れを測る
+2. ~~再開前の位置確認~~ 完了（K キー）
+3. ~~電子系のブロック図と BOM~~ 骨格まで完了。品番と容量は **C044 1 個の電流実測**（購入が要る）後
 4. 接触→脱力の Q1〜Q5 を決めてもらう（製品・機構の判断）
+5. firmware のサーボ層（writeServos / readServos）。配線方式が決まってから。コンパイルのみ
 
 ## Next Best Actions（旧）
 
