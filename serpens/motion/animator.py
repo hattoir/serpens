@@ -5,7 +5,8 @@
 - キーフレーム補間: ease-in-out / ease-out / オーバーシュート付き ease-out
 - 呼吸: 全軸に ±amplitude・周期 period のサイン波を常時加算。ON/OFF は fade_s でなめらかに
 - freeze(): 出力をその場で固定（驚きの全停止）。解除すると、止まっていた時間ぶん
-  すべて（補間・歩容・呼吸）が一時停止していたように続きから動く
+  補間・歩容が一時停止していたように続きから動く。呼吸は壁時計で回り続けるので、
+  keep_breath=True の freeze では呼吸だけが続く（止めると「物体」に戻る）
 """
 from __future__ import annotations
 
@@ -139,6 +140,8 @@ class Animator:
         self._breath_target = 1.0
         self._frozen_at: float | None = None
         self._frozen_out: Pose = {}
+        self._frozen_keep_breath = False
+        self._last_breath: Pose = {n: 0.0 for n in self.names}
         self._paused_total = 0.0
         self._last_anim_t: float | None = None
         self.last_output: Pose = dict(self.base)
@@ -181,11 +184,13 @@ class Animator:
         """呼吸の ON/OFF（fade_s かけて振幅を変える）。"""
         self._breath_target = 1.0 if on else 0.0
 
-    def freeze(self, t: float) -> None:
-        """出力をその場で固定する（呼吸も止まる）。"""
+    def freeze(self, t: float, keep_breath: bool = False) -> None:
+        """出力をその場で固定する。keep_breath=True なら呼吸だけは続ける。"""
         if self._frozen_at is None:
             self._frozen_at = t
-            self._frozen_out = dict(self.last_output)
+            self._frozen_keep_breath = keep_breath
+            self._frozen_out = ({n: self.last_output[n] - self._last_breath[n] for n in self.names}
+                                if keep_breath else dict(self.last_output))
 
     def unfreeze(self, t: float) -> None:
         """固定を解除し、止まっていた時間ぶん全体を一時停止扱いにする。"""
@@ -213,14 +218,23 @@ class Animator:
             del self._tracks[name]
         return v
 
-    def breath_offset(self, index: int, at: float) -> float:
-        """関節 index の呼吸オフセット [deg]。"""
-        return self._breath_env * self._b_amp * math.sin(2.0 * math.pi * at / self._b_period + index * self._b_phase)
+    def breath_offset(self, index: int, t: float) -> float:
+        """関節 index の呼吸オフセット [deg]。t は壁時計（freeze で止めない）。"""
+        return self._breath_env * self._b_amp * math.sin(2.0 * math.pi * t / self._b_period + index * self._b_phase)
+
+    def _clamped(self, name: str, v: float) -> float:
+        lo, hi = self._limits[name]
+        return min(max(v, lo), hi)
 
     def update(self, t: float) -> Pose:
         """時刻 t の9軸指令角（ソフトウェアリミット内）。"""
         if self._frozen_at is not None:
-            return dict(self._frozen_out)
+            if not self._frozen_keep_breath:
+                return dict(self._frozen_out)
+            for i, name in enumerate(self.names):
+                self._last_breath[name] = self.breath_offset(i, t)
+            self.last_output = {n: self._clamped(n, self._frozen_out[n] + self._last_breath[n]) for n in self.names}
+            return dict(self.last_output)
         at = self._anim_t(t)
         dt = 0.0 if self._last_anim_t is None else max(at - self._last_anim_t, 0.0)
         self._last_anim_t = at
@@ -231,9 +245,8 @@ class Animator:
         base: Pose = {}
         for i, name in enumerate(self.names):
             base[name] = self._base_value(name, at)
-            v = base[name] + gait.get(name, 0.0) + self.breath_offset(i, at)
-            lo, hi = self._limits[name]
-            out[name] = min(max(v, lo), hi)
+            self._last_breath[name] = self.breath_offset(i, t)
+            out[name] = self._clamped(name, base[name] + gait.get(name, 0.0) + self._last_breath[name])
         self.last_base = base
         self.last_output = out
         return out

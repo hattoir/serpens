@@ -150,6 +150,8 @@ class Brain:
         elif p.target_serial != self._serial:
             self.noticed = False
             self.expr.cancel("react")
+            self.expr.cancel("primary_react")
+            self.expr.schedule(t + self.expr._u("primary_reaction_delay_s"), "primary_react", self._primary_react)
             self.expr.schedule(t + self.expr._u("reaction_delay_s"), "react", self._react)
         self._serial = p.target_serial
         if p.touch:
@@ -187,6 +189,13 @@ class Brain:
         if self.fsm.state != "COIL_REST_HEAT":
             return False
         return p.max_temp_c is None or p.max_temp_c > float(self.safety_cfg["overheat_resume_c"])
+
+    def _primary_react(self, t: float) -> None:
+        """a. 一次反応（因果の窓 <300ms の中で「気づいた」を見せる）。まだ気づいてはいない扱い。"""
+        person, snake = self._last_person_raw, self._last_snake
+        direction = 0.0 if person is None or snake is None else self._yaw_to(snake, person)
+        self.expr.primary_react(t, direction, self.fsm.state)
+        self._events.append("一次反応（目・ピクッ）")
 
     def _react(self, t: float) -> None:
         """c. 反応の始まり: 全停止（驚き）→ 警戒。PETTED 中は割り込まない。"""

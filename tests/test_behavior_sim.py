@@ -176,3 +176,28 @@ def test_person_rushing_in_causes_retreat(cfg: dict) -> None:
 def test_person_walking_up_does_not_cause_retreat(cfg: dict) -> None:
     """Bug-1 の回帰: 普通に歩いて近づく来場者から逃げない（旧 gain 0.90 ではここで RETREAT した）。"""
     assert not any("→RETREAT" in e for _, e in _come_closer(cfg, WALK_MM_S))
+
+
+def test_primary_reaction_is_inside_the_causal_window(cfg: dict) -> None:
+    """a. 検出から 0.15〜0.25 秒で目が光り J8 が人の側へピクッと動く。驚きの全停止中も呼吸は続く。"""
+    x = cfg["behavior"]["expression"]
+    s = SimSession(cfg, BodyPose(200.0, 400.0, 0.0), seed=3)
+    run_until(s, 3.0)
+    s.people = [SimPerson(900.0, -300.0)]                # 右手前 → 頭から見て右（J8 負）
+    t0, ev, trace = s.t, [], []
+    run_until(s, t0 + 1.6, ev,
+              hook=lambda ss: trace.append((ss.t, ss.anim.last_output["J8"], ss.anim.last_output["J7"],
+                                            ss.head.eye_rgb_brightness[3], ss.anim.frozen)))
+    t_prim = next(t for t, e in ev if e.startswith("一次反応"))
+    lo, hi = x["primary_reaction_delay_s"]
+    assert lo - 0.03 <= t_prim - t0 <= hi + 0.03
+    t_react = next(t for t, e in ev if e.startswith("反応開始"))
+    assert t_prim < t_react                              # 一次反応は「間」より前
+    yaw0 = next(j8 for t, j8, *_ in trace if t <= t_prim)
+    twitch = [j8 - yaw0 for t, j8, *_ in trace if t_prim < t <= t_prim + 2 * x["primary_twitch_s"]]
+    assert min(twitch) <= -x["primary_twitch_deg"] * 0.8    # 人のいる側（右）へ動いた
+    assert any(br == x["primary_flash_brightness"] for t, _, _, br, _ in trace if t_prim <= t <= t_prim + x["primary_flash_s"])
+    patrol_br = cfg["behavior"]["eyes"]["PATROL"][3]
+    assert any(br == patrol_br for t, _, _, br, _ in trace if t_prim + x["primary_flash_s"] + 0.05 < t < t_react)  # 戻る
+    neck_frozen = [j7 for _t, _j8, j7, _br, frozen in trace if frozen]
+    assert len(neck_frozen) > 5 and max(neck_frozen) - min(neck_frozen) > 0.1   # 全停止中も呼吸で首が動く

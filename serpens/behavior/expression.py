@@ -1,7 +1,8 @@
 """生き物らしさの表現（時間の演出）。数値は全部 config の behavior.expression。
 
+  a. 一次反応: 検出から 0.15〜0.25 秒で目を一瞬光らせ、J8 を刺激の方向へ 2.5° ピクッと動かす（primary_react）
   b. 人物検出から反応開始まで 0.4〜0.9 秒のランダム遅延（brain が schedule する）
-  c. 反応の最初の 0.3 秒は呼吸も含めて全停止（surprise）
+  c. 反応の最初の 0.3 秒は全停止（surprise。呼吸だけは続ける）
   d. 頭の回転は ease-out ＋ 3〜5° のオーバーシュートと戻り、到達後 1.5〜2.5 秒ホールド（look_at）
   e. 首かしげ: J9 を 12〜18° 傾けて 1.2 秒保持（tilt）
   g. 15〜40 秒に1回、ランダムな方向を 1.5 秒見る（maybe_distract）
@@ -27,6 +28,7 @@ class Expression:
                  bus: ServoBus | None = None, head: HeadIO | None = None) -> None:
         self.x = cfg["behavior"]["expression"]
         self.eyes_cfg = cfg["behavior"]["eyes"]
+        self.head_modes = cfg["head_io"]["eye_modes"]
         self.anim, self.poses, self.rng = animator, poses, rng
         self.bus, self.head = bus, head
         self._events: list[tuple[float, str, Action]] = []
@@ -71,9 +73,36 @@ class Expression:
             fn(t)
 
     # ---- しぐさ -----------------------------------------------------------------
+    def primary_react(self, t: float, direction: float, state: str) -> None:
+        """a. 一次反応: 目の輝度を一瞬上げ、J8 を direction の符号の側へ小さくピクッと動かす。"""
+        if bool(self.x["primary_eye_flash"]):
+            self.eye_flash(t, state)
+        self.twitch(t, direction)
+        self.log.append((t, "primary_react"))
+
+    def eye_flash(self, t: float, state: str) -> None:
+        """目を primary_flash_s だけ最大輝度で点灯し、元の状態の色へ戻す。"""
+        if self.head is None:
+            return
+        r, g, b, _br, _mode = (int(v) for v in self.eyes_cfg[state])
+        self.head.set_eye(r, g, b, int(self.x["primary_flash_brightness"]))
+        self.head.set_mode(int(self.head_modes["on"]))
+        self.cancel("eye_flash_end")
+        self.schedule(t + float(self.x["primary_flash_s"]), "eye_flash_end", lambda _tt: self.set_eyes(state))
+
+    def twitch(self, t: float, direction: float) -> None:
+        """J8 をいまのベース角から direction の側へ primary_twitch_deg 動かし、同じ時間で戻す。"""
+        base = self.anim.base.get(HEAD_YAW, 0.0)
+        deg = float(self.x["primary_twitch_deg"]) * (1.0 if direction >= 0 else -1.0)
+        dur = float(self.x["primary_twitch_s"])
+        self.anim.play(Keyframe(self.poses.head_look(base + deg, self.anim.base.get(HEAD_ROLL, 0.0)), dur, Easing.OUT), t)
+        self.schedule(t + dur, "twitch_back",
+                      lambda tt: self.anim.play(Keyframe({HEAD_YAW: base}, dur, Easing.OUT), tt))
+        self.log.append((t, f"twitch {deg:+.1f}°"))
+
     def surprise(self, t: float) -> None:
-        """c. 全停止（呼吸も）→ surprise_freeze_s 後に解除。"""
-        self.anim.freeze(t)
+        """c. 全停止 → surprise_freeze_s 後に解除。呼吸は surprise_keep_breath なら止めない。"""
+        self.anim.freeze(t, keep_breath=bool(self.x["surprise_keep_breath"]))
         self.log.append((t, "surprise"))
         self.schedule(t + float(self.x["surprise_freeze_s"]), "unfreeze", self.anim.unfreeze)
 

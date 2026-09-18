@@ -437,8 +437,18 @@ behavior:
     retreat_distance_mm: 900.0    # 逃げるときの目標: 人から離れた点までの距離
   # 生き物らしさ（expression.py）
   expression:
-    reaction_delay_s: [0.4, 0.9]      # b. 人物検出から反応開始まで
-    surprise_freeze_s: 0.3            # c. 反応の最初は呼吸も含め全停止
+    reaction_delay_s: [0.4, 0.9]      # b. 人物検出から反応開始まで（「間」。primary の後）
+    # 一次反応（因果の印象は遅延 140ms を超えると消え始め 1 秒で崩壊する: Front. Psychol. 14:1167809 / Sci. Rep. 10:22384）。
+    # 検出（≤200ms）+ 遅れ 100ms の後、150〜250ms でまず目を光らせ J8 を刺激の方向へ 2.5° ピクッと動かす。
+    # 「間」（reaction_delay_s）はその後。目の LED は機械遅延ゼロなので LED だけでも成立する
+    primary_reaction_delay_s: [0.15, 0.25]
+    primary_twitch_deg: 2.5
+    primary_twitch_s: 0.12            # 片道の時間（往復で 0.24s）
+    primary_eye_flash: true
+    primary_flash_brightness: 255
+    primary_flash_s: 0.15
+    surprise_freeze_s: 0.3            # c. 反応の最初は全停止（呼吸は除く）
+    surprise_keep_breath: true        #    止まっている間も呼吸は続ける（止めると「物体」に戻る）
     look_overshoot_deg: [3.0, 5.0]    # d. 頭の回転の行き過ぎ
     look_hold_s: [1.5, 2.5]           # d. 到達後のホールド
     look_duration_s: 0.6              # d. 頭を回す時間（軸の上限速度で自動的に延びる）
