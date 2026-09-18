@@ -306,7 +306,7 @@ class Brain:
         s = self.fsm.state
         c = self.b["controller"]
         if s not in QUIET_STATES:
-            self.expr.maybe_distract(t)
+            self.expr.glance_away(t)
         if s in STILL_STATES or (s == "PATROL" and self.patrol_paused):
             self.expr.maybe_flick(t, self._novelty)         # 舌のちらつき相当（止まっているときだけ）
         if snake is None:

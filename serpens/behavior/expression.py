@@ -6,7 +6,7 @@
   f. 舌のちらつき相当: J8 を ±3〜8° 0.2〜0.4 秒で往復。頻度は novelty に連動（maybe_flick）
   d. 頭の回転は ease-out ＋ 3〜5° のオーバーシュートと戻り、到達後 1.5〜2.5 秒ホールド（look_at）
   e. 首かしげ: J9 を 12〜18° 傾けて 1.2 秒保持（tilt）
-  g. 15〜40 秒に1回、ランダムな方向を 1.5 秒見る（maybe_distract）
+  g. 3.5〜7 秒に1回、ランダムな方向を 1.5〜3 秒見てから戻る（glance_away。GAR 0.4〜0.6 が狙い）
   i. タッチでトルク 60% へ脱力＋首を下げる＋目を暗く、2 秒（petted）
 """
 from __future__ import annotations
@@ -37,7 +37,7 @@ class Expression:
         self.hold_until = -1.0
         self.busy_until = -1.0            # かしげ・よそ見中は look_at を受け付けない
         self.next_tilt_t = float("inf")
-        self.next_distract_t = self._draw_distract(0.0)
+        self.next_glance_t = self._draw_glance(0.0)
         self._flick_last_t: float | None = None
         self.flick_until = -1.0
         self.flicks = 0
@@ -47,8 +47,8 @@ class Expression:
         lo, hi = self.x[key]
         return self.rng.uniform(float(lo), float(hi))
 
-    def _draw_distract(self, t: float) -> float:
-        return t + self._u("distraction_interval_s")
+    def _draw_glance(self, t: float) -> float:
+        return t + self._u("glance_interval_s")
 
     # ---- 予定表 -----------------------------------------------------------------
     def schedule(self, t: float, name: str, fn: Action) -> None:
@@ -168,18 +168,18 @@ class Expression:
             self.tilt(t)
             self.next_tilt_t = t + self._u("tilt_interval_s")
 
-    def maybe_distract(self, t: float) -> None:
-        """g. 時々よそ見をして、元の向きに戻る。"""
-        if t < self.next_distract_t or t < self.busy_until:
+    def glance_away(self, t: float) -> None:
+        """g. 視線をそらして、元の向きに戻る（主要動作。QUIET_STATES 以外で常時走る）。"""
+        if t < self.next_glance_t or t < self.busy_until:
             return
         prev = self.look_yaw
-        m = float(self.x["distraction_max_yaw_deg"])
+        m = float(self.x["glance_max_yaw_deg"])
         self.look_at(t, self.rng.uniform(-m, m), force=True)
-        back = t + float(self.x["distraction_look_s"])
+        back = t + self._u("glance_away_s")
         self.busy_until = back
-        self.schedule(back, "distract_back", lambda tt: self.look_at(tt, prev, force=True))
-        self.next_distract_t = self._draw_distract(t)
-        self.log.append((t, "distraction"))
+        self.schedule(back, "glance_back", lambda tt: self.look_at(tt, prev, force=True))
+        self.next_glance_t = self._draw_glance(t)
+        self.log.append((t, "glance_away"))
 
     def petted(self, t: float) -> float:
         """i. 脱力: トルクを落とし、首を下げ、目を暗くする。petted_s 後にトルクを戻す。戻す時刻を返す。"""

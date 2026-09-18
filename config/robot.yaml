@@ -463,15 +463,19 @@ behavior:
       peak_rate_per_min: 9.0
     surprise_keep_breath: true        #    止まっている間も呼吸は続ける（止めると「物体」に戻る）
     look_overshoot_deg: [3.0, 5.0]    # d. 頭の回転の行き過ぎ
-    look_hold_s: [1.5, 2.5]           # d. 到達後のホールド
+    # d. 到達後のホールド。相互凝視の快適時間は平均 3.3 秒・大多数が 2〜5 秒（Binetti et al., R. Soc. Open Sci., n≈500）
+    look_hold_s: [2.5, 4.0]
     look_duration_s: 0.6              # d. 頭を回す時間（軸の上限速度で自動的に延びる）
     look_retarget_deg: 20.0           #    ホールド中でもこれ以上ずれたら向き直す
     tilt_deg: [12.0, 18.0]            # e. 首かしげ（J9）
     tilt_hold_s: 1.2
     tilt_interval_s: [5.0, 10.0]      #    OBSERVE / ENGAGE 中にかしげる間隔
-    distraction_interval_s: [15.0, 40.0]   # g. よそ見の間隔
-    distraction_look_s: 1.5
-    distraction_max_yaw_deg: 60.0
+    # g. 視線そらし（glance_away）。GAR（そらしている時間の割合）0.5〜0.7 が会話を最も長くし、0.1 だと短くなる
+    # （Front. Robot. AI 10:1062714）。旧 15〜40 秒に 1.5 秒 = GAR 約 0.04 でほぼ見つめっぱなしだった。
+    # 「見ては外し、見ては外しが常態で、たまに長く見る」。期待値: 5.25 秒ごとに 2.25 秒そらす → GAR 約 0.43
+    glance_interval_s: [3.5, 7.0]
+    glance_away_s: [1.5, 3.0]
+    glance_max_yaw_deg: 60.0
     approach_first_ratio: 0.6         # f. 接近は 60% 進む → 止まる → 残り
     approach_pause_s: [0.8, 1.5]
     petted_s: 2.0                     # i. 脱力の時間（トルク比・首は poses.relax）

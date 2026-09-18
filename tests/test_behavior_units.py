@@ -219,8 +219,8 @@ def test_tilt_surprise_distraction_and_petted(cfg: dict) -> None:
     assert anim.frozen
     ex.update(2.0 + x["surprise_freeze_s"] + 1e-6)
     assert not anim.frozen
-    lo, hi = x["distraction_interval_s"]
-    assert lo <= ex.next_distract_t <= hi
+    lo, hi = x["glance_interval_s"]
+    assert lo <= ex.next_glance_t <= hi
     end = ex.petted(5.0)
     assert end == pytest.approx(5.0 + x["petted_s"])
     assert bus._axes[1].torque_ratio == pytest.approx(
