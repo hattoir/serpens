@@ -125,6 +125,10 @@ gait:
   presets:
     forward:    {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 0.0}
     slow:       {amplitude_deg: 20.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.3, turn_bias_deg: 0.0}
+    # 忍び寄り（rectilinear 相当）。接近は速度差ではなく**波形の差**で意図を伝える。rectilinear locomotion は
+    # 忍び寄り捕食・狭所で使われ 0.02〜0.07 BL/s、振幅は体長の 0.4〜1.3%（PMC3673153）。
+    # 簡易シミュレータ（KINEMATIC_SIM）で 121mm/周期 → 30mm/s = 0.036 BL/s（体長 850mm）
+    stalk:      {amplitude_deg: 8.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.25, turn_bias_deg: 0.0}
     backward:   {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: -0.5, turn_bias_deg: 0.0}
     # head_weighted は平均の重みが 1/2 なので、uniform と同じ半径には γ0 が 2 倍要る（γ0=20 で R≈480mm）
     turn_left:  {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 20.0}
@@ -424,6 +428,8 @@ behavior:
   controller:
     gait: forward             # 振幅・空間周波数の元にする歩容
     advance_per_cycle_mm: 380.0   # 1周期の前進量。要実機校正（fit_sim.py の結果に合わせる）
+    stalk_gait: stalk             # 接近（APPROACH）に使う歩容
+    stalk_advance_per_cycle_mm: 121.0   # stalk の 1周期の前進量（KINEMATIC_SIM、sim/measure.py）。要実機校正
     min_temporal_freq_hz: 0.10    # これより遅い蛇行はしない（周期 10 秒）
     speed_patrol_mm_s: 120.0
     speed_approach_mm_s: 50.0     # h. 近づくときは遅く

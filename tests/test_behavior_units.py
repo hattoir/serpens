@@ -249,3 +249,18 @@ def test_flick_rate_follows_novelty_and_returns_to_base(cfg: dict) -> None:
     assert counts[1.0] > counts[0.0]
     assert f["peak_rate_per_min"] * 0.5 <= counts[1.0] <= f["peak_rate_per_min"] * 1.6, counts
     assert counts[0.0] <= f["base_rate_per_min"] * 2.0, counts
+
+
+def test_stalk_gait_is_a_different_waveform_not_just_slower(cfg: dict) -> None:
+    """接近は速度差ではなく波形の差: 振幅が小さく、rectilinear の 0.02〜0.07 BL/s に収まる。"""
+    from serpens.sim.measure import per_cycle_advance
+
+    ctrl = Controller(cfg)
+    walk = ctrl._params(120.0)
+    stalk = ctrl._params(50.0, gait="stalk")
+    assert stalk.amplitude_deg < 0.5 * walk.amplitude_deg
+    assert abs(stalk.temporal_freq_hz) <= abs(cfg["gait"]["presets"]["stalk"]["temporal_freq_hz"])
+    adv = per_cycle_advance(cfg, stalk, 2, 2).per_cycle_mm
+    assert adv == pytest.approx(cfg["behavior"]["controller"]["stalk_advance_per_cycle_mm"], rel=0.15)
+    bl_per_s = adv * abs(stalk.temporal_freq_hz) / float(cfg["body"]["length_mm"])
+    assert 0.02 <= bl_per_s <= 0.07, bl_per_s

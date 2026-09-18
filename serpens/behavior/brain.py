@@ -380,7 +380,7 @@ class Brain:
             self._set_drive(DriveCommand(False, reason="接近: 一度止まって様子を見る"))
             return
         cmd = self.ctrl.drive_to(t, snake, person, float(c["speed_approach_mm_s"]), person,
-                                 stop_at_person=True, edge_is_goal=True)
+                                 stop_at_person=True, edge_is_goal=True, gait="stalk")   # 忍び寄りの波形
         if cmd.blocked:
             self._at_limit, self._limit_person = True, np.asarray(person, float).copy()
         self._set_drive(cmd)

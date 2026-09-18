@@ -54,6 +54,8 @@ class Controller:
         c = cfg["behavior"]["controller"]
         self.c = c
         self.base = GaitParams.from_cfg(cfg["gait"]["presets"][c["gait"]])
+        self.stalk = GaitParams.from_cfg(cfg["gait"]["presets"][c["stalk_gait"]])
+        self._advance = {"base": float(c["advance_per_cycle_mm"]), "stalk": float(c["stalk_advance_per_cycle_mm"])}
         self.w, self.d = float(cfg["mat"]["width_mm"]), float(cfg["mat"]["depth_mm"])
         self.phase = "forward"       # forward → back（後退しながら向き直る）→ forward
         self._phase_t = 0.0
@@ -73,10 +75,12 @@ class Controller:
             return min(wanted, float(self.c["near_speed_limit_mm_s"]))
         return wanted
 
-    def _params(self, speed: float, backward: bool = False) -> GaitParams:
-        f_max = abs(self.base.temporal_freq_hz)
-        f = min(max(speed / float(self.c["advance_per_cycle_mm"]), float(self.c["min_temporal_freq_hz"])), f_max)
-        return replace(self.base, temporal_freq_hz=-f if backward else f, turn_bias_deg=0.0)
+    def _params(self, speed: float, backward: bool = False, gait: str = "base") -> GaitParams:
+        """速さ → 歩容パラメータ。gait="stalk" は忍び寄り（小振幅・低周波）。"""
+        base = self.stalk if gait == "stalk" else self.base
+        f_max = abs(base.temporal_freq_hz)
+        f = min(max(speed / self._advance[gait], float(self.c["min_temporal_freq_hz"])), f_max)
+        return replace(base, temporal_freq_hz=-f if backward else f, turn_bias_deg=0.0)
 
     def _heading_error(self, pose: SnakePose, target: np.ndarray) -> float:
         b = math.atan2(target[1] - pose.y, target[0] - pose.x)
@@ -121,8 +125,8 @@ class Controller:
     # ---- 指令 -----------------------------------------------------------------
     def drive_to(self, t: float, pose: SnakePose, target_xy: np.ndarray, speed_mm_s: float,
                  person_xy: np.ndarray | None = None, stop_at_person: bool = False,
-                 edge_is_goal: bool = False) -> DriveCommand:
-        """target_xy へ向かう指令を作る。"""
+                 edge_is_goal: bool = False, gait: str = "base") -> DriveCommand:
+        """target_xy へ向かう指令を作る。gait="stalk" で忍び寄りの波形にする。"""
         c = self.c
         speed = self.speed_limit(pose, person_xy, speed_mm_s)
         if person_xy is not None and stop_at_person and \
@@ -157,7 +161,7 @@ class Controller:
         err = (1.0 - w) * err_target + w * err_center
         g = self._clamp_turn(gain * err, turn_max)
         note = "" if w == 0.0 else f"／端に寄ったので中央へ {w:.0%}"
-        return DriveCommand(True, self._params(speed), g, speed, f"目標へ（向きの誤差 {err_target:+.0f}°{note}）")
+        return DriveCommand(True, self._params(speed, gait=gait), g, speed, f"目標へ（向きの誤差 {err_target:+.0f}°{note}）")
 
     def _enter(self, phase: str, t: float) -> None:
         self.phase, self._phase_t = phase, t
