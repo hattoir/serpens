@@ -197,7 +197,39 @@ def test_primary_reaction_is_inside_the_causal_window(cfg: dict) -> None:
     twitch = [j8 - yaw0 for t, j8, *_ in trace if t_prim < t <= t_prim + 2 * x["primary_twitch_s"]]
     assert min(twitch) <= -x["primary_twitch_deg"] * 0.8    # 人のいる側（右）へ動いた
     assert any(br == x["primary_flash_brightness"] for t, _, _, br, _ in trace if t_prim <= t <= t_prim + x["primary_flash_s"])
-    patrol_br = cfg["behavior"]["eyes"]["PATROL"][3]
-    assert any(br == patrol_br for t, _, _, br, _ in trace if t_prim + x["primary_flash_s"] + 0.05 < t < t_react)  # 戻る
+    lit = [t for t, _, _, br, _ in trace if t_prim <= t < t_react and br == x["primary_flash_brightness"]]
+    assert x["primary_flash_s"] - 0.03 <= max(lit) - min(lit) <= x["primary_flash_s"] + 0.06   # 一瞬だけ光って戻る
     neck_frozen = [j7 for _t, _j8, j7, _br, frozen in trace if frozen]
     assert len(neck_frozen) > 5 and max(neck_frozen) - min(neck_frozen) > 0.1   # 全停止中も呼吸で首が動く
+
+
+def test_no_threat_posture_while_tracking_a_person(cfg: dict) -> None:
+    """人を追跡中は J7 > neck.look_max_deg の姿勢を指令しない（フル鎌首はコブラの打撃直前に見える）。"""
+    look_max = float(cfg["neck"]["look_max_deg"])
+    s = SimSession(cfg, BodyPose(200.0, 400.0, 0.0), seed=2)
+    s.people = [SimPerson(600.0, -400.0)]
+    worst = 0.0
+
+    def watch(ss: SimSession) -> None:
+        nonlocal worst
+        if ss.target is not None:
+            worst = max(worst, ss.anim.last_base["J7"])
+
+    run_until(s, 60.0, hook=watch)
+    assert s.target is not None
+    assert worst <= look_max + 1e-6, worst
+    # guard そのもの: 追跡中に伸びを命じても J7 は look_max_deg に抑えられる
+    s.brain.expr.person_tracked = True
+    s.brain.expr.stretch(s.t)
+    run_until(s, s.t + 3.0)
+    assert s.anim.last_base["J7"] <= look_max + 1e-6 and s.brain.expr.guarded >= 1
+
+
+def test_stretch_happens_only_when_alone(cfg: dict) -> None:
+    """伸び（フル鎌首）は誰もいない巡回の静止中にだけ出る。"""
+    s = SimSession(cfg, BodyPose(200.0, 400.0, 0.0), seed=4)
+    full = float(cfg["neck"]["full_rear_min_deg"])
+    reached = []
+    run_until(s, 150.0, hook=lambda ss: reached.append(ss.anim.last_base["J7"] >= full - 1.0))
+    assert any("stretch" == n for _t, n in s.brain.expr.log)
+    assert any(reached)

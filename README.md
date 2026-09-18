@@ -266,8 +266,8 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 - 関節角の符号: yaw + = 上から見て左、pitch + = 頭が上がる、roll + = 右に傾く（`motion/kinematics.py`）
 - `motion/gait.py` … α(n,t) = A·sin(Ω·n + ω·t) + γ(n)。n=0 が J1（尾側）。ω>0 で前進、ω<0 で後退。
   旋回入力は γ だけ（振幅勾配は平面の蛇行では旋回しないことを確認して削除）。
-- `motion/poses.py` … home（J7 = +8°：頭をわずかに浮かせる）/ coil / rear_up（土台 s_curve / partial_coil）/
-  full_rear_up / head_look / relax。
+- `motion/poses.py` … home（J7 = +8°：頭をわずかに浮かせる）/ rest（緩い弧）/ rear_up（土台 arc）/
+  stretch（伸び。人がいないときだけ）/ head_look / relax。旧 coil・s_curve は `legacy_poses`。
   head_look で J7 を指定すると「人を見る」範囲（`neck.look_min_deg`〜`look_max_deg`）に制限される。
 - `motion/animator.py` … 出力 = キーフレーム + 歩容（加算）+ 呼吸（加算）。
   キーフレームがその軸の `max_speed_dps`（胴体 240 / J7 120 / J8・J9 90 °/s）を超える速さを要求したら、

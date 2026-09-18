@@ -6,7 +6,8 @@
 
 J7 を 90° 近くまで倒すと J8 のヨー軸が世界座標で roll になってしまうため、
 人を見るとき（head_look）の J7 は neck.look_min_deg〜look_max_deg に制限する。
-neck.full_rear_min_deg〜max_deg は「真上から見下ろすフル鎌首」演出専用。
+neck.full_rear_min_deg〜max_deg は「伸び」（stretch。人がいないときだけ）専用。
+人を追跡中にそこまで持ち上げると打撃直前のコブラに見える（brain の guard で抑える）。
 """
 from __future__ import annotations
 
@@ -78,7 +79,7 @@ class Poses:
 
     @property
     def rear_up_bases(self) -> list[str]:
-        """鎌首の土台の種類（s_curve / partial_coil）。"""
+        """鎌首の土台の種類（arc。旧 s_curve は legacy_poses）。"""
         return list(self._p["rear_up"]["bases"])
 
     def rear_up(self, angle_deg: float | None = None, base: str | None = None) -> Pose:
@@ -93,9 +94,12 @@ class Poses:
         pose[NECK] = self._clamp(NECK, a)
         return pose
 
-    def full_rear_up(self) -> Pose:
-        """真上から見下ろすフル鎌首（演出専用）。"""
+    def stretch(self) -> Pose:
+        """伸び: 真上から見下ろすフル鎌首。**人がいないときだけ**（旧 full_rear_up）。"""
         return self.rear_up(float(self._neck["full_rear_min_deg"]))
+
+    def stretch_timing(self) -> dict[str, Any]:
+        return dict(self._p["stretch"])
 
     def head_look(self, yaw_deg: float, roll_deg: float = 0.0, neck_deg: float | None = None) -> Pose:
         """頭を向ける。neck_deg を与えたときは「人を見る」範囲にクランプする。"""

@@ -136,7 +136,7 @@ def test_engine_blends_in_and_out(cfg: dict) -> None:
 def test_presets_within_soft_limits(cfg: dict) -> None:
     poses = Poses(cfg)
     lim = limits(cfg)
-    all_poses = [poses.home(), poses.rest(), poses.full_rear_up(), poses.head_look(80, 50, 90),
+    all_poses = [poses.home(), poses.rest(), poses.stretch(), poses.head_look(80, 50, 90),
                  poses.relax().angles] + [poses.rear_up(60, b) for b in poses.rear_up_bases]
     for pose in all_poses:
         for n, v in pose.items():
@@ -146,10 +146,10 @@ def test_presets_within_soft_limits(cfg: dict) -> None:
 
 def test_rest_arc_leaves_room_for_breathing(cfg: dict) -> None:
     """とぐろ ± 呼吸振幅 でもソフトリミット内。"""
-    amp = cfg["breath"]["amplitude_deg"]
+    amp = cfg["breath"]["amplitude_by_axis"]
     lim = limits(cfg)
     for n, v in Poses(cfg).rest().items():
-        assert lim[n][0] <= v - amp and v + amp <= lim[n][1], n
+        assert lim[n][0] <= v - amp[n] and v + amp[n] <= lim[n][1], n
 
 
 def test_rest_arc_has_no_self_intersection(cfg: dict) -> None:
@@ -162,8 +162,9 @@ def test_rest_arc_has_no_self_intersection(cfg: dict) -> None:
     sc = cfg["self_collision"]
     coil = poses.rest()
     assert sum(coil[f"J{k}"] for k in range(1, 7)) > 200
-    for d in (-cfg["breath"]["amplitude_deg"], 0.0, cfg["breath"]["amplitude_deg"]):
-        pose = {k: v + d for k, v in coil.items()}
+    amp = cfg["breath"]["amplitude_by_axis"]
+    for d in (-1.0, 0.0, 1.0):
+        pose = {k: v + d * amp[k] for k, v in coil.items()}
         pts = poses.points(pose)
         clr = min_self_clearance(pts[:, :2], sc["arc_skip_mm"], sc["sample_mm"])
         assert clr >= sc["min_clearance_mm"] >= cfg["body"]["diameter_mm"], (d, clr)
@@ -174,7 +175,8 @@ def test_rest_arc_has_no_self_intersection(cfg: dict) -> None:
 def test_rear_up_bases_have_no_self_intersection(cfg: dict) -> None:
     poses = Poses(cfg)
     sc = cfg["self_collision"]
-    assert set(poses.rear_up_bases) == {"s_curve", "arc"}
+    assert set(poses.rear_up_bases) == {"arc"}                      # s_curve は威嚇に見えるので legacy へ
+    assert "s_curve" in cfg["legacy_poses"]
     for b in poses.rear_up_bases:
         pts = poses.points(poses.rear_up(60, b))
         assert min_self_clearance(pts[:, :2], sc["arc_skip_mm"], sc["sample_mm"]) >= sc["min_clearance_mm"]
@@ -195,7 +197,7 @@ def test_head_look_limits_neck_to_look_range(cfg: dict) -> None:
     assert "J7" not in poses.head_look(10, 5)
     assert poses.head_look(30, 15) == {"J8": 30, "J9": 15}
     assert poses.head_look(120, -60) == {"J8": 80, "J9": -35}      # ソフトリミット
-    assert poses.full_rear_up()["J7"] == nk["full_rear_min_deg"]
+    assert poses.stretch()["J7"] == nk["full_rear_min_deg"]
 
 
 def test_relax_command(cfg: dict) -> None:

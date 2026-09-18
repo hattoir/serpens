@@ -76,7 +76,7 @@ def main() -> None:
     ax.grid(alpha=0.3)
 
     sc = cfg["self_collision"]
-    shapes = [("home", poses.home()), ("休憩の弧", poses.rest()), ("鎌首60° (胴体S字)", poses.rear_up(60))]
+    shapes = [("home", poses.home()), ("休憩の弧", poses.rest()), ("鎌首60° (胴体 arc)", poses.rear_up(60))]
     for k, (label, pose) in enumerate(shapes):
         a2 = fig.add_subplot(2, 4, 5 + k)
         pts = poses.points(pose)

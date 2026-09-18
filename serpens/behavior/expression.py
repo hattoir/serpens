@@ -12,12 +12,13 @@
 from __future__ import annotations
 
 import random
+from dataclasses import replace
 from typing import Any, Callable
 
 from serpens.hw.head_io import HeadIO
 from serpens.hw.servo_bus import ServoBus
 from serpens.motion.animator import Animator, Easing, Keyframe
-from serpens.motion.poses import HEAD_ROLL, HEAD_YAW, Poses
+from serpens.motion.poses import HEAD_ROLL, HEAD_YAW, NECK, Poses
 
 Action = Callable[[float], None]
 
@@ -39,6 +40,9 @@ class Expression:
         self.next_tilt_t = float("inf")
         self.next_glance_t = self._draw_glance(0.0)
         self._flick_last_t: float | None = None
+        self.person_tracked = False       # brain が毎周期入れる。True の間は J7 を look_max_deg までに抑える
+        self.guarded = 0                  # guard が効いた回数（試験・ログ用）
+        self.next_stretch_t = self._u_from(self.poses.stretch_timing()["interval_s"], 0.0)
         self.flick_until = -1.0
         self.flicks = 0
         self.log: list[tuple[float, str]] = []
@@ -46,6 +50,35 @@ class Expression:
     def _u(self, key: str) -> float:
         lo, hi = self.x[key]
         return self.rng.uniform(float(lo), float(hi))
+
+    def _u_from(self, pair: Any, t: float) -> float:
+        lo, hi = pair
+        return t + self.rng.uniform(float(lo), float(hi))
+
+    def play(self, kf: Keyframe, t: float) -> float:
+        """姿勢を出す唯一の入口。人を追跡中は J7 を neck.look_max_deg までに抑える（威嚇に見せない）。"""
+        if self.person_tracked and NECK in kf.pose and kf.pose[NECK] > self.poses.clamp_look_neck(kf.pose[NECK]):
+            pose = dict(kf.pose)
+            pose[NECK] = self.poses.clamp_look_neck(pose[NECK])
+            kf = replace(kf, pose=pose)
+            self.guarded += 1
+        return self.anim.play(kf, t)
+
+    def maybe_stretch(self, t: float) -> None:
+        """伸び（人がいないときだけ。呼ばれる側が保証する）。"""
+        if t < self.next_stretch_t or self.person_tracked or t < self.busy_until:
+            return
+        self.stretch(t)
+
+    def stretch(self, t: float) -> None:
+        st = self.poses.stretch_timing()
+        dur = self.play(Keyframe(self.poses.stretch(), float(st["duration_s"]), Easing.IN_OUT), t)
+        back = t + dur + float(st["hold_s"])
+        self.busy_until = back + float(st["duration_s"])
+        home = {k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, HEAD_ROLL)}
+        self.schedule(back, "stretch_back", lambda tt: self.play(Keyframe(home, float(st["duration_s"])), tt))
+        self.next_stretch_t = self._u_from(st["interval_s"], back)
+        self.log.append((t, "stretch"))
 
     def _draw_glance(self, t: float) -> float:
         return t + self._u("glance_interval_s")
@@ -99,9 +132,9 @@ class Expression:
         base = self.anim.base.get(HEAD_YAW, 0.0)
         deg = float(self.x["primary_twitch_deg"]) * (1.0 if direction >= 0 else -1.0)
         dur = float(self.x["primary_twitch_s"])
-        self.anim.play(Keyframe(self.poses.head_look(base + deg, self.anim.base.get(HEAD_ROLL, 0.0)), dur, Easing.OUT), t)
+        self.play(Keyframe(self.poses.head_look(base + deg, self.anim.base.get(HEAD_ROLL, 0.0)), dur, Easing.OUT), t)
         self.schedule(t + dur, "twitch_back",
-                      lambda tt: self.anim.play(Keyframe({HEAD_YAW: base}, dur, Easing.OUT), tt))
+                      lambda tt: self.play(Keyframe({HEAD_YAW: base}, dur, Easing.OUT), tt))
         self.log.append((t, f"twitch {deg:+.1f}°"))
 
     def maybe_flick(self, t: float, novelty: float) -> None:
@@ -123,8 +156,8 @@ class Expression:
         deg = self.rng.uniform(float(lo), float(hi)) * self.rng.choice((-1.0, 1.0))
         lo, hi = f["duration_s"]
         half = self.rng.uniform(float(lo), float(hi)) / 2.0
-        self.anim.play(Keyframe({HEAD_YAW: self.poses.head_look(base + deg)[HEAD_YAW]}, half, Easing.OUT), t)
-        self.schedule(t + half, "flick_back", lambda tt: self.anim.play(Keyframe({HEAD_YAW: base}, half, Easing.OUT), tt))
+        self.play(Keyframe({HEAD_YAW: self.poses.head_look(base + deg)[HEAD_YAW]}, half, Easing.OUT), t)
+        self.schedule(t + half, "flick_back", lambda tt: self.play(Keyframe({HEAD_YAW: base}, half, Easing.OUT), tt))
         self.flick_until = t + 2.0 * half
         self.flicks += 1
         self.log.append((t, f"flick {deg:+.0f}°"))
@@ -141,7 +174,7 @@ class Expression:
                           (t < self.hold_until and abs(yaw_deg - self.look_yaw) < float(self.x["look_retarget_deg"]))):
             return False
         pose = self.poses.head_look(yaw_deg, self.anim.base.get(HEAD_ROLL, 0.0), neck_deg)
-        dur = self.anim.play(Keyframe(pose, float(self.x["look_duration_s"]), Easing.OUT_OVERSHOOT,
+        dur = self.play(Keyframe(pose, float(self.x["look_duration_s"]), Easing.OUT_OVERSHOOT,
                                       self._u("look_overshoot_deg")), t)
         self.look_yaw = pose[HEAD_YAW]
         self.hold_until = t + dur + self._u("look_hold_s")
@@ -151,10 +184,10 @@ class Expression:
     def tilt(self, t: float) -> None:
         """e. 首かしげ（左右ランダム）→ tilt_hold_s 保持 → 戻す。"""
         deg = self._u("tilt_deg") * self.rng.choice((-1.0, 1.0))
-        dur = self.anim.play(Keyframe({HEAD_ROLL: deg}, float(self.x["look_duration_s"]), Easing.OUT), t)
+        dur = self.play(Keyframe({HEAD_ROLL: deg}, float(self.x["look_duration_s"]), Easing.OUT), t)
         back = t + dur + float(self.x["tilt_hold_s"])
         self.busy_until = back
-        self.schedule(back, "untilt", lambda tt: self.anim.play(Keyframe({HEAD_ROLL: 0.0}, float(self.x["look_duration_s"])), tt))
+        self.schedule(back, "untilt", lambda tt: self.play(Keyframe({HEAD_ROLL: 0.0}, float(self.x["look_duration_s"])), tt))
         self.log.append((t, f"tilt {deg:+.0f}°"))
 
     def start_tilting(self, t: float) -> None:
@@ -184,7 +217,7 @@ class Expression:
     def petted(self, t: float) -> float:
         """i. 脱力: トルクを落とし、首を下げ、目を暗くする。petted_s 後にトルクを戻す。戻す時刻を返す。"""
         r = self.poses.relax()
-        self.anim.play(Keyframe(r.angles, float(self.x["look_duration_s"])), t)
+        self.play(Keyframe(r.angles, float(self.x["look_duration_s"])), t)
         self.set_torque_ratio(r.torque_ratio if r.torque_ratio is not None else 1.0)
         end = t + float(self.x["petted_s"])
         self.cancel("petted_end")

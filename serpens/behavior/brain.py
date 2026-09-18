@@ -116,6 +116,7 @@ class Brain:
         self._last_t = t
         self._events = []
         self._perceive(t, dt, p)
+        self.expr.person_tracked = p.person_xy is not None      # 追跡中は威嚇に見える姿勢を出さない（guard）
         self._last_snake, self._last_person_raw = p.snake, p.person_xy
         person = p.person_xy if self.noticed else None
         if self._at_limit and (person is None or self._limit_person is None or
@@ -272,16 +273,16 @@ class Brain:
         self.expr.stop_tilting()
         self._set_drive(DriveCommand(False, reason=STATE_LABELS_JA[s]))
         if s not in COIL_STATES and self.anim.base.get("J1", 0.0) != self.poses.home()["J1"]:
-            self.anim.play(Keyframe({k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, "J9")}, 1.5), t)
+            self.expr.play(Keyframe({k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, "J9")}, 1.5), t)
         if s == "SLEEP":
-            self.anim.play(Keyframe({NECK: float(x["sleep_neck_deg"]), HEAD_YAW: 0.0}, 2.0), t)
+            self.expr.play(Keyframe({NECK: float(x["sleep_neck_deg"]), HEAD_YAW: 0.0}, 2.0), t)
         elif s == "PATROL":
             self._waypoint = None
             lo, hi = self.b["controller"]["patrol_flip_s"]
             self._patrol_flip_t = t + self.rng.uniform(float(lo), float(hi))
             self.patrol_paused = False
             self._patrol_phase_until = t + self._u_ctrl("patrol_move_s")
-            self.anim.play(Keyframe({NECK: self.poses.home()[NECK]}, 1.0), t)
+            self.expr.play(Keyframe({NECK: self.poses.home()[NECK]}, 1.0), t)
         elif s in STILL_STATES and snake is not None and person is not None:
             neck = float(x["alert_neck_deg"] if s == "ALERT" else x["engage_neck_deg"])
             self.expr.look_at(t, self._yaw_to(snake, person), neck, force=True)
@@ -299,7 +300,7 @@ class Brain:
         elif s == "PETTED":
             self.expr.petted(t)
         elif s in COIL_STATES:
-            self.anim.play(rest_keyframe(self.poses), t)
+            self.expr.play(rest_keyframe(self.poses), t)
         self.expr.set_eyes(s)
 
     def _on_tick(self, t: float, snake: SnakePose | None, person: np.ndarray | None, head_dist: float | None) -> None:
@@ -309,6 +310,8 @@ class Brain:
             self.expr.glance_away(t)
         if s in STILL_STATES or (s == "PATROL" and self.patrol_paused):
             self.expr.maybe_flick(t, self._novelty)         # 舌のちらつき相当（止まっているときだけ）
+        if s == "PATROL" and self.patrol_paused and person is None and self._last_person_raw is None:
+            self.expr.maybe_stretch(t)                      # 伸び（誰もいないときだけ）
         if snake is None:
             self._set_drive(DriveCommand(False, reason="位置不明: 停止"))
             return

@@ -158,13 +158,20 @@ poses:
     order: [J1, J2, J3, J4, J5, J6, J7, J8, J9]
     stagger_s: 0.5            # 隣の関節が動き始めるまでの遅れ
     per_joint_s: 1.5          # 各関節の補間時間
-  # 鎌首: J7 で頭を持ち上げる。胴体の土台は2種類（実機で安定な方を選ぶ）
+  # 鎌首: J7 で頭を持ち上げる。胴体の土台は arc（後方を軽く曲げる）。
+  # 旧 s_curve（J4:25, J5:-35, J6:20）は生物学的に「打撃直前の S 字構え」（蛇の防御段階 ①逃走 → ②威嚇 → ③打撃。
+  # California Herps: Defensive Strategies）なので演出から外し、legacy_poses（SIMULATION_LEGACY_ONLY）へ移した
   rear_up:
     default_angle_deg: 60.0
-    default_base: s_curve
+    default_base: arc
     bases:
-      s_curve:      {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}   # 仮
       arc:          {J1: 40, J2: 34, J3: 28, J4: 0, J5: 0, J6: 0}    # 後方を軽く曲げる（R03 の範囲内）
+  # 伸び（stretch）: 真上から見下ろすフル鎌首（J7 = neck.full_rear_min_deg）。**人がいないときだけ**。
+  # 人を追跡中は「コブラが襲う直前」に見えるので、brain の guard が J7 を neck.look_max_deg に抑える
+  stretch:
+    hold_s: 2.5
+    duration_s: 2.0
+    interval_s: [40.0, 90.0]  # 巡回の静止中、誰もいないときにこの間隔で
   # 脱力（タッチ時）: 首を下げ、トルクを落とす
   relax:
     neck_deg: 0.0             # J7 を下げる
@@ -182,6 +189,7 @@ legacy_poses:
   reason: "R03 では胴体ヨーが ±50°（CONDITIONAL）。旧値は 83° / 55° で入らない"
   coil: {J1: 83.0, J2: 68.9, J3: 57.2, J4: 47.5, J5: 39.4, J6: 32.7, J7: 8, J8: 0, J9: 0}
   partial_coil: {J1: 60, J2: 50, J3: 40, J4: 0, J5: 0, J6: 0}
+  s_curve: {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}   # 鎌首の旧土台。威嚇の S 字構えに見えるため演出から外した
 
 # ---------------------------------------------------------------------------
 # アニメーション
