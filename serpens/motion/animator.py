@@ -2,68 +2,28 @@
 
 出力角 = キーフレーム（ベース姿勢） + 歩容（J1〜J6、加算） + 呼吸（全軸、軸ごとの振幅で加算）
 
-- キーフレーム補間: ease-in-out / ease-out / オーバーシュート付き ease-out
-- 呼吸: 全軸に ±amplitude・周期 period のサイン波を常時加算。ON/OFF は fade_s でなめらかに
+- キーフレーム補間: ease-in-out / ease-out / オーバーシュート付き ease-out（serpens/motion/easing.py）
+  + 予備動作（anticipate）と減衰振動（settle）。速度上限の計算にはどちらも含める
+- 頭（胴体ヨーより先の軸）は先端の加速度を animator.head_max_accel_g 以下に、
+  head_min_rise_deg 以上の動きは立ち上がりを head_min_rise_s 以上にする（打撃に見える速さを構造的に出さない。
+  ガラガラヘビの打撃は 506 m/s²・35ms: Higham et al., Sci. Rep. 2017）
+- 呼吸: 全軸にサイン波を常時加算。ON/OFF は fade_s でなめらかに。呼吸は壁時計で回る
 - freeze(): 出力をその場で固定（驚きの全停止）。解除すると、止まっていた時間ぶん
-  補間・歩容が一時停止していたように続きから動く。呼吸は壁時計で回り続けるので、
-  keep_breath=True の freeze では呼吸だけが続く（止めると「物体」に戻る）
+  補間・歩容が一時停止していたように続きから動く。keep_breath=True なら呼吸だけは続く
 """
 from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from enum import Enum
 from typing import Any
 
 from serpens.hw.servo_bus import Goal, ServoBus
-from serpens.motion.gait import GaitEngine
+from serpens.motion.easing import (Easing, Track, ease_in_out, ease_out, min_duration_for_accel_s,  # noqa: F401
+                                   min_duration_s, overshoot_value)
+from serpens.motion.gait import GaitEngine, body_joint_names
 from serpens.motion.poses import Pose, Poses
 
-
-class Easing(Enum):
-    """補間の種類。"""
-
-    IN_OUT = "ease_in_out"
-    OUT = "ease_out"
-    OUT_OVERSHOOT = "ease_out_overshoot"
-
-
-def ease_in_out(p: float) -> float:
-    """3次の ease-in-out（0→1）。"""
-    p = min(max(p, 0.0), 1.0)
-    return 4.0 * p ** 3 if p < 0.5 else 1.0 - (-2.0 * p + 2.0) ** 3 / 2.0
-
-
-def ease_out(p: float) -> float:
-    """3次の ease-out（0→1）。"""
-    p = min(max(p, 0.0), 1.0)
-    return 1.0 - (1.0 - p) ** 3
-
-
-# 各補間の「最大の傾き / 平均の傾き」（3次式なので 3）
-EASE_PEAK_SLOPE = 3.0
-
-
-def min_duration_s(start: float, end: float, easing: Easing, overshoot_deg: float,
-                   peak_ratio: float, max_speed_dps: float) -> float:
-    """最高角速度が max_speed_dps を超えないために必要な最短時間。"""
-    if easing is Easing.OUT_OVERSHOOT and end != start:
-        return EASE_PEAK_SLOPE * (abs(end - start) + abs(overshoot_deg)) / (peak_ratio * max_speed_dps)
-    return EASE_PEAK_SLOPE * abs(end - start) / max_speed_dps
-
-
-def overshoot_value(start: float, end: float, p: float, overshoot_deg: float, peak_ratio: float) -> float:
-    """行き過ぎ付きの補間値。
-
-    0〜peak_ratio: start → end + overshoot（ease-out）
-    peak_ratio〜1: そこから end に戻る（ease-in-out）
-    """
-    if end == start or overshoot_deg == 0.0:
-        return start + (end - start) * ease_out(p)
-    peak = end + math.copysign(overshoot_deg, end - start)
-    if p < peak_ratio:
-        return start + (peak - start) * ease_out(p / peak_ratio)
-    return peak + (end - peak) * ease_in_out((p - peak_ratio) / (1.0 - peak_ratio))
+G_MPS2 = 9.80665
 
 
 @dataclass(frozen=True)
@@ -72,6 +32,8 @@ class Keyframe:
 
     order と stagger_s を与えると、order の順に stagger_s ずつ遅れて動き始める
     （とぐろを尾から順に巻く、など）。duration_s は各関節の補間時間。
+    anticipate_deg / anticipate_lead_s … 本動作の lead 秒前に進行方向と逆へ deg だけ引く
+    settle_amp_deg / settle_tau_s / settle_joints … 到達後に settle_joints を減衰振動で止める
     """
 
     pose: Pose
@@ -80,6 +42,11 @@ class Keyframe:
     overshoot_deg: float = 0.0
     order: tuple[str, ...] = ()
     stagger_s: float = 0.0
+    anticipate_deg: float = 0.0
+    anticipate_lead_s: float = 0.0
+    settle_amp_deg: float = 0.0
+    settle_tau_s: float = 0.0
+    settle_joints: tuple[str, ...] = ()
 
     def delay_of(self, name: str) -> float:
         """関節 name が動き始めるまでの遅れ [s]。"""
@@ -96,27 +63,6 @@ def rest_keyframe(poses: Poses) -> Keyframe:
                     order=tuple(seq["order"]), stagger_s=float(seq["stagger_s"]))
 
 
-@dataclass
-class _Track:
-    start: float
-    end: float
-    t0: float
-    duration: float
-    easing: Easing
-    overshoot_deg: float
-
-    def value(self, t: float, peak_ratio: float) -> float:
-        if t <= self.t0:
-            return self.start
-        p = 1.0 if self.duration <= 0 else (t - self.t0) / self.duration
-        if p >= 1.0:
-            return self.end
-        if self.easing is Easing.OUT_OVERSHOOT:
-            return overshoot_value(self.start, self.end, p, self.overshoot_deg, peak_ratio)
-        f = ease_out(p) if self.easing is Easing.OUT else ease_in_out(p)
-        return self.start + (self.end - self.start) * f
-
-
 class Animator:
     """9軸の指令角を毎周期計算する。時刻 t は呼び出し側が与える（テストしやすいように）。"""
 
@@ -128,6 +74,15 @@ class Animator:
         a, b = cfg["animator"], cfg["breath"]
         self._accel = float(a["default_accel_dps2"])
         self._peak_ratio = float(a["overshoot_peak_ratio"])
+        self._settle_hz = float(a["settle_freq_hz"])
+        # 頭（胴体ヨーより先）: 先端の加速度と立ち上がり時間の下限
+        body = set(body_joint_names(cfg))
+        self.head_joints = [n for n in self.names if n not in body]
+        neck_x = next(float(j["x_mm"]) for j in cfg["joints"] if j["name"] not in body)
+        self._head_lever_mm = float(cfg["body"]["head_tip_x_mm"]) - neck_x
+        self._head_max_accel = float(a["head_max_accel_g"]) * G_MPS2
+        self._head_min_rise_s = float(a["head_min_rise_s"])
+        self._head_min_rise_deg = float(a["head_min_rise_deg"])
         by_axis = b["amplitude_by_axis"]
         self._b_amp = {n: float(by_axis.get(n, b["default_amplitude_deg"])) for n in self.names}
         self._b_period = float(b["period_s"])
@@ -136,7 +91,7 @@ class Animator:
         self.gait = GaitEngine(cfg)
         home = cfg["poses"]["home"]
         self.base: Pose = {n: float(home.get(n, 0.0)) for n in self.names}
-        self._tracks: dict[str, _Track] = {}
+        self._tracks: dict[str, Track] = {}
         self._breath_env = 1.0
         self._breath_target = 1.0
         self._frozen_at: float | None = None
@@ -155,20 +110,47 @@ class Animator:
         return t - self._paused_total
 
     # ---- 操作 -----------------------------------------------------------------
+    def _min_head_s(self, name: str, travel_deg: float) -> float:
+        """頭の軸に課す最短時間（先端の加速度 ≤ head_max_accel、大きな動きは立ち上がり ≥ head_min_rise_s）。"""
+        if name not in self.head_joints or travel_deg <= 0.0:
+            return 0.0
+        need = min_duration_for_accel_s(travel_deg, self._head_lever_mm, self._head_max_accel)
+        if travel_deg >= self._head_min_rise_deg:
+            need = max(need, self._head_min_rise_s)
+        return need
+
     def play(self, kf: Keyframe, t: float) -> float:
         """キーフレームを開始する。始点は各関節の現在のベース角。
 
-        どれかの関節がその軸の max_speed_dps を超える場合は、全関節そろえて時間を延ばす。
-        戻り値: 最後の関節が到達するまでの時間 [s]
+        どれかの関節が速度・加速度の上限を超える場合は、全関節そろえて時間を延ばす
+        （予備動作の時間・減衰振動の振幅も同じ上限に収める）。
+        戻り値: 最後の関節が到達するまでの時間 [s]（減衰振動は含まない）
         """
         at = self._anim_t(t)
         starts = {name: self._base_value(name, at) for name in kf.pose}
-        need = max((min_duration_s(starts[n], d, kf.easing, kf.overshoot_deg, self._peak_ratio, self._vmax[n])
-                    for n, d in kf.pose.items()), default=0.0)
+        pulls = {n: (-math.copysign(kf.anticipate_deg, d - starts[n]) if kf.anticipate_deg and d != starts[n] else 0.0)
+                 for n, d in kf.pose.items()}
+        need, lead_need = 0.0, 0.0
+        for n, d in kf.pose.items():
+            s0 = starts[n] + pulls[n]
+            need = max(need, min_duration_s(s0, d, kf.easing, kf.overshoot_deg, self._peak_ratio, self._vmax[n]),
+                       self._min_head_s(n, abs(d - s0)))
+            if pulls[n]:
+                lead_need = max(lead_need, min_duration_s(starts[n], s0, Easing.OUT, 0.0, 1.0, self._vmax[n]),
+                                self._min_head_s(n, abs(pulls[n])))
         dur = max(kf.duration_s, need)
+        lead = max(kf.anticipate_lead_s, lead_need) if any(pulls.values()) else 0.0
+        settle = {n: min(kf.settle_amp_deg, self._vmax[n] / (2.0 * math.pi * self._settle_hz))
+                  for n in kf.settle_joints} if kf.settle_amp_deg > 0.0 else {}
         for name, deg in kf.pose.items():
-            self._tracks[name] = _Track(starts[name], deg, at + kf.delay_of(name), dur, kf.easing, kf.overshoot_deg)
-        return dur + max((kf.delay_of(n) for n in kf.pose), default=0.0)
+            self._tracks[name] = Track(starts[name], deg, at + kf.delay_of(name), dur, kf.easing, kf.overshoot_deg,
+                                       lead, pulls[name], settle.get(name, 0.0), kf.settle_tau_s, self._settle_hz)
+        for name, amp in settle.items():
+            if name not in kf.pose:                       # 動かさない関節も、到達に合わせて揺れて止まる
+                v = self._base_value(name, at)
+                self._tracks[name] = Track(v, v, at, lead + dur, Easing.OUT, 0.0, 0.0, 0.0,
+                                           amp, kf.settle_tau_s, self._settle_hz)
+        return lead + dur + max((kf.delay_of(n) for n in kf.pose), default=0.0)
 
     def set_pose_now(self, pose: Pose) -> None:
         """補間なしでベース姿勢を置き換える。"""
@@ -177,14 +159,14 @@ class Animator:
             self.base[name] = deg
 
     def busy(self, t: float) -> bool:
-        """補間中の関節があれば True。"""
+        """到達前の関節があれば True（減衰振動中は含めない）。"""
         at = self._anim_t(t)
-        return any(at < tr.t0 + tr.duration for tr in self._tracks.values())
+        return any(at < tr.t_arrive for tr in self._tracks.values())
 
     def busy_joint(self, name: str, t: float) -> bool:
-        """関節 name が補間中なら True。"""
+        """関節 name が到達前なら True。"""
         tr = self._tracks.get(name)
-        return tr is not None and self._anim_t(t) < tr.t0 + tr.duration
+        return tr is not None and self._anim_t(t) < tr.t_arrive
 
     def set_breathing(self, on: bool) -> None:
         """呼吸の ON/OFF（fade_s かけて振幅を変える）。"""
@@ -219,7 +201,7 @@ class Animator:
         if tr is None:
             return self.base[name]
         v = tr.value(at, self._peak_ratio)
-        if at >= tr.t0 + tr.duration:
+        if at >= tr.t_done:
             self.base[name] = tr.end
             del self._tracks[name]
         return v

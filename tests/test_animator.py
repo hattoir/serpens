@@ -176,3 +176,50 @@ def test_send_uses_per_axis_speed(cfg: dict) -> None:
     st = bus.sync_read_states()
     assert st[1].pos_deg > st[8].pos_deg + 15           # 頭（90°/s）は胴体（240°/s）より遅い
     assert st[8].pos_deg <= vmax(cfg)["J8"] * 0.3 + 0.5
+
+
+def test_anticipation_pulls_back_first_and_speed_limit_includes_it(cfg: dict) -> None:
+    """予備動作: 本動作の前に逆へ引く。速度上限の計算に予備動作ぶんが入る（時間が延びる）。"""
+    anim = quiet(cfg)
+    kf = Keyframe({"J8": 40.0}, 0.6, Easing.OUT, anticipate_deg=6.0, anticipate_lead_s=0.2)
+    total = anim.play(kf, 0.0)
+    t, trace = run(anim, 0.0, total + 0.1)
+    j8 = [p["J8"] for p in trace]
+    assert min(j8[:10]) < -3.0                       # まず逆（負）へ
+    assert j8[-1] == pytest.approx(40.0)
+    v = vmax(cfg)["J8"]
+    assert np.abs(np.diff(j8)).max() <= v * DT * 1.01
+    plain = anim.play(Keyframe({"J8": 0.0}, 0.6, Easing.OUT), t)
+    assert total > plain                              # 予備動作の時間ぶん長い
+
+
+def test_settle_oscillates_and_decays_on_tail_joints(cfg: dict) -> None:
+    """follow-through: 到達後に尾側の関節が減衰振動して止まる。振幅は軸の速度上限に収める。"""
+    anim = quiet(cfg)
+    kf = Keyframe({"J7": 60.0}, 0.8, Easing.IN_OUT, settle_amp_deg=5.0, settle_tau_s=0.3, settle_joints=("J1", "J2"))
+    arrive = anim.play(kf, 0.0)
+    _, trace = run(anim, arrive, arrive + 1.5)
+    j1 = np.array([p["J1"] for p in trace])
+    assert np.abs(j1[:15]).max() > 2.0                # 到達直後は揺れている
+    assert np.abs(j1[-10:]).max() < 0.2               # 4τ 後には止まっている
+    assert (np.diff(np.sign(j1[:40])) != 0).sum() >= 2   # 振動（符号が変わる）
+    assert np.abs(np.diff(j1)).max() <= vmax(cfg)["J1"] * DT * 1.01
+    assert all(p["J3"] == 0.0 for p in trace)         # 指定外の関節は揺れない
+
+
+def test_head_rise_time_and_acceleration_are_bounded(cfg: dict) -> None:
+    """頭の動きは立ち上がり 200ms 以上（5° 以上のとき）・先端加速度 1G 以下。2.5° のピクッは速いまま。"""
+    a = cfg["animator"]
+    anim = quiet(cfg)
+    fast = anim.play(Keyframe({"J8": 40.0}, 0.05, Easing.OUT), 0.0)
+    assert fast >= a["head_min_rise_s"]
+    lever = cfg["body"]["head_tip_x_mm"] - next(j["x_mm"] for j in cfg["joints"] if j["name"] == "J7")
+    t, trace = run(anim, 0.0, fast + 0.1)
+    x = np.radians([p["J8"] for p in trace]) * lever / 1000.0
+    accel = np.abs(np.diff(x, 2)).max() / DT ** 2
+    assert accel <= a["head_max_accel_g"] * 9.80665 * 1.05
+    anim.set_pose_now({"J8": 0.0})
+    twitch = anim.play(Keyframe({"J8": 2.5}, 0.12, Easing.OUT), t)
+    assert twitch < a["head_min_rise_s"]              # 微小な動きは下限を課さない
+    body = anim.play(Keyframe({"J3": 10.0}, 0.05, Easing.OUT), t)
+    assert body < a["head_min_rise_s"]                # 胴体は対象外（速度上限だけ）

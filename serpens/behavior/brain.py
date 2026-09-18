@@ -273,7 +273,8 @@ class Brain:
         self.expr.stop_tilting()
         self._set_drive(DriveCommand(False, reason=STATE_LABELS_JA[s]))
         if s not in COIL_STATES and self.anim.base.get("J1", 0.0) != self.poses.home()["J1"]:
-            self.expr.play(Keyframe({k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, "J9")}, 1.5), t)
+            home = {k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, "J9")}
+            self.expr.play(self.expr.with_settle(Keyframe(home, 1.5)), t)
         if s == "SLEEP":
             self.expr.play(Keyframe({NECK: float(x["sleep_neck_deg"]), HEAD_YAW: 0.0}, 2.0), t)
         elif s == "PATROL":

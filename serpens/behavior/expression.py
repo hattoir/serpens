@@ -29,6 +29,8 @@ class Expression:
     def __init__(self, cfg: dict[str, Any], animator: Animator, poses: Poses, rng: random.Random,
                  bus: ServoBus | None = None, head: HeadIO | None = None) -> None:
         self.x = cfg["behavior"]["expression"]
+        self.anticipate = cfg["animator"]["anticipate"]
+        self.settle = cfg["animator"]["settle"]
         self.eyes_cfg = cfg["behavior"]["eyes"]
         self.head_modes = cfg["head_io"]["eye_modes"]
         self.anim, self.poses, self.rng = animator, poses, rng
@@ -64,6 +66,11 @@ class Expression:
             self.guarded += 1
         return self.anim.play(kf, t)
 
+    def with_settle(self, kf: Keyframe) -> Keyframe:
+        """胴体の大きな姿勢変化に follow-through（尾側の減衰振動）を付ける。"""
+        return replace(kf, settle_amp_deg=float(self.settle["amp_deg"]), settle_tau_s=float(self.settle["tau_s"]),
+                       settle_joints=tuple(self.settle["joints"]))
+
     def maybe_stretch(self, t: float) -> None:
         """伸び（人がいないときだけ。呼ばれる側が保証する）。"""
         if t < self.next_stretch_t or self.person_tracked or t < self.busy_until:
@@ -72,7 +79,7 @@ class Expression:
 
     def stretch(self, t: float) -> None:
         st = self.poses.stretch_timing()
-        dur = self.play(Keyframe(self.poses.stretch(), float(st["duration_s"]), Easing.IN_OUT), t)
+        dur = self.play(self.with_settle(Keyframe(self.poses.stretch(), float(st["duration_s"]), Easing.IN_OUT)), t)
         back = t + dur + float(st["hold_s"])
         self.busy_until = back + float(st["duration_s"])
         home = {k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, HEAD_ROLL)}
@@ -174,8 +181,11 @@ class Expression:
                           (t < self.hold_until and abs(yaw_deg - self.look_yaw) < float(self.x["look_retarget_deg"]))):
             return False
         pose = self.poses.head_look(yaw_deg, self.anim.base.get(HEAD_ROLL, 0.0), neck_deg)
+        big = abs(pose[HEAD_YAW] - self.anim.base.get(HEAD_YAW, 0.0)) >= float(self.anticipate["min_travel_deg"])
         dur = self.play(Keyframe(pose, float(self.x["look_duration_s"]), Easing.OUT_OVERSHOOT,
-                                      self._u("look_overshoot_deg")), t)
+                                 self._u("look_overshoot_deg"),
+                                 anticipate_deg=self._u_from(self.anticipate["head_deg"], 0.0) if big else 0.0,
+                                 anticipate_lead_s=self._u_from(self.anticipate["lead_s"], 0.0) if big else 0.0), t)
         self.look_yaw = pose[HEAD_YAW]
         self.hold_until = t + dur + self._u("look_hold_s")
         self.log.append((t, f"look {self.look_yaw:+.0f}°"))

@@ -198,6 +198,18 @@ animator:
   default_accel_dps2: 2000.0
   overshoot_peak_ratio: 0.75  # オーバーシュート付き ease-out: 全体のこの割合で行き過ぎの頂点
   # キーフレームが joints[].max_speed_dps を超える速さを要求したら、時間を自動で延ばす
+  # 頭（J7〜J9）の「打撃に見える速さ」を構造的に出さない（印象の要件。安全の上限ではない）。
+  # ガラガラヘビの打撃は最大加速度 506 m/s²（約 52G）・35ms（Higham et al., Sci. Rep. 2017）。
+  # 愛玩機は先端（J7 から頭先端まで body.head_tip_x_mm − J7.x_mm = 180mm）の加速度を 1G 以下に
+  head_max_accel_g: 1.0
+  head_min_rise_s: 0.2        # head_min_rise_deg 以上の頭の動きは立ち上がり 200ms 以上
+  head_min_rise_deg: 5.0      # これ未満の微小な動き（一次反応のピクッ 2.5°）は下限を課さない
+  # follow-through（到達後の減衰振動）の周波数。振幅・時定数は Keyframe 側（settle_amp_deg / settle_tau_s）
+  settle_freq_hz: 2.0
+  # 予備動作と減衰振動の既定値（anticipation あり → 魅力 4.27→4.83、follow-through あり → 知的印象 3.86→4.72:
+  # Takayama, Dooley & Ju, HRI 2011, n=273）。頭の look_at と、胴体の大きな姿勢変化に使う
+  anticipate: {head_deg: [3.0, 8.0], lead_s: [0.1, 0.3], min_travel_deg: 10.0}   # 小さな向き直しには付けない
+  settle: {amp_deg: 5.0, tau_s: 0.3, joints: [J1, J2, J3]}   # 尾側 2〜3 関節を 5°→0、τ=0.3s
 # 呼吸オーバーレイ（全軸に常時加算）。擬似呼吸は注視 +10.65s・やりとり +27.68s・アニマシー +0.69（IJSR 2026, n=75）
 breath:
   # 軸ごとの振幅。生物の呼吸は背腹方向だが胴体に pitch 軸が無いので、J7（首ピッチ）を大きく取って
