@@ -89,14 +89,19 @@ def test_staggered_coil_goes_tail_first(cfg: dict) -> None:
 
 
 def test_breathing_on_all_axes(cfg: dict) -> None:
-    """呼吸: 全軸が ±2°・周期 4 秒で振れる（J7 もホーム +8° なので両側に振れる）。OFF で止まる。"""
+    """呼吸: 各軸が軸ごとの振幅・周期 4 秒で振れる（J7 もホーム +8° なので両側に振れる）。
+    位相は尾→頭へ phase_step_deg ずつ遅れる（同位相だと胴体が C 字に丸まって「震え」に見える）。OFF で止まる。"""
     b = cfg["breath"]
     home = cfg["poses"]["home"]
     anim = Animator(cfg)
     t, trace = run(anim, 0.0, 2 * b["period_s"])
     arr = np.array([[p[n] - home[n] for n in anim.names] for p in trace])
-    assert np.allclose(arr.max(axis=0), b["amplitude_deg"], atol=0.05)
-    assert np.allclose(arr.min(axis=0), -b["amplitude_deg"], atol=0.05)
+    amp = np.array([b["amplitude_by_axis"][n] for n in anim.names])
+    assert np.allclose(arr.max(axis=0), amp, atol=0.05)
+    assert np.allclose(arr.min(axis=0), -amp, atol=0.05)
+    assert b["amplitude_by_axis"]["J7"] >= 2 * max(b["amplitude_by_axis"][n] for n in anim.names if n != "J7")
+    lag = int(round(b["phase_step_deg"] / 360.0 * b["period_s"] / DT))
+    assert 0 < lag and np.allclose(arr[lag:lag + 50, 0] / amp[0], arr[:50, 1] / amp[1], atol=0.02)  # J2 は J1 より遅れる
     k = int(b["period_s"] / DT)
     assert np.allclose(arr[10], arr[10 + k], atol=1e-6)
     anim.set_breathing(False)
@@ -144,17 +149,18 @@ def test_scenario_9axis_sequence_is_reasonable(cfg: dict) -> None:
     lim = {j["name"]: (j["min_deg"], j["max_deg"]) for j in cfg["joints"]}
     arr = np.array([[p[n] for n in anim.names] for p in log])
     v = vmax(cfg)
-    extra = 2 * np.pi * (cfg["breath"]["amplitude_deg"] / cfg["breath"]["period_s"]
+    extra = 2 * np.pi * (max(cfg["breath"]["amplitude_by_axis"].values()) / cfg["breath"]["period_s"]
                          + cfg["gait"]["presets"]["forward"]["amplitude_deg"] * 0.5)
     for i, n in enumerate(anim.names):
         assert arr[:, i].min() >= lim[n][0] and arr[:, i].max() <= lim[n][1]
         assert np.abs(np.diff(arr[:, i])).max() <= (v[n] + extra) * DT, n
     assert max(abs(p["J3"]) for p in walk[-50:]) > 20
-    assert all(abs(p["J7"] - 8) < 3 for p in walk)
+    assert all(abs(p["J7"] - 8) < cfg["breath"]["amplitude_by_axis"]["J7"] + 1 for p in walk)   # 前進中の首は呼吸ぶんだけ
     assert coil[-1]["J1"] == pytest.approx(poses.rest()["J1"], abs=2.5)
-    assert rear[-1]["J7"] == pytest.approx(60, abs=2.5)
+    neck_breath = cfg["breath"]["amplitude_by_axis"]["J7"] + 0.5      # J7 は呼吸で大きく上下する
+    assert rear[-1]["J7"] == pytest.approx(60, abs=neck_breath)
     assert look[-1]["J8"] == pytest.approx(40, abs=2.5) and max(p["J8"] for p in look) > 42
-    assert relax[-1]["J7"] == pytest.approx(cfg["poses"]["relax"]["neck_deg"], abs=2.5)
+    assert relax[-1]["J7"] == pytest.approx(cfg["poses"]["relax"]["neck_deg"], abs=neck_breath)
 
 
 def test_send_uses_per_axis_speed(cfg: dict) -> None:

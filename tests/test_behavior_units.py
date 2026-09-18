@@ -201,7 +201,7 @@ def test_look_at_overshoot_and_hold(cfg: dict) -> None:
         peak = max(peak, anim.update(t)["J8"])
         t += 0.02
     lo, hi = x["look_overshoot_deg"]
-    breath = cfg["breath"]["amplitude_deg"]
+    breath = cfg["breath"]["amplitude_by_axis"]["J8"]
     assert 40.0 + lo - breath - 0.3 <= peak <= 40.0 + hi + breath + 0.3
     hold_lo, hold_hi = x["look_hold_s"]
     assert not ex.look_at(1.0, 45.0)                                       # ホールド中の小さな変化は無視

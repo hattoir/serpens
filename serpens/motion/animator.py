@@ -1,6 +1,6 @@
 """キーフレーム補間・歩容・呼吸を重ね合わせて、9軸の指令角を作る。
 
-出力角 = キーフレーム（ベース姿勢） + 歩容（J1〜J6、加算） + 呼吸（全軸、加算）
+出力角 = キーフレーム（ベース姿勢） + 歩容（J1〜J6、加算） + 呼吸（全軸、軸ごとの振幅で加算）
 
 - キーフレーム補間: ease-in-out / ease-out / オーバーシュート付き ease-out
 - 呼吸: 全軸に ±amplitude・周期 period のサイン波を常時加算。ON/OFF は fade_s でなめらかに
@@ -128,7 +128,8 @@ class Animator:
         a, b = cfg["animator"], cfg["breath"]
         self._accel = float(a["default_accel_dps2"])
         self._peak_ratio = float(a["overshoot_peak_ratio"])
-        self._b_amp = float(b["amplitude_deg"])
+        by_axis = b["amplitude_by_axis"]
+        self._b_amp = {n: float(by_axis.get(n, b["default_amplitude_deg"])) for n in self.names}
         self._b_period = float(b["period_s"])
         self._b_phase = math.radians(float(b["phase_step_deg"]))
         self._b_fade = float(b["fade_s"])
@@ -225,7 +226,8 @@ class Animator:
 
     def breath_offset(self, index: int, t: float) -> float:
         """関節 index の呼吸オフセット [deg]。t は壁時計（freeze で止めない）。"""
-        return self._breath_env * self._b_amp * math.sin(2.0 * math.pi * t / self._b_period + index * self._b_phase)
+        return self._breath_env * self._b_amp[self.names[index]] * math.sin(
+            2.0 * math.pi * t / self._b_period + index * self._b_phase)
 
     def _clamped(self, name: str, v: float) -> float:
         lo, hi = self._limits[name]

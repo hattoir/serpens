@@ -26,7 +26,10 @@ class DeviceMotion:
         self.head = [n for n in self.joints if n not in self.body][:HEAD_MAX]
         self.limits = cfg["link"]["limits"]
         self.ttl_max_ms = int(cfg["link"]["drive_ttl_max_ms"])
-        self.breath = cfg["breath"]
+        b = cfg["breath"]
+        self.breath = b
+        self.breath_amp = {n: float(b["amplitude_by_axis"].get(n, b["default_amplitude_deg"])) for n in self.joints}
+        self.breath_phase = math.radians(float(b["phase_step_deg"]))
         home = cfg["poses"]["home"]
         self.goals = {n: float(home.get(n, 0.0)) for n in self.joints}
         self.target = dict(self.goals)
@@ -123,10 +126,10 @@ class DeviceMotion:
             self.goals[name] += max(-step, min(step, diff))
 
     def output(self, t: float, breathing: bool) -> dict[str, float]:
-        """サーボへ書く角度。呼吸（首の小さな上下）はここで足す。"""
+        """サーボへ書く角度。呼吸（軸ごとの振幅・尾→頭の位相勾配）はここで足す（PC 側 animator と同じ式）。"""
         out = dict(self.goals)
-        if breathing and self.head:
-            neck = self.head[0]                       # 首（胴体ヨーの次の軸）
-            a = float(self.breath["amplitude_deg"])
-            out[neck] = self.clamp(neck, out[neck] + a * math.sin(2.0 * math.pi * t / float(self.breath["period_s"])))
+        if breathing:
+            w = 2.0 * math.pi * t / float(self.breath["period_s"])
+            for i, name in enumerate(self.joints):
+                out[name] = self.clamp(name, out[name] + self.breath_amp[name] * math.sin(w + i * self.breath_phase))
         return out
