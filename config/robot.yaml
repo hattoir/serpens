@@ -448,6 +448,14 @@ behavior:
     primary_flash_brightness: 255
     primary_flash_s: 0.15
     surprise_freeze_s: 0.3            # c. 反応の最初は全停止（呼吸は除く）
+    # 舌のちらつき相当（舌が無いので J8 の微小往復で代替）。ガータースネークの舌フリック実測
+    # （Chiszar et al., Bull. Psychon. Soc.）: 新奇環境直後 約51回/分 → 馴化後 2〜4回/分、新規刺激で 8〜10回/分。
+    # 頻度 = base + (peak − base) × novelty。止まって人を見ている状態と巡回の静止中に出る
+    flick:
+      yaw_deg: [3.0, 8.0]
+      duration_s: [0.2, 0.4]          # 往復で1回
+      base_rate_per_min: 3.0
+      peak_rate_per_min: 9.0
     surprise_keep_breath: true        #    止まっている間も呼吸は続ける（止めると「物体」に戻る）
     look_overshoot_deg: [3.0, 5.0]    # d. 頭の回転の行き過ぎ
     look_hold_s: [1.5, 2.5]           # d. 到達後のホールド

@@ -228,3 +228,24 @@ def test_tilt_surprise_distraction_and_petted(cfg: dict) -> None:
     ex.update(end + 0.01)
     assert bus._axes[1].torque_ratio == pytest.approx(
         cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])   # 演出が終わっても安全上限まで
+
+
+def test_flick_rate_follows_novelty_and_returns_to_base(cfg: dict) -> None:
+    """f. 舌のちらつき相当: 新奇なら約 9 回/分、馴化後は約 3 回/分。J8 は ±yaw_deg の範囲で往復して戻る。"""
+    f = cfg["behavior"]["expression"]["flick"]
+    counts = {}
+    for novelty in (1.0, 0.0):
+        ex, anim, _bus = rig(cfg)
+        peak = 0.0
+        for t in np.arange(0.0, 120.0, 0.02):
+            ex.update(t)
+            ex.maybe_flick(t, novelty)
+            anim.update(t)
+            peak = max(peak, abs(anim.last_base["J8"]))             # 呼吸ぶんを除いた首の動き
+        counts[novelty] = ex.flicks / 2.0                       # 回/分
+        assert peak <= f["yaw_deg"][1] + 0.5
+        anim.update(121.0)
+        assert abs(anim.last_base["J8"]) < 0.5                    # 戻っている
+    assert counts[1.0] > counts[0.0]
+    assert f["peak_rate_per_min"] * 0.5 <= counts[1.0] <= f["peak_rate_per_min"] * 1.6, counts
+    assert counts[0.0] <= f["base_rate_per_min"] * 2.0, counts

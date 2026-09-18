@@ -3,6 +3,7 @@
   a. 一次反応: 検出から 0.15〜0.25 秒で目を一瞬光らせ、J8 を刺激の方向へ 2.5° ピクッと動かす（primary_react）
   b. 人物検出から反応開始まで 0.4〜0.9 秒のランダム遅延（brain が schedule する）
   c. 反応の最初の 0.3 秒は全停止（surprise。呼吸だけは続ける）
+  f. 舌のちらつき相当: J8 を ±3〜8° 0.2〜0.4 秒で往復。頻度は novelty に連動（maybe_flick）
   d. 頭の回転は ease-out ＋ 3〜5° のオーバーシュートと戻り、到達後 1.5〜2.5 秒ホールド（look_at）
   e. 首かしげ: J9 を 12〜18° 傾けて 1.2 秒保持（tilt）
   g. 15〜40 秒に1回、ランダムな方向を 1.5 秒見る（maybe_distract）
@@ -37,6 +38,9 @@ class Expression:
         self.busy_until = -1.0            # かしげ・よそ見中は look_at を受け付けない
         self.next_tilt_t = float("inf")
         self.next_distract_t = self._draw_distract(0.0)
+        self._flick_last_t: float | None = None
+        self.flick_until = -1.0
+        self.flicks = 0
         self.log: list[tuple[float, str]] = []
 
     def _u(self, key: str) -> float:
@@ -99,6 +103,31 @@ class Expression:
         self.schedule(t + dur, "twitch_back",
                       lambda tt: self.anim.play(Keyframe({HEAD_YAW: base}, dur, Easing.OUT), tt))
         self.log.append((t, f"twitch {deg:+.1f}°"))
+
+    def maybe_flick(self, t: float, novelty: float) -> None:
+        """f. 舌のちらつき相当。1周期あたり rate/60·dt の確率で J8 を小さく往復させる。"""
+        f = self.x["flick"]
+        last, self._flick_last_t = self._flick_last_t, t
+        if last is None or t < self.flick_until or t < self.busy_until or self.anim.busy_joint(HEAD_YAW, t):
+            return
+        rate = float(f["base_rate_per_min"]) + (float(f["peak_rate_per_min"]) - float(f["base_rate_per_min"])) * \
+            min(max(novelty, 0.0), 1.0)
+        if self.rng.random() < rate / 60.0 * max(t - last, 0.0):
+            self.flick(t)
+
+    def flick(self, t: float) -> None:
+        """J8 をいまのベース角から ±yaw_deg へ行って戻る（往復で duration_s）。"""
+        f = self.x["flick"]
+        base = self.anim.base.get(HEAD_YAW, 0.0)
+        lo, hi = f["yaw_deg"]
+        deg = self.rng.uniform(float(lo), float(hi)) * self.rng.choice((-1.0, 1.0))
+        lo, hi = f["duration_s"]
+        half = self.rng.uniform(float(lo), float(hi)) / 2.0
+        self.anim.play(Keyframe({HEAD_YAW: self.poses.head_look(base + deg)[HEAD_YAW]}, half, Easing.OUT), t)
+        self.schedule(t + half, "flick_back", lambda tt: self.anim.play(Keyframe({HEAD_YAW: base}, half, Easing.OUT), tt))
+        self.flick_until = t + 2.0 * half
+        self.flicks += 1
+        self.log.append((t, f"flick {deg:+.0f}°"))
 
     def surprise(self, t: float) -> None:
         """c. 全停止 → surprise_freeze_s 後に解除。呼吸は surprise_keep_breath なら止めない。"""

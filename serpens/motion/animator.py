@@ -180,6 +180,11 @@ class Animator:
         at = self._anim_t(t)
         return any(at < tr.t0 + tr.duration for tr in self._tracks.values())
 
+    def busy_joint(self, name: str, t: float) -> bool:
+        """関節 name が補間中なら True。"""
+        tr = self._tracks.get(name)
+        return tr is not None and self._anim_t(t) < tr.t0 + tr.duration
+
     def set_breathing(self, on: bool) -> None:
         """呼吸の ON/OFF（fade_s かけて振幅を変える）。"""
         self._breath_target = 1.0 if on else 0.0

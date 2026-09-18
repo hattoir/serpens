@@ -307,6 +307,8 @@ class Brain:
         c = self.b["controller"]
         if s not in QUIET_STATES:
             self.expr.maybe_distract(t)
+        if s in STILL_STATES or (s == "PATROL" and self.patrol_paused):
+            self.expr.maybe_flick(t, self._novelty)         # 舌のちらつき相当（止まっているときだけ）
         if snake is None:
             self._set_drive(DriveCommand(False, reason="位置不明: 停止"))
             return
