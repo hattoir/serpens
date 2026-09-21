@@ -111,6 +111,18 @@
 | 50Hz 制御周期が知覚スレッド（ArUco + YOLO 59ms/枚）と同時でも遅れない | `SOFTWARE_VERIFIED`（このPC） | `tools/loop_timing.py`: 平均 19.96ms / 最悪 20.9ms / 遅れ 0/502（2026-09-18） |
 | 電子系（遮断器・E-STOP・電流検出）の設計 | **設計案のみ** | `docs/electronics.md`。C044 の電流値は **UNKNOWN**（12V 品の 2.7A は流用しない） |
 
+## 4.8 動きの質（蛇らしさ・愛着。`docs/motion_quality.md`）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| 静止率 0.44 / 一次反応 0.22s / GAR 0.51 / 可視波数 1.3 / LDJ −25.7 | `SIMULATED` | `tools/motion_quality.py`、`tests/test_motion_quality.py`（7）。KINEMATIC_SIM |
+| Bug-1/2/3（Stress 飽和・Energy・ノイズ）の回帰 | `SOFTWARE_VERIFIED` | `tests/test_behavior_units.py` / `test_behavior_sim.py` |
+| 人を追跡中に J7 > look_max_deg を指令しない（威嚇の封印） | `SOFTWARE_VERIFIED` | `tests/test_behavior_sim.py` |
+| 頭の先端加速度 ≤ 1G・立ち上がり ≥ 200ms | `SOFTWARE_VERIFIED` | `tests/test_animator.py`（指令角。サーボ応答は含まない） |
+| 8 軸案で体に 2 波（Ω=90°）、前進は 1 波の約 4 割 | `SIMULATED` | `config/robot_yaw8.yaml`。実機は存在しない |
+| カメラ経路込みの一次反応（約 0.52s） | **未測定・窓の外** | detect 5Hz + 遅れ 0.1s は想定値 |
+| 「生き物らしさ」「愛着」 | **未評価** | 人が見ての評価。実機でしか判断できない |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

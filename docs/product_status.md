@@ -21,7 +21,7 @@
 | Sensors | 部分 | 頭部 I/O の行プロトコル（ToF・タッチ×2・LED×2）とモック（[head_io.py](../serpens/hw/head_io.py)）、サーボの位置/負荷/温度/電圧の読み出し（[state_poller.py](../serpens/hw/state_poller.py)） | **IMU が無い。** 搭載カメラも無い。電流センサも無い |
 | Vision | 実装済み（外部カメラ前提） | ArUco・床ホモグラフィ・YOLO。**模擬画像の Vision で閉ループ**（[phase4_vision_bridge.md](phase4_vision_bridge.md)）。実画像経路 `CameraObserver`（カメラ / 録画 → 自己位置・人）を `--camera` に接続。見失い後は人が K で位置を確認 | 実カメラでは未測定。上方の外部カメラ前提。所有者の個人識別は無い |
 | Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |
-| Behavior | 実装済み（模擬） | 内部状態 4 種 + 効用による状態選択、10 状態、しぐさ（[behavior/](../serpens/behavior/)） | 充電要求・所有者探索の状態が無い。LLM は不使用（憲章どおり） |
+| Behavior | 実装済み（模擬） | 内部状態 4 種 + 効用、10 状態、**語彙（primitives）/ 文法（grammar, config）/ 移動（locomotion）**。stop-and-go・一次反応・呼吸の位相波・予備動作・視線そらし（[motion_quality.md](motion_quality.md)） | 充電要求・所有者探索の状態が無い。「蛇らしさ」は人が見ての評価が未。LLM は不使用（憲章どおり） |
 | Charging | **未着手** | 無し | ドック・姿勢・接点・充電制御のすべて |
 | Safety | 部分 | PC 側の 3 種停止とラッチ（[safety.py](../serpens/safety.py)）、機体側の watchdog・緊急停止ラッチ・上限強制（[device.py](../serpens/link/device.py)）、**安全の絶対値**（[safety_limits.md](safety_limits.md)、`tests/test_safety_limits.py`） | 接触→脱力 20ms が未達（現状 800ms）。電気的制限（層2）が丸ごと無い。物理の緊急停止スイッチが無い |
 | PC AI Integration | 実装済み | 50Hz 制御ループ（[runner.py](../serpens/runner.py)）、GUI（[gui/](../serpens/gui/)）、駆動リンクの PC 側（[client.py](../serpens/link/client.py)）、出力先の継ぎ目（[robot.py](../serpens/robot.py)） | **行動 → 駆動リンク → 機体は 2026-09-14 に接続済み**（`--robot link`）。実 ESP32 は未接続 |

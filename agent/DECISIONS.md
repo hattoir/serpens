@@ -17,6 +17,26 @@
 
 ---
 
+## 2026-09-21 — 動きの語彙（primitives）と文法（grammar, config）を分け、人格を config で変える
+
+**Decision**: しぐさを「語彙」（`primitives.py`。状態を知らない素材）と「文法」（`grammar.py`。config の
+`behavior.grammar` に、状態ごとに何をいつ撃つかの表）に分けた。移動の段取りは `locomotion.py`。
+Bug-1 は gain を下げるだけでなく、駆け込みを別の出来事（Stress の一段上げ）にした。
+Bug-2 の gain_move はレビュー案 0.004 でなく 0.008（stop-and-go の稼働率 0.5 を見込む）。
+静止率は「歩容の振幅がゼロ」で定義（首マーカの速さだと呼吸の位相波を移動と数える）。
+
+**Why**: surprise / look_at / petted が並列で粒度がばらばらのまま twitch / flick / sag / nuzzle / stretch を
+足すと破綻する（レビュー Part 3）。展示会場で「もう少し臆病に」を config 1 行で試せるかが当日の完成度を決める。
+一次遅れの Stress は接近「距離」を積分するだけで歩行と突進を区別できないので、速さのしきい値で分けた。
+
+**Alternatives**: (1) Expression に関数を足し続ける (2) 状態機械の中にしぐさを書く
+(3) 突進を approach_ref を上げて吸収する（歩行との区別が付かない）。
+
+**Trade-offs**: 文法の表は config が長くなる（未知の語彙は起動時に弾く）。grammar は brain の状態を
+毎周期見るので、状態遷移が _on_enter を通らない起動直後は tick 側で補う。数値はすべて模擬で、人の評価が未。
+
+---
+
 ## 2026-09-18 — 実画像経路は観測器で差し込み、録画は実機の開始条件を満たさない。見失い後は人が確認する
 
 **Decision**: `CameraObserver`（カメラ番号 / 動画 / 静止画）を `SimSession(observer=)` で差し込む。

@@ -4,7 +4,14 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-18 更新）
+## Current Goal（2026-09-21 更新）
+
+外部レビュー（蛇らしさ・愛着）の 13 ステップを実装した（`docs/motion_quality.md`）。致命バグ 3 件（Stress 飽和・
+Energy・ノイズ）、stop-and-go、一次反応 150〜250ms、舌のちらつき、呼吸の位相波、視線、威嚇姿勢の封印、
+anticipate/settle、忍び寄り歩容、撫での 3 段、primitives/grammar/locomotion の分離、評価指標 5 種、8 軸案 config。
+**動きの人格は `config/robot.yaml` の `behavior.grammar` だけで変えられる。** 全 374 件緑。
+
+## Current Goal（2026-09-18 更新・旧）
 
 実機なしで進められるものを進めた: **実画像経路 `CameraObserver`**（カメラ / 録画 → 自己位置・人）、
 **見失い後の位置確認（K）**、**制御周期の実測**（知覚スレッド同時で遅れ 0）、**電子系の設計案**
@@ -73,6 +80,9 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 
 ## Current Problems
 
+00. （2026-09-21）一次反応は PC 内 220ms だがカメラ経路（5Hz + 100ms）込みだと約 0.52s で因果の窓（≤300ms）の外。
+    可視波数は 6 軸で 1 波が上限（8 軸案は 2 波だが前進量が約 4 割に落ちる）。「蛇らしさ」は人の評価が未
+
 0. （2026-09-18）実カメラ経路は接続したが**実カメラの画像では未検証**（録画は仮想カメラ製）。
    近い偽マーカは区別できない（`docs/phase4_vision_bridge.md` §4）。接触→脱力は要求未確定
    （`docs/contact_release_requirements.md`）。電気安全ゲートは全項目未実測。C044 の電流値 UNKNOWN
@@ -107,7 +117,13 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-18 後）
+## Next Best Actions（2026-09-21 後）
+
+0. 一次反応の実経路: 検出周期を上げる（`person.detect_hz`）か、ESP32 側で検出直後に目を光らせる経路
+1. 展示当日の「人格」調整の手順書（`behavior.grammar` の項目と効き方）
+2. 実カメラが来たら `tools/motion_quality.py` の一次反応をカメラ込みで測り直す
+
+## Next Best Actions（2026-09-18 後・旧）
 
 1. ~~実カメラ用の観測器~~ 完了（`CameraObserver`）。実カメラが繋がったら `--camera 0` で誤差・遅れを測る
 2. ~~再開前の位置確認~~ 完了（K キー）
