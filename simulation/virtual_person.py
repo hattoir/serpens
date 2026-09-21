@@ -33,6 +33,7 @@ class VirtualPerson:
     appear_s: float = 0.0                 # この時刻から現れる
     disappear_s: float = math.inf         # この時刻に消える
     stop_at_y_mm: float | None = None     # ここまで来たら立ち止まる（展示では台の手前で止まる）
+    stop_at_x_mm: float | None = None     # CROSSING: ここまで横へ動いたら立ち止まる（決定的瞬間の来場者）
 
     def visible(self, t: float) -> bool:
         return self.appear_s <= t < self.disappear_s
@@ -51,8 +52,9 @@ class VirtualPerson:
             return x0, y
         if self.kind == "LEAVING":         # 台から離れる
             return x0, y0 - d
-        if self.kind == "CROSSING":        # 左から右へ
-            return x0 + d, y0
+        if self.kind == "CROSSING":        # 左から右へ（stop_at_x_mm があればそこで止まる）
+            x = x0 + d
+            return (x if self.stop_at_x_mm is None else min(x, self.stop_at_x_mm)), y0
         raise ValueError(f"未知の軌跡: {self.kind}（{TRAJECTORIES}）")
 
     def pose(self, t: float) -> Pose2D:
