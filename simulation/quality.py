@@ -1,10 +1,13 @@
 """動きの質の指標（蛇らしさ・愛着）。**実機ゼロで今日から回せる。すべて SIMULATED。**
+役割は REGRESSION_METRIC / SIMULATION_DIAGNOSTIC。**人の評価の代替ではない**（PRODUCT SUCCESS METRIC にしない）。
 
   頭部軌道の LDJ     対数無次元ジャーク（Balasubramanian et al. 2015; 判別感度 z=5.28: Front. Neurol. 9:615）。
                      試行時間を統制して相対比較にだけ使う（値そのものに絶対の意味は無い）
   静止率             巡回中、止まっている時間の割合（間欠移動する動物は約 50%: Integr. Comp. Biol. 41(2):137）
   可視波数           胴体中心線の曲がりの符号が変わる回数 / 2（= 体に乗っている波の数）
-  一次反応レイテンシ 刺激（人が現れる）→ 最初の可視変化（目 or J8）。因果の窓は 140ms〜1s（Front. Psychol. 14:1167809）
+  一次反応レイテンシ 人の座標が行動へ入ってから最初の可視変化（目 or J8）まで = BEHAVIOR_INTERNAL。
+                     「人検出から」ではない。カメラ経路込みは END_TO_END_SIMULATED（config の想定値を足した推定）、
+                     実測は HARDWARE_MEASURED（未）。因果の窓は 140ms〜1s（Front. Psychol. 14:1167809）
   GAR                人を見ていない時間 / 人と向き合っている時間（0.5〜0.7 が会話を最も長くする: Front. Robot. AI 10:1062714）
 
 歩容の追従性（trail_error）は蛇らしさではない。車輪で横滑りゼロ拘束をかけたシミュレータでは
@@ -66,8 +69,12 @@ class QualityReport:
     still_ratio: float = float("nan")          # 巡回中の静止率
     head_ldj: float = float("nan")             # 頭先端軌道の LDJ（試行時間 seconds_alone で統制）
     visible_waves: float = float("nan")        # 歩容中の可視波数（平均）
-    primary_latency_s: float = float("nan")    # 人が現れてから最初の可視変化まで（模擬。カメラの遅れは含まない）
+    primary_latency_s: float = float("nan")    # 人の座標が行動へ入ってから最初の可視変化まで（BEHAVIOR_INTERNAL）
+    primary_latency_source: str = "BEHAVIOR_INTERNAL"
     vision_budget_s: float = 0.0               # config 上のカメラ遅れ（検出周期 + 遅延）。実測ではない
+    end_to_end_estimate_s: float = float("nan")   # primary + vision_budget（END_TO_END_SIMULATED。実測ではない）
+    end_to_end_source: str = "END_TO_END_SIMULATED"
+    hardware_measured_s: float | None = None   # HARDWARE_MEASURED（実カメラ → 実機。未測定 = None）
     gar: float = float("nan")                  # 人と向き合っている間に、見ていない時間の割合
     notes: list[str] = field(default_factory=list)
 
@@ -126,6 +133,7 @@ def measure_with_person(cfg: dict[str, Any], seconds: float, seed: int, report: 
     report.primary_latency_s = float("nan") if first is None else first
     p, v = cfg["person"], cfg["vision_sim"]
     report.vision_budget_s = 1.0 / float(p["detect_hz"]) + float(v["latency_s"])
+    report.end_to_end_estimate_s = report.primary_latency_s + report.vision_budget_s
     report.gar = float("nan") if not looking else 1.0 - float(np.mean(looking))
     if not looking:
         report.notes.append("人と向き合う状態（ALERT/OBSERVE/ENGAGE）に入らなかった")

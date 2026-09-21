@@ -1,0 +1,14 @@
+{
+  "instrument": "Godspeed Questionnaire Series (Bartneck, Kulić, Croft & Zoghbi, 2009)",
+  "note": "Godspeed 由来の項目。Serpens 独自項目（pilot/response_template.csv）とは分けて保存する。語対を改変しない。使う場合は各対を 1〜5 の semantic differential で答える。原著の英語表記を正とし、日本語は補助。",
+  "scale": "1-5 semantic differential",
+  "subscales": {
+    "animacy": [["Dead", "Alive"], ["Stagnant", "Lively"], ["Mechanical", "Organic"], ["Artificial", "Lifelike"], ["Inert", "Interactive"], ["Apathetic", "Responsive"]],
+    "likeability": [["Dislike", "Like"], ["Unfriendly", "Friendly"], ["Unkind", "Kind"], ["Unpleasant", "Pleasant"], ["Awful", "Nice"]],
+    "perceived_safety": [["Anxious", "Relaxed"], ["Agitated", "Calm"], ["Quiescent", "Surprised"]],
+    "anthropomorphism": [["Fake", "Natural"], ["Machinelike", "Humanlike"], ["Unconscious", "Conscious"], ["Artificial", "Lifelike"], ["Moving rigidly", "Moving elegantly"]],
+    "perceived_intelligence": [["Incompetent", "Competent"], ["Ignorant", "Knowledgeable"], ["Irresponsible", "Responsible"], ["Unintelligent", "Intelligent"], ["Foolish", "Sensible"]]
+  },
+  "raw_response_file": "pilot/godspeed_responses.csv",
+  "raw_response_columns": ["participant_anonymous_id", "clip_id", "subscale", "item_index", "left", "right", "score_1_5"]
+}

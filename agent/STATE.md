@@ -4,7 +4,15 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-21 更新）
+## Current Goal（2026-09-21 Phase 2 更新）
+
+**Serpens の身体と動きを、初めて実際の人間へ見せて評価できる状態にした。** 6 / 8 / 10 Yaw の overlay（同等リンク長 /
+同等身体長）、波数掃引と速度合わせ（`tools/body_compare.py`）、匿名クリップ（`tools/pilot_clips.py`）、提示順の
+ランダム化、回答テンプレート・Godspeed 分離・集計（`docs/human_pilot.md`）、EXHIBITION profile の体験弧、
+内部状態 6 種の仕様（`docs/internal_state_model.md`）と回復可能性テスト、Familiarity / Sleepiness、Energy と温度の分離。
+**HARDWARE_VERIFIED = 0、HUMAN_EVALUATED = 0。** 次はユーザーが Pilot（n=8〜12）を実施し、回答を `pilot/` の形式で保存する。
+
+## Current Goal（2026-09-21 更新・旧）
 
 外部レビュー（蛇らしさ・愛着）の 13 ステップを実装した（`docs/motion_quality.md`）。致命バグ 3 件（Stress 飽和・
 Energy・ノイズ）、stop-and-go、一次反応 150〜250ms、舌のちらつき、呼吸の位相波、視線、威嚇姿勢の封印、
@@ -80,6 +88,10 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 
 ## Current Problems
 
+000. （2026-09-21 Phase 2）**人物検出 5Hz が展示の反応速度のボトルネックになりうる**（正式 Risk）。一次反応は
+     BEHAVIOR_INTERNAL 0.22s / END_TO_END_SIMULATED 約 0.52s（因果の窓の外）。実カメラ到着後に E2E を測る。
+     6 / 8 / 10 の MuJoCo（PHYSICS_SIM）比較は未（MJCF は 9 軸案のみ）。Pitch は別実験（未着手）。
+
 00. （2026-09-21）一次反応は PC 内 220ms だがカメラ経路（5Hz + 100ms）込みだと約 0.52s で因果の窓（≤300ms）の外。
     可視波数は 6 軸で 1 波が上限（8 軸案は 2 波だが前進量が約 4 割に落ちる）。「蛇らしさ」は人の評価が未
 
@@ -117,7 +129,14 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-21 後）
+## Next Best Actions（2026-09-21 Phase 2 後）
+
+0. **ユーザーが Pilot を実施**（`docs/human_pilot.md`）。回答を `output/pilot/responses.csv` に保存 → `tools/pilot_analysis.py`
+1. Pilot の結果を `docs/body_configuration_decision_template.md` に写す（決定はその後）
+2. yaw8 / yaw10 の MJCF（PHYSICS_SIM）比較。前進量のトレードオフを物理でも見る
+3. Yaw が決まったら Limited Body Pitch +1 / +2 を別実験として
+
+## Next Best Actions（2026-09-21 後・旧）
 
 0. 一次反応の実経路: 検出周期を上げる（`person.detect_hz`）か、ESP32 側で検出直後に目を光らせる経路
 1. 展示当日の「人格」調整の手順書（`behavior.grammar` の項目と効き方）

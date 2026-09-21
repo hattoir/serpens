@@ -29,6 +29,10 @@
 
 ## 3. 測定（`tools/motion_quality.py --seeds 3`、2026-09-21、KINEMATIC_SIM）
 
+**位置づけ: REGRESSION_METRIC / SIMULATION_DIAGNOSTIC。** PRODUCT SUCCESS METRIC ではなく、人の評価
+（`docs/human_pilot.md`、HUMAN_EVALUATED = 0）の代替でもない。人の評価との相関が取れたときだけ代理指標として再評価する。
+一次反応の 0.22s は BEHAVIOR_INTERNAL（人の座標が行動へ入ってから）であり「人検出から 220ms」ではない。
+
 | 指標 | 目標 | 旧実装 | 今回 | 判定 |
 |---|---|---|---|---|
 | 静止率（巡回中、歩容の振幅がゼロの割合） | 0.40〜0.60 | ほぼ 0 | **0.44** | 内 |

@@ -361,7 +361,13 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\gait_sweep.py
 # 制御周期 50Hz が知覚スレッド（描画 / ArUco+YOLO）と同時でも守れるか（このPCの測定）
 .\.venv\Scripts\python.exe tools\loop_timing.py
-# 動きの質（静止率・一次反応・GAR・可視波数・LDJ。KINEMATIC_SIM）。--overlay configobot_yaw8.yaml で 8 軸案
+# 6/8/10 軸の比較表（波数掃引・速度合わせ。KINEMATIC_SIM）→ output\body_compare.md
+.\.venv\Scripts\python.exe tools\body_compare.py
+# Human Perception Pilot: 匿名クリップ → 提示順 → 集計（docs/human_pilot.md）
+.\.venv\Scripts\python.exe tools\pilot_clips.py --seed 1
+.\.venv\Scripts\python.exe tools\pilot_order.py --participants 10 --seed 42
+.\.venv\Scripts\python.exe tools\pilot_analysis.py output\pilot\responses.csv --key output\pilot\clip_key.json
+# 動きの質（静止率・一次反応・GAR・可視波数・LDJ。KINEMATIC_SIM。回帰指標であって人の評価の代替ではない）
 .\.venv\Scripts\python.exe tools\motion_quality.py
 # 模擬 Vision の閉ループを故障ごとに試す（Phase 4。実カメラの値ではない）
 .\.venv\Scripts\python.exe tools\vision_check.py

@@ -7,7 +7,8 @@ r"""動きの質の評価（蛇らしさ・愛着）。**実機ゼロで回せ�
     .\.venv\Scripts\python.exe tools\motion_quality.py --waves-only --overlay config\robot_yaw8.yaml   # 8軸案の前進量と可視波数
 
 数値の目標（外部レビュー）: 静止率 40〜60% / 可視波数 2 / 一次反応 ≤ 300ms / GAR 0.4〜0.6。
-LDJ は試行時間を統制した相対比較にだけ使う。
+LDJ は試行時間を統制した相対比較にだけ使う。**これらは REGRESSION_METRIC / SIMULATION_DIAGNOSTIC であって
+人の評価（docs/human_pilot.md）の代替ではない。**
 """
 from __future__ import annotations
 
@@ -68,7 +69,8 @@ def main() -> int:
         r = evaluate(cfg, args.alone, args.person, seed)
         rows.append(r)
         print(f"seed {seed}: 静止率 {r.still_ratio:.2f}  LDJ {r.head_ldj:.2f}  可視波数 {r.visible_waves:.2f}  "
-              f"一次反応 {r.primary_latency_s * 1000:.0f}ms（+カメラ予算 {r.vision_budget_s * 1000:.0f}ms）  "
+              f"一次反応 {r.primary_latency_s * 1000:.0f}ms[{r.primary_latency_source}] "
+              f"E2E推定 {r.end_to_end_estimate_s * 1000:.0f}ms[{r.end_to_end_source}]  "
               f"GAR {r.gar:.2f}  {' '.join(r.notes)}")
     keys = ("still_ratio", "head_ldj", "visible_waves", "primary_latency_s", "gar")
     mean = {k: float(np.nanmean([getattr(r, k) for r in rows])) for k in keys}

@@ -1,0 +1,14 @@
+{
+  "note": "Human Perception Pilot の比較条件。config は simulation/body_compare.py の CONFIGS のキー。target_waves × 360 / N を Ω にする。SPEED_MATCHED は yaw6 の 1 波の見た目速度へ f を寄せる（上限で切れることがある）。条件名は動画に出さない。",
+  "conditions": [
+    {"name": "yaw6_w1.0_RAW",            "config": "yaw6",  "target_waves": 1.0, "condition": "RAW"},
+    {"name": "yaw6_w1.5_RAW",            "config": "yaw6",  "target_waves": 1.5, "condition": "RAW"},
+    {"name": "yaw8_w2.0_RAW",            "config": "yaw8",  "target_waves": 2.0, "condition": "RAW"},
+    {"name": "yaw8_w2.0_SPEED_MATCHED",  "config": "yaw8",  "target_waves": 2.0, "condition": "SPEED_MATCHED"},
+    {"name": "yaw10_w2.0_RAW",           "config": "yaw10", "target_waves": 2.0, "condition": "RAW"},
+    {"name": "yaw10_w2.0_SPEED_MATCHED", "config": "yaw10", "target_waves": 2.0, "condition": "SPEED_MATCHED"},
+    {"name": "yaw8_samelen_w2.0_RAW",    "config": "yaw8_samelen",  "target_waves": 2.0, "condition": "RAW"},
+    {"name": "yaw10_samelen_w2.0_RAW",   "config": "yaw10_samelen", "target_waves": 2.0, "condition": "RAW"},
+    {"name": "exhibition_arc_yaw6",      "scene": "arc", "overlay": null, "profile": "config/profile_exhibition.yaml"}
+  ]
+}

@@ -1,0 +1,35 @@
+# 胴体ヨー 6 軸案 — 現行（robot.yaml と同じ幾何。比較の基準。B: リンク 95mm / A: 全長 850mm の両方の基準）
+# robot.yaml への上書き（`load_config(overlay=...)`）。**設計の事前検証用。実機は存在しない。**
+# 関節名: 胴体ヨー J1〜J6、首ピッチ J7、頭ヨー J8、頭ロール J9。
+# リンク 95.0mm、全長 850mm、サーボ 9 個。質量・可動域は 9 軸案と同じ仮定値
+body:
+  length_mm: 850
+  diameter_mm: 50
+  mass_g: 1000                  # 9 軸案 1000g ± 節 × 100g（仮定）
+  tail_x_mm: 0
+  head_tip_x_mm: 850
+joints:
+  - {name: J1,  servo_id:  1, axis: yaw,   x_mm:  100, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J2,  servo_id:  2, axis: yaw,   x_mm:  195, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J3,  servo_id:  3, axis: yaw,   x_mm:  290, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J4,  servo_id:  4, axis: yaw,   x_mm:  385, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J5,  servo_id:  5, axis: yaw,   x_mm:  480, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J6,  servo_id:  6, axis: yaw,   x_mm:  575, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J7,  servo_id:  7, axis: pitch, x_mm:  670, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: -10.0, mechanical_max_deg: 95.0, min_deg: -8.0, max_deg: 90.0, max_speed_dps: 120.0}
+  - {name: J8,  servo_id:  8, axis: yaw,   x_mm:  725, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: -85.0, mechanical_max_deg: 85.0, min_deg: -80.0, max_deg: 80.0, max_speed_dps: 90.0}
+  - {name: J9,  servo_id:  9, axis: roll,  x_mm:  765, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: -40.0, mechanical_max_deg: 40.0, min_deg: -35.0, max_deg: 35.0, max_speed_dps: 90.0}
+markers:
+  tail_x_mm: 50.0
+  neck_x_mm: 640              # 首ピッチの 30mm 手前
+mass_budget_g:
+  servo_count: 9
+  segment_frame_count: 8
+poses:
+  home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 8, J8: 0, J9: 0}
+gait:
+  presets:
+    # 体に 2 波（Ω = 360°×2 / 6 = 120°）と 1 波（Ω = 60°）。掃引は tools/body_compare.py
+    forward:    {amplitude_deg: 30.0, spatial_freq_deg: 120.0, temporal_freq_hz: 0.5, turn_bias_deg: 0.0}
+    one_wave:   {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 0.0}
+breath:
+  amplitude_by_axis: {J1: 1.5, J2: 2.0, J3: 2.0, J4: 2.0, J5: 1.5, J6: 1.5, J7: 5.0, J8: 0.5, J9: 0.5}

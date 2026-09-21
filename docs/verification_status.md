@@ -1,16 +1,20 @@
 # 検証レベル — 何が確かめられていて、何が確かめられていないか
 
-作成 2026-09-15。**このリポジトリで「確認済み」と書くときは、必ずこの4段のどれかを指す。**
-実機が 1 台も無い状態で開発しているので、**模擬の結果を実測として扱わない**ことが最優先。
+作成 2026-09-15、2026-09-21 に 5 段へ。**このリポジトリで「確認済み」と書くときは、必ずこのどれかを指す**
+（`serpens/verification.py`）。実機が 1 台も無い状態で開発しているので、**模擬の結果を実測として扱わない**ことが最優先。
 
 | レベル | 意味 | 根拠になるもの |
 |---|---|---|
-| `SIMULATED` | シミュレーション上で**そう動いた**。現実がそうなるとは限らない | 模擬機体・模擬サーボ・偽経路での実行結果 |
 | `SOFTWARE_VERIFIED` | **ソフトの論理として正しい**ことを自動試験で確かめた（物理は含まない） | `pytest`。式の一致・状態遷移・拒否条件・値の整合 |
-| `HARDWARE_UNVERIFIED` | 実機が要るが、**まだ確かめていない**。設計値・推定値のまま | 一次資料からの計算、データシート、CAD 検討 |
-| `HARDWARE_VERIFIED` | **実機で測った**。日付・条件・測定器つき | 実測記録（`docs/phase2_acceptance.md` §3 など） |
+| `KINEMATIC_SIM` | 簡易シミュレータで**そう動いた**（車輪の横滑りゼロ拘束・指令角そのまま）。旧表記 `SIMULATED` | `serpens/sim`、`tools/motion_quality.py`、`tools/body_compare.py` |
+| `PHYSICS_SIM` | MuJoCo（接触・摩擦・サーボの一次遅れ）でそう動いた。摩擦もゲインも未同定 | `simulation/mujoco` |
+| `HARDWARE_VERIFIED` | **実機で測った**。日付・条件・測定器つき | 実測記録 |
+| `HUMAN_EVALUATED` | **人が見て評価した**。source は `VIDEO_HUMAN_EVALUATION`（動画）/ `PHYSICAL_HUMAN_EVALUATION`（実物） | `docs/human_pilot.md` の回答 |
 
-現在 `HARDWARE_VERIFIED` は **0 件**。実サーボも ESP32 も 1 台も無い。
+設計値・推定値で実機が要るものは従来どおり `HARDWARE_UNVERIFIED` と書く。
+現在 `HARDWARE_VERIFIED` は **0 件**、`HUMAN_EVALUATED` は **0 件**。
+**Snake-likeness / Animacy / Approachability / Affection / Fear / Smoothness は Simulation だけでは合格判定しない。**
+`tools/motion_quality.py` の指標は REGRESSION_METRIC / SIMULATION_DIAGNOSTIC であり、人の評価の代替ではない。
 
 ## 1. 駆動リンクと安全
 
@@ -122,6 +126,21 @@
 | 8 軸案で体に 2 波（Ω=90°）、前進は 1 波の約 4 割 | `SIMULATED` | `config/robot_yaw8.yaml`。実機は存在しない |
 | カメラ経路込みの一次反応（約 0.52s） | **未測定・窓の外** | detect 5Hz + 遅れ 0.1s は想定値 |
 | 「生き物らしさ」「愛着」 | **未評価** | 人が見ての評価。実機でしか判断できない |
+
+## 4.9 Human Perception Pilot の準備（2026-09-21）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| 6 / 8 / 10 Yaw の overlay（同等リンク長 / 同等身体長）と波数掃引・速度合わせ | `KINEMATIC_SIM` | `tools/body_compare.py` → `output/body_compare.md` |
+| 匿名クリップ生成・提示順のランダム化・回答テンプレート・集計 | `SOFTWARE_VERIFIED` | `tests/test_pilot_tools.py`（8） |
+| EXHIBITION profile の体験弧（NOTICE→…→REST が 60 秒で起きる） | `KINEMATIC_SIM` | `tests/test_exhibition_profile.py`（3 seeds） |
+| 内部状態 6 種の回復可能性 | `SOFTWARE_VERIFIED` | `tests/test_internal_state_recovery.py`（24） |
+| 一次反応 0.22s（BEHAVIOR_INTERNAL）/ 約 0.52s（END_TO_END_SIMULATED） | `KINEMATIC_SIM` / 推定 | HARDWARE_MEASURED は未 |
+| 人が見た蛇らしさ・愛着・Fear | **HUMAN_EVALUATED = 0** | ユーザーが Pilot を実施するまで変わらない |
+
+**正式な Risk**: 人物検出 5Hz（`person.detect_hz`）が展示の反応速度のボトルネックになりうる。
+実機カメラ到着後に camera capture → detector → world state → behavior → command → visible response の
+End-to-End latency を測る。
 
 ## 5. 書くときの約束
 

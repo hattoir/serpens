@@ -57,7 +57,11 @@
 
 ## 4. 決めていただきたいこと
 
-0. **胴体ヨーの operational limit（現在 ±50° CONDITIONAL）。** CAD R03 の「64.8° 干渉なし / 64.9° 干渉」に
+0. **展示機の身体構成。** Body Yaw 6 / 8 / 10、Limited Body Pitch 0 / 1 / 2 を、
+   **Human Evaluation（`docs/human_pilot.md`）・Simulation（`output/body_compare.md`）・CAD・BOM・Safety** で決める。
+   材料は揃っている（overlay `config/robot_yaw{6,8,10}*.yaml`、匿名クリップ、決定レポートの雛形
+   `docs/body_configuration_decision_template.md`）。**Pilot 前に決めない。** Pitch は Yaw 決定後の別実験。
+0'. **胴体ヨーの operational limit（現在 ±50° CONDITIONAL）。** CAD R03 の「64.8° 干渉なし / 64.9° 干渉」に
    合わせて下げた。旧とぐろ（329°）は入らず、休憩姿勢は緩い弧（rest_arc, 240°）。最終値が決まったら
    `config/robot.yaml` の `min/max_deg` と展示用とぐろ（`legacy_poses` の代替）を作り直す。
 1. **第一号機はどちらか。**（a）展示会用の 9 軸テザー機を仕上げる（b）室内ペットとして電源・知覚から作り直す

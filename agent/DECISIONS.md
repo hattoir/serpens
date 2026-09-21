@@ -17,6 +17,27 @@
 
 ---
 
+## 2026-09-21 — Human Evaluation を最優先ゲートにし、身体構成の決定は Pilot 後へ
+
+**Decision**: 検証レベルを SOFTWARE_VERIFIED / KINEMATIC_SIM / PHYSICS_SIM / HARDWARE_VERIFIED / HUMAN_EVALUATED の
+5 段にし、蛇らしさ・アニマシー・近づきやすさ・愛着・怖さは Simulation だけでは合格判定しない。
+6 / 8 / 10 Yaw は同じ Ω を使い回さず「狙い波数 → Ω = w·360/N」で揃え、同等リンク長（B）と同等身体長（A）の両方を作り、
+RAW と SPEED_MATCHED の 2 条件を用意した。クリップは匿名 ID で、条件との対応は key JSON にだけ持つ。
+内部状態は 6 種（Familiarity / Sleepiness を追加）を共通の式（baseline / rise_tau / decay_tau / saturation / gains）で持ち、
+Stress は saturation 0.9 として「飽和で社会的な状態が同時に消える」構造を無くした。Energy（活動）と温度（機械）を分離。
+
+**Why**: 動きの質は最終的に人が決める。Simulation の指標で「良くなった」と言い続けると、展示で初めて破綻する。
+6 軸 1 波 519mm vs 8 軸 2 波 199mm のような数値だけで身体を決めると、速度差が蛇らしさの評価を汚染する。
+Bug-1 の「飽和 → 回復不能」は gain の値ではなく構造の問題だったので、saturation と property test で押さえた。
+
+**Alternatives**: (1) Simulation の指標を成功指標にする (2) 8 軸を先に採用して CAD を進める（Pilot 前の決定は禁止）
+(3) Familiarity を単純なタイマーにする（同一人物の追跡・距離・退避・タッチを入力にした）。
+
+**Trade-offs**: 動画では大きさ・音・接触・距離感は評価できない（VIDEO_HUMAN_EVALUATION として分ける）。
+n=8〜12 では小さな差は結論にできない。EXHIBITION profile の体験弧は 3 seeds の模擬で確認したにすぎない。
+
+---
+
 ## 2026-09-21 — 動きの語彙（primitives）と文法（grammar, config）を分け、人格を config で変える
 
 **Decision**: しぐさを「語彙」（`primitives.py`。状態を知らない素材）と「文法」（`grammar.py`。config の
