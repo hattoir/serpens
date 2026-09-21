@@ -370,28 +370,54 @@ vision_sim:
 behavior:
   tick_hz: 50.0
   seed: null                  # 乱数の種（null = 毎回違う。テストでは固定）
-  # 内部状態: dx/dt = -(x - x0)/τ + Σ gain × 刺激。値は 0〜1 にクランプ
-  # 刺激: presence(人がいる 0/1) proximity(近さ 0〜1) approach(人が近づく速さ 0〜1)
-  #       touch(タッチ 0/1) novelty(新しい人、減衰する 0〜1) looking(人の方を向いている 0/1) alone(誰もいない 0/1)
+  # 内部状態（仕様: docs/internal_state_model.md）
+  #   dx/dt = −(x − baseline)/τ + Σ gain × 刺激。0〜saturation にクランプ。
+  #   τ = decay_tau_s（baseline より上から下がるとき）/ rise_tau_s（baseline より下から戻るとき）。gains の負値は抑制
+  # 刺激: presence(人がいる 0/1) proximity(近さ 0〜1) approach(人が近づく速さ 0〜1) touch(タッチ 0/1)
+  #       novelty(新しい人、減衰する 0〜1) looking(人の方を向いている 0/1) alone(誰もいない 0/1)
+  #       calm(人がいて・近づいて来ず・Stress が低い = 安全なやりとりが続いている 0/1)
   internal:
-    curiosity: {x0: 0.40, tau_s: 20.0, gains: {novelty: 0.60, alone: 0.015, proximity: -0.02}}
-    affection: {x0: 0.30, tau_s: 60.0, gains: {touch: 0.25, proximity: 0.02, looking: 0.01}}
-    # approach の平衡値 = x0 + gain × tau × approach = 0.05 + 0.72·approach → 普通に歩いて近づく人（0.5〜1.0）で
+    curiosity:   {baseline: 0.40, rise_tau_s: 20.0, decay_tau_s: 20.0, saturation: 1.0,
+                  gains: {novelty: 0.60, alone: 0.015, proximity: -0.02, calm: 0.02}}   # calm: 落ち着いて見ている間に好奇心が育つ（接近の持続）
+    affection:   {baseline: 0.30, rise_tau_s: 60.0, decay_tau_s: 60.0, saturation: 1.0,
+                  gains: {touch: 0.25, proximity: 0.02, looking: 0.01}}
+    # approach の平衡値 = baseline + gain × tau × approach = 0.05 + 0.72·approach → 歩いて来る人（0.5〜1.0）で
     # 0.41〜0.77。**旧 0.90 は approach 0.18（毎秒 88mm）で 1.0 に飽和し、RETREAT だけが残って永久に逃げた**
-    # （外部レビュー Bug-1）。回帰テスト: tests/test_behavior_units.py。値は実機の来場者で要調整
-    stress:    {x0: 0.05, tau_s: 6.0,  gains: {approach: 0.12, novelty: 0.05}}
-    attention: {x0: 0.10, tau_s: 3.0,  gains: {presence: 0.25, proximity: 0.30, looking: 0.20}}
-  energy:                     # Energy = min(温度由来, 1 − 活動の疲れ)
-    temp_fresh_c: 32.0        # これ以下なら 1.0
-    temp_tired_c: 50.0        # これ以上なら 0.0
-    tau_s: 3.0                # 表示・判断のなめらかさ
+    # （外部レビュー Bug-1）。saturation 0.9: (1−s) が 0 にならない = APPROACH/ENGAGE/OBSERVE が同時に消えない
+    stress:      {baseline: 0.05, rise_tau_s: 6.0,  decay_tau_s: 6.0,  saturation: 0.9,
+                  gains: {approach: 0.12, novelty: 0.05}}
+    attention:   {baseline: 0.10, rise_tau_s: 3.0,  decay_tau_s: 3.0,  saturation: 1.0,
+                  gains: {presence: 0.25, proximity: 0.30, looking: 0.20}}
+    # 慣れ（同じ人との安全なやりとりで上がり、退避・駆け込み・人の入れ替わりで下がる。誰もいないと 5 分でゆっくり抜ける）
+    #   calm 1 分で 0.3、近くで撫でられると速い。効き方: Stress の approach gain と駆け込みの驚きを最大 50% 弱め、
+    #   APPROACH / ENGAGE を最大 30% 強める（初対面は変えない。utility.py, brain.py）
+    familiarity: {baseline: 0.0,  rise_tau_s: 60.0, decay_tau_s: 300.0, saturation: 0.9,
+                  gains: {calm: 0.005, proximity: 0.004, touch: 0.05}}
+    # 眠気（誰もいない時間で溜まり、人・新しさで抜ける）。SLEEP の効用に入る
+    sleepiness:  {baseline: 0.10, rise_tau_s: 60.0, decay_tau_s: 300.0, saturation: 1.0,
+                  gains: {alone: 0.006, presence: -0.05, novelty: -0.10}}
+  # 一度きりの出来事による段差（kick）。慣れの効き方（familiarity_*）もここ
+  kicks:
+    retreat_familiarity: -0.15      # RETREAT に入ったら慣れが下がる
+    rush_familiarity: -0.10         # 駆け込まれたら慣れが下がる
+    new_person_familiarity_keep: 0.5    # 追跡する人が入れ替わったら慣れはこの倍率に
+    familiarity_stress_relief: 0.5  # Stress の approach gain と駆け込みの驚きを (1 − relief × 慣れ) 倍
+    familiarity_social_boost: 0.3   # APPROACH / ENGAGE を (1 + boost × 慣れ) 倍（初対面は 1 倍）
+  energy:                     # Energy = 1 − 活動の疲れ（**キャラクターの状態。サーボ温度は混ぜない** → thermal）
     # 活動の疲れ（Bug-2: 温度だけだと冷えている間は気分の休憩が一度も起きない）
     #   d(fatigue)/dt = gain_move × (歩容が動いている) − fatigue / tau_recover_s
     # 巡回は stop-and-go で動いているのは約半分なので、平衡値 = gain × 0.5 × tau = 0.48。
     # COIL_REST_MOOD が PATROL に勝つのは fatigue ≈ 0.42 → 巡回 約4分で休み、静止 20〜30 秒で戻る目安。
     # （レビュー案の 0.004 は連続歩行の前提。stop-and-go では平衡 0.24 で一度も休まない）**実機で要調整**
     fatigue: {gain_move: 0.008, tau_recover_s: 120.0}
+  # サーボ温度（**機械の状態。Safety layer**）。過熱の強制休憩は behavior.safety.overheat_c（55℃）。
+  # その手前の rest_request_c からは Behavior 側へ「休ませたい」を出す（COIL_REST_MOOD の効用に加点）
+  thermal:
+    fresh_c: 32.0             # これ以下なら涼しい（表示用）
+    rest_request_c: 45.0      # これ以上で休憩要求（overheat_c より手前。実機で要調整）
+    rest_request_boost: 0.8   # 休憩要求中に COIL_REST_MOOD の効用へ足す値（weight を掛ける前）
   stimuli:
+    calm_stress_max: 0.3      # Stress がこれ以下で、人が近づいて来ていなければ calm = 1
     approach_ref_mm_s: 500.0  # 人がこの速さで近づくと approach = 1
     # 駆け込み（驚き）: 一次遅れは接近「距離」を積分するだけなので、approach だけでは歩行と突進を区別できない。
     # 人がこの速さを超えて迫ったら Stress を一段上げる（→ RETREAT）。歩いて来る来場者は 250〜500mm/s。要調整
@@ -442,6 +468,9 @@ behavior:
     weights: {SLEEP: 0.9, PATROL: 1.0, ALERT: 1.6, OBSERVE: 0.9, APPROACH: 1.4, ENGAGE: 1.3, PETTED: 3.0, RETREAT: 1.8,
               COIL_REST_MOOD: 1.1, COIL_REST_HEAT: 0.0}   # HEAT は効用では選ばれない（安全割り込みでのみ入る）
     engage_distance_mm: 450.0 # 頭先端から人までこれ以内なら「近い」（ENGAGE）。停止距離 400mm より少し外側
+    # ためらい: 新奇なうちは近づかない。APPROACH × (1 − hesitation × novelty)。novelty は 3 秒で減衰するので
+    # 気づいた直後は OBSERVE（見る・追う）が勝ち、数秒して APPROACH へ移る（NOTICE→LOOK→HESITATE→TRACK→APPROACH）
+    approach_novelty_hesitation: 0.8
   # 移動（controller.py）
   controller:
     gait: forward             # 振幅・空間周波数の元にする歩容

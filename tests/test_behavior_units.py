@@ -35,9 +35,9 @@ def pose(x: float, y: float, th_deg: float) -> SnakePose:
 def test_first_order_decay_and_gain(cfg: dict) -> None:
     st = InternalState(cfg)
     c = cfg["behavior"]["internal"]["stress"]
-    st.values["stress"] = 1.0
-    st.update(c["tau_s"], Stimuli(), None)             # 1ステップで τ 進めると (x−x0) は 0 に（オイラー）
-    assert st.stress == pytest.approx(c["x0"], abs=1e-9)
+    st.values["stress"] = c["saturation"]
+    st.update(c["decay_tau_s"], Stimuli(), None)       # 1ステップで τ 進めると (x−baseline) は 0 に（オイラー）
+    assert st.stress == pytest.approx(c["baseline"], abs=1e-9)
     st2 = InternalState(cfg)
     for _ in range(100):
         st2.update(0.05, Stimuli(approach=1.0, presence=1.0), None)
@@ -51,7 +51,7 @@ def test_stress_does_not_saturate_when_a_visitor_walks_up(cfg: dict) -> None:
         st.update(0.02, Stimuli(approach=1.0, presence=1.0), None)
     assert st.stress < 0.95
     c = cfg["behavior"]["internal"]["stress"]
-    eq = c["x0"] + c["gains"]["approach"] * c["tau_s"]          # approach = 1 の平衡値
+    eq = c["baseline"] + c["gains"]["approach"] * c["rise_tau_s"]     # approach = 1 の平衡値
     assert 0.6 <= eq <= 0.9, eq
     # 歩いて 1.2m 近づいて立ち止まった人（approach 0.7 が 3.5 秒）とは、かかわれる
     walked = InternalState(cfg)
@@ -62,21 +62,26 @@ def test_stress_does_not_saturate_when_a_visitor_walks_up(cfg: dict) -> None:
     assert ev.raw["ENGAGE"] > ev.raw["RETREAT"], ev.raw
 
 
-def test_energy_from_servo_temperature(cfg: dict) -> None:
-    e = cfg["behavior"]["energy"]
-    assert energy_from_temperature(e["temp_fresh_c"] - 5, e["temp_fresh_c"], e["temp_tired_c"]) == 1.0
-    assert energy_from_temperature(e["temp_tired_c"] + 5, e["temp_fresh_c"], e["temp_tired_c"]) == 0.0
-    mid = (e["temp_fresh_c"] + e["temp_tired_c"]) / 2
-    assert energy_from_temperature(mid, e["temp_fresh_c"], e["temp_tired_c"]) == pytest.approx(0.5)
+def test_thermal_is_separate_from_energy(cfg: dict) -> None:
+    """サーボ温度は機械の状態: Energy（キャラクター）には混ぜず、休憩要求（rest_request）として出す。"""
+    th = cfg["behavior"]["thermal"]
+    assert energy_from_temperature(th["fresh_c"] - 5, th["fresh_c"], th["rest_request_c"]) == 1.0
+    assert energy_from_temperature(th["rest_request_c"] + 5, th["fresh_c"], th["rest_request_c"]) == 0.0
     st = InternalState(cfg)
     for _ in range(200):
-        st.update(0.1, Stimuli(), e["temp_tired_c"])    # 熱い = 疲れている
-    assert st.energy < 0.01 and st.heat_c == e["temp_tired_c"]
+        st.update(0.1, Stimuli(), th["rest_request_c"] + 5)
+    assert st.energy == 1.0 and st.heat_c == th["rest_request_c"] + 5    # 熱くても Energy は減らない
+    assert st.thermal_rest_request
+    u = UtilityModel(cfg, random.Random(0))
+    u.noise = 0.0
+    hot = u.evaluate(st, Context(False, None, 0.0, 0.0, rest_request=True), 0.0).raw
+    cool = u.evaluate(st, Context(False, None, 0.0, 0.0, rest_request=False), 0.0).raw
+    assert hot["COIL_REST_MOOD"] > cool["COIL_REST_MOOD"] and hot["COIL_REST_MOOD"] > hot["PATROL"]
 
 
 def test_activity_fatigue_lowers_energy_and_rest_recovers_it(cfg: dict) -> None:
     """Bug-2 の回帰: サーボが冷えていても、動き続けると Energy が下がり、休むと戻る。"""
-    cool = cfg["behavior"]["energy"]["temp_fresh_c"] - 5
+    cool = cfg["behavior"]["thermal"]["fresh_c"] - 5
     st = InternalState(cfg)
     for i in range(int(300.0 / 0.1)):
         st.update(0.1, Stimuli(alone=1.0), cool, moving=(i // 40) % 2 == 0)     # 4秒動いて4秒止まる
@@ -117,11 +122,11 @@ def test_utility_picks_sensible_states(cfg: dict) -> None:
     st = InternalState(cfg)
     best = lambda ctx: max((ev := u.evaluate(st, ctx, 0.0)).noisy, key=lambda k: ev.noisy[k])  # noqa: E731
     assert best(Context(True, 800.0, 1.0, 0.0)) == "PETTED"
-    st.values["curiosity"], st.energy = 0.9, 1.0
+    st.values["curiosity"], st.fatigue = 0.9, 0.0
     assert best(Context(False, None, 0.0, 0.0)) == "PATROL"
     assert best(Context(True, 900.0, 0.0, 0.0)) == "APPROACH"
     assert best(Context(True, 420.0, 0.0, 0.0)) == "ENGAGE"
-    st.energy = 0.0
+    st.fatigue = 1.0
     assert best(Context(False, None, 0.0, 0.0)) == "COIL_REST_MOOD"
     ev = u.evaluate(st, Context(False, None, 0.0, 0.0), 0.0)
     assert "→ とぐろで休む" in thought_line(ev, "COIL_REST_MOOD")

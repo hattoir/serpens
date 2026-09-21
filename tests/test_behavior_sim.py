@@ -99,7 +99,7 @@ def test_touch_makes_it_go_limp(cfg: dict) -> None:
 
 
 def test_hot_servos_make_it_coil_and_rest(cfg: dict) -> None:
-    """Energy はサーボ温度から: 熱くなると COIL_REST（尾から順にとぐろ）。"""
+    """サーボ温度は Safety 層: 熱くなると休憩要求 → COIL_REST（さらに熱いと強制の COIL_REST_HEAT）。"""
     s = SimSession(cfg, BodyPose(300.0, 600.0, 0.0), seed=4,
                    overrides={"mock_servo": {"heat_tau_s": 6.0, "ambient_c": 45.0}})   # 暑い会場を模擬
     ev: list = []
@@ -110,7 +110,7 @@ def test_hot_servos_make_it_coil_and_rest(cfg: dict) -> None:
 
 def test_lonely_and_uncurious_goes_to_sleep(cfg: dict) -> None:
     s = SimSession(cfg, BodyPose(300.0, 600.0, 0.0), seed=5)
-    s.brain.internal._ch["curiosity"].x0 = 0.02
+    s.brain.internal._ch["curiosity"].baseline = 0.02
     s.brain.internal._ch["curiosity"].gains = {}
     s.brain.internal.values["curiosity"] = 0.02
     ev: list = []

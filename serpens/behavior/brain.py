@@ -70,6 +70,7 @@ class Brain:
                  head: HeadIO | None = None, rng: random.Random | None = None) -> None:
         b = cfg["behavior"]
         self.cfg, self.b, self.x, self.st = cfg, b, b["expression"], b["stimuli"]
+        self.kicks = b["kicks"]
         seed = b["seed"]
         self.rng = rng or random.Random(seed)
         self.anim, self.poses = animator, Poses(cfg)
@@ -115,10 +116,12 @@ class Brain:
         self.internal.update(dt, stim, p.max_temp_c, moving=self.anim.gait.active)
         forced = self._safety(t, p)
         ev = self.utility.evaluate(self.internal, Context(person is not None, head_dist, stim.touch, self._novelty,
-                                                          self.loco.at_limit), t)
+                                                          self.loco.at_limit, self.internal.thermal_rest_request), t)
         tr = forced or (None if self._hold_for_heat(p) else self.fsm.step(t, ev.noisy))
         if tr is not None:
             self._events.append(f"{tr.src}→{tr.dst}（{tr.reason}）")
+            if tr.dst == "RETREAT":
+                self.internal.kick("familiarity", float(self.kicks["retreat_familiarity"]))
             self._on_enter(t, tr.dst, p.snake, person)
         self._on_tick(t, p.snake, person, head_dist)
         self._events += self.loco.events
@@ -144,6 +147,9 @@ class Brain:
             self.expr.cancel("react")
             self.grammar.event(t, "notice")                          # 一次反応（目・ピクッ）は文法が撃つ
             self.expr.schedule(t + self.expr._u("reaction_delay_s"), "react", self._react)
+        if p.target_serial != self._serial:
+            # 追跡する人が入れ替わった（同じ人との慣れは一部だけ残る）
+            self.internal.values["familiarity"] *= float(self.kicks["new_person_familiarity_keep"])
         self._serial = p.target_serial
         if p.touch:
             self._touch_until = t + float(self.st["touch_hold_s"])
@@ -220,8 +226,12 @@ class Brain:
             self._approach_speed += a * (v - self._approach_speed)
         self._last_person = np.asarray(person, float).copy()
         s.approach = min(max(self._approach_speed / float(self.st["approach_ref_mm_s"]), 0.0), 1.0)
+        relief = 1.0 - float(self.kicks["familiarity_stress_relief"]) * self.internal.familiarity   # 慣れで弱まる
+        s.approach *= relief
+        s.calm = 1.0 if (self.internal.stress <= float(self.st["calm_stress_max"]) and s.approach < 0.1) else 0.0
         if self._approach_speed > float(self.st["rush_mm_s"]) and self._last_t is not None                 and self._last_t >= self._rush_rearm_t:
-            self.internal.kick("stress", float(self.st["rush_stress_kick"]))     # 駆け込まれた（驚き）
+            self.internal.kick("stress", float(self.st["rush_stress_kick"]) * relief)     # 駆け込まれた（驚き）
+            self.internal.kick("familiarity", float(self.kicks["rush_familiarity"]))
             self._rush_rearm_t = self._last_t + float(self.st["rush_rearm_s"])
             self._events.append(f"駆け込み {self._approach_speed:.0f}mm/s → Stress 上昇")
         yaw_needed = self._yaw_to(p.snake, person)
