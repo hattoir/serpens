@@ -14,15 +14,33 @@ import yaml
 DEFAULT_CONFIG_PATH: Path = Path(__file__).resolve().parent.parent / "config" / "robot.yaml"
 
 
-def load_config(path: str | Path | None = None) -> dict[str, Any]:
-    """YAML 設定を読み込んで dict で返す。"""
+def load_config(path: str | Path | None = None, overlay: str | Path | None = None) -> dict[str, Any]:
+    """YAML 設定を読み込んで dict で返す。overlay は上書き（例: config/robot_yaw8.yaml の 8 軸案）。"""
     p = Path(path) if path is not None else DEFAULT_CONFIG_PATH
+    data = _read_yaml(p)
+    if overlay is not None:
+        data = apply_overlay(data, _read_yaml(Path(overlay)))
+    check_joint_limits(data)
+    return data
+
+
+def _read_yaml(p: Path) -> dict[str, Any]:
     with p.open(encoding="utf-8") as f:
         data = yaml.safe_load(f)
     if not isinstance(data, dict):
         raise ValueError(f"設定ファイルの形式が不正です: {p}")
-    check_joint_limits(data)
     return data
+
+
+def apply_overlay(base: dict[str, Any], overlay: dict[str, Any]) -> dict[str, Any]:
+    """辞書は再帰的に上書き、リスト（joints など）は丸ごと置き換える。base は変更しない。"""
+    out = dict(base)
+    for k, v in overlay.items():
+        if isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = apply_overlay(out[k], v)
+        else:
+            out[k] = v
+    return out
 
 
 def check_joint_limits(cfg: dict[str, Any]) -> None:

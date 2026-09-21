@@ -11,6 +11,7 @@ guard: person_tracked の間は J7 を neck.look_max_deg までに抑える（�
 """
 from __future__ import annotations
 
+import math
 import random
 from dataclasses import replace
 from typing import Any, Callable
@@ -154,8 +155,10 @@ class Primitives:
     def glance_away(self, t: float) -> None:
         """視線をそらして（glance_away_s）、元の向きに戻る。"""
         prev = self.look_yaw
-        m = float(self.x["glance_max_yaw_deg"])
-        self.look_at(t, self.rng.uniform(-m, m), force=True)
+        m, off = float(self.x["glance_max_yaw_deg"]), float(self.x["glance_min_offset_deg"])
+        choices = [y for y in (prev - self.rng.uniform(off, m + off), prev + self.rng.uniform(off, m + off))
+                   if -m <= y <= m] or [math.copysign(m, -prev)]
+        self.look_at(t, self.rng.choice(choices), force=True)
         back = t + self._u("glance_away_s")
         self.busy_until = back
         self.schedule(back, "glance_back", lambda tt: self.look_at(tt, prev, force=True))

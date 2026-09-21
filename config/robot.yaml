@@ -195,6 +195,25 @@ legacy_poses:
   s_curve: {J1: 0, J2: 0, J3: 0, J4: 25, J5: -35, J6: 20}   # 鎌首の旧土台。威嚇の S 字構えに見えるため演出から外した
 
 # ---------------------------------------------------------------------------
+# 動きの質の評価（simulation/quality.py, tools/motion_quality.py）。**SIMULATED。相対比較に使う**
+# ---------------------------------------------------------------------------
+quality:
+  # 静止 = 歩容の振幅がゼロ（呼吸は移動ではない。首マーカの速さで測ると呼吸の位相波を「移動」と数えてしまう）
+  wave_min_turn_deg: 3.0          # 中心線の曲がりがこれ未満なら波として数えない（呼吸ぶんを除く）
+  visible_head_change_deg: 1.0    # 一次反応の「可視変化」とみなす J8 の動き
+  person_appear_s: 5.0            # 人が現れる時刻（一次反応・GAR の測定）
+  person_xy_mm: [700.0, -300.0]   # 現れる位置（来場者側。頭の正面付近。真横だと J8 ±80° に入らず GAR が意味を失う）
+  start: {x_mm: 600.0, y_mm: 1100.0, theta_deg: -90.0}   # 尾端の初期姿勢（来場者側を向く）
+  # 回帰テスト（tests/test_motion_quality.py）の合格線。目標: 静止率 0.40〜0.60、一次反応 ≤ 0.30s、GAR 0.40〜0.60。
+  # 可視波数は 9 軸案では 1 が上限（構造的制約）。LDJ は 120 秒で統制した値の帯（大きく崩れたら気づくため）
+  thresholds:
+    still_ratio: [0.35, 0.70]
+    primary_latency_s_max: 0.30
+    gar: [0.35, 0.65]
+    visible_waves_min: 0.9
+    head_ldj: [-30.0, -20.0]        # 2026-09-21 の測定 −25.5 前後（120 秒）。相対比較用の帯
+
+# ---------------------------------------------------------------------------
 # アニメーション
 # ---------------------------------------------------------------------------
 animator:
@@ -461,7 +480,7 @@ behavior:
     # （Integr. Comp. Biol. 41(2):137）。歩き続けると「ルンバ」に見える。静止中も呼吸は続く。
     # 期待値 3s 動いて 4s 止まる（歩容の立ち上がり・立ち下がり blend_s が動く側に乗る）。静止中は騒音ゼロ
     patrol_move_s: [2.0, 4.0]
-    patrol_pause_s: [2.0, 6.0]
+    patrol_pause_s: [3.0, 7.0]     # 歩容の立ち下がり（blend_s 約 1s）が動く側に乗るので、静止率 0.4〜0.6 にはこの長さが要る
     lookahead_mm: 250.0
     recover_heading_ok_deg: 45.0  # 中央を向いたとみなす誤差
     retreat_distance_mm: 900.0    # 逃げるときの目標: 人から離れた点までの距離
@@ -488,13 +507,14 @@ behavior:
     # d. 到達後のホールド。相互凝視の快適時間は平均 3.3 秒・大多数が 2〜5 秒（Binetti et al., R. Soc. Open Sci., n≈500）
     look_hold_s: [2.5, 4.0]
     look_duration_s: 0.6              # d. 頭を回す時間（軸の上限速度で自動的に延びる）
-    look_retarget_deg: 20.0           #    ホールド中でもこれ以上ずれたら向き直す
+    look_retarget_deg: 12.0           #    ホールド中でもこれ以上ずれたら向き直す（stimuli.looking_tolerance_deg 15 より小さく。GAR の測定で判明）
     tilt_deg: [12.0, 18.0]            # e. 首かしげ（J9）
     tilt_hold_s: 1.2
     # g. 視線そらし（glance_away）。間隔は grammar（every）。GAR（そらしている時間の割合）0.5〜0.7 が会話を
     # 最も長くし、0.1 だと短くなる（Front. Robot. AI 10:1062714）。旧 15〜40 秒に 1.5 秒 = GAR 約 0.04
-    glance_away_s: [1.5, 3.0]
+    glance_away_s: [2.5, 4.5]         # 測定（tools/motion_quality.py）で GAR 0.4〜0.6 に入る長さ。every は grammar（4〜8s）
     glance_max_yaw_deg: 60.0
+    glance_min_offset_deg: 25.0       # そらす先はいまの向きからこれ以上離す（偶然「見ている」範囲に入らない）
     approach_first_ratio: 0.6         # f. 接近は 60% 進む → 止まる → 残り
     approach_pause_s: [0.8, 1.5]
     # i. 撫でへの応答の素材（3 段: 呼吸を止める → 脱力 → すり寄る。時刻は grammar.PETTED）。
@@ -518,24 +538,24 @@ behavior:
       - {do: twitch,    at: [0.15, 0.25], toward: person}
     ALERT:
       on_enter: [{do: flick, at: 1.2, times: 3, gap_s: 0.5}]
-      while:    [{do: glance_away, every: [3.5, 7.0]}]
+      while:    [{do: glance_away, every: [4.0, 8.0]}]
     OBSERVE:
       while:
         - {do: flick, rate_per_min: novelty}
         - {do: tilt, every: [5.0, 10.0]}
-        - {do: glance_away, every: [3.5, 7.0]}
+        - {do: glance_away, every: [4.0, 8.0]}
     ENGAGE:
       while:
         - {do: flick, rate_per_min: novelty}
         - {do: tilt, every: [5.0, 10.0]}
-        - {do: glance_away, every: [3.5, 7.0]}
+        - {do: glance_away, every: [4.0, 8.0]}
     APPROACH:
-      while: [{do: glance_away, every: [3.5, 7.0]}]
+      while: [{do: glance_away, every: [4.0, 8.0]}]
     RETREAT:
-      while: [{do: glance_away, every: [3.5, 7.0]}]
+      while: [{do: glance_away, every: [4.0, 8.0]}]
     PATROL:
       while:
-        - {do: glance_away, every: [3.5, 7.0]}
+        - {do: glance_away, every: [4.0, 8.0]}
         - {do: flick, rate_per_min: novelty, only: paused}
         - {do: stretch, every: [40.0, 90.0], only: alone_paused}
     PETTED:                                     # 撫でへの 3 段応答

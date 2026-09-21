@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from typing import Any
 
 BODY_AXIS = "yaw"
-NECK_JOINT = "J7"
+NECK_AXIS = "pitch"        # 最初の pitch 軸 = 首。それより尾側の yaw が胴体（関節数を決め打ちしない）
 TURN_PROFILES = ("uniform", "head_weighted")
 
 
@@ -43,10 +43,10 @@ class GaitParams:
 
 
 def body_joint_names(cfg: dict[str, Any]) -> list[str]:
-    """胴体の水平ヨー関節（首より尾側、J1〜J6）の名前。"""
+    """胴体の水平ヨー関節（首＝最初の pitch 軸より尾側）の名前。9 軸案では J1〜J6。"""
     names: list[str] = []
     for j in cfg["joints"]:
-        if j["name"] == NECK_JOINT:
+        if j["axis"] == NECK_AXIS:
             break
         if j["axis"] == BODY_AXIS:
             names.append(j["name"])
