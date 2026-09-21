@@ -60,12 +60,12 @@ def test_approach_two_stage_stops_short_and_slow_near_person(cfg: dict) -> None:
     def rec(ss: SimSession) -> None:
         if ss.snake is not None:
             track.append((ss.t, np.array([ss.snake.x, ss.snake.y]), ss.brain.ctrl.head_distance(ss.snake, person)))
-            if ss.brain.drive.moving and np.linalg.norm(track[-1][1] - person) <= c["near_person_mm"]:
-                cmd_near.append(ss.brain.drive.speed_mm_s)
+            if ss.brain.loco.drive.moving and np.linalg.norm(track[-1][1] - person) <= c["near_person_mm"]:
+                cmd_near.append(ss.brain.loco.drive.speed_mm_s)
 
     run_until(s, 60.0, ev, hook=rec)
     names = [e for _, e in ev]
-    assert "接近: 60% で一時停止" in names, names
+    assert "接近: 途中で一時停止" in names, names
     assert min(d for _, _, d in track) >= c["stop_distance_mm"] - 10.0
     assert any("→ENGAGE" in e for e in names)
     # 1m 以内: 指令速度は必ず 8cm/s 以下（気づく前の巡回中も）
@@ -78,17 +78,22 @@ def test_approach_two_stage_stops_short_and_slow_near_person(cfg: dict) -> None:
 
 
 def test_touch_makes_it_go_limp(cfg: dict) -> None:
-    """i. タッチ → PETTED: トルク 60%・首を下げる・目を暗く、2 秒でトルクが戻る。"""
+    """i. タッチ → PETTED: 呼吸を止める → 脱力（トルク 40%・首を下げる・目を暗く）→ すり寄る。release 後にトルクが戻る。"""
+    sag = next(it for it in cfg["behavior"]["grammar"]["PETTED"]["on_enter"] if it["do"] == "sag")
     s = SimSession(cfg, BodyPose(300.0, 600.0, 0.0), seed=1)
     run_until(s, 2.0)
     s.touch(True)
     run_until(s, 2.3)
     s.touch(False)
     assert s.brain.fsm.state == "PETTED"
+    t_pet = next(t for t, n in s.brain.expr.log if n == "hold_breath")
+    run_until(s, t_pet + sag["at"][1] + 0.1)
     assert s.bus._axes[7].torque_ratio == pytest.approx(
-        cfg["poses"]["relax"]["torque_ratio"] * cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
+        sag["torque_ratio"] * cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
     assert s.head.eye_rgb_brightness[3] == cfg["behavior"]["eyes"]["PETTED"][3]
-    run_until(s, 2.3 + cfg["behavior"]["expression"]["petted_s"] + 0.2)
+    run_until(s, t_pet + 2.0)
+    assert any(n.startswith("nuzzle") for _t, n in s.brain.expr.log)
+    run_until(s, t_pet + sag["at"][1] + sag["release_s"] + 0.3)
     assert s.bus._axes[7].torque_ratio == pytest.approx(
         cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])   # 演出が終わっても安全上限まで
 
@@ -138,8 +143,8 @@ def test_patrol_is_stop_and_go_and_keeps_breathing(cfg: dict) -> None:
     def watch(ss: SimSession) -> None:
         if ss.brain.fsm.state != "PATROL":
             return
-        paused.append(ss.brain.patrol_paused)
-        if ss.brain.patrol_paused and not ss.anim.gait.active:
+        paused.append(ss.brain.loco.patrol_paused)
+        if ss.brain.loco.patrol_paused and not ss.anim.gait.active:
             neck_while_paused.append(ss.anim.last_output["J7"])
             gait_while_paused.append(ss.anim.last_output["J3"] - ss.anim.last_base["J3"])
 
@@ -181,6 +186,7 @@ def test_person_walking_up_does_not_cause_retreat(cfg: dict) -> None:
 def test_primary_reaction_is_inside_the_causal_window(cfg: dict) -> None:
     """a. 検出から 0.15〜0.25 秒で目が光り J8 が人の側へピクッと動く。驚きの全停止中も呼吸は続く。"""
     x = cfg["behavior"]["expression"]
+    notice = {it["do"]: it for it in cfg["behavior"]["grammar"]["on_notice"]}
     s = SimSession(cfg, BodyPose(200.0, 400.0, 0.0), seed=3)
     run_until(s, 3.0)
     s.people = [SimPerson(900.0, -300.0)]                # 右手前 → 頭から見て右（J8 負）
@@ -188,8 +194,8 @@ def test_primary_reaction_is_inside_the_causal_window(cfg: dict) -> None:
     run_until(s, t0 + 1.6, ev,
               hook=lambda ss: trace.append((ss.t, ss.anim.last_output["J8"], ss.anim.last_output["J7"],
                                             ss.head.eye_rgb_brightness[3], ss.anim.frozen)))
-    t_prim = next(t for t, e in ev if e.startswith("一次反応"))
-    lo, hi = x["primary_reaction_delay_s"]
+    t_prim = next(t for t, n in s.brain.expr.log if n.startswith("twitch"))
+    lo, hi = notice["twitch"]["at"]
     assert lo - 0.03 <= t_prim - t0 <= hi + 0.03
     t_react = next(t for t, e in ev if e.startswith("反応開始"))
     assert t_prim < t_react                              # 一次反応は「間」より前

@@ -122,7 +122,7 @@ def main() -> None:
         events += [(st.t, e) for e in st.events]
         new = s.brain.expr.log[n_log:]
         n_log = len(s.brain.expr.log)
-        events += [(t, n) for t, n in new if n in ("surprise", "glance_away", "petted") or n.startswith("tilt")]
+        events += [(t, n) for t, n in new if n in ("freeze", "glance_away", "sag", "nuzzle") or n.startswith("tilt")]
         log.append((st.t, st.state, dict(st.internal), st.heat_c))
         if not args.no_gif and k % frame_every == 0:
             top = Image.fromarray(cv2.cvtColor(draw_top(s), cv2.COLOR_BGR2RGB))

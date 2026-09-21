@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 
 from serpens.behavior.controller import Controller
-from serpens.behavior.expression import Expression
+from serpens.behavior.grammar import Grammar, GrammarCtx
+from serpens.behavior.primitives import Primitives
 from serpens.behavior.fsm import StateMachine
 from serpens.behavior.internal_state import InternalState, Stimuli, energy_from_temperature
 from serpens.behavior.utility import STATES, Context, UtilityModel, thought_line
@@ -184,12 +185,12 @@ def test_controller_edge_recovery_and_edge_goal(cfg: dict) -> None:
 
 
 # ---- 表現 ------------------------------------------------------------------------
-def rig(cfg: dict) -> tuple[Expression, Animator, MockServoBus]:
+def rig(cfg: dict) -> tuple[Primitives, Animator, MockServoBus]:
     clock = FakeClock()
     bus = MockServoBus(cfg, clock=clock)
     bus.connect()
     anim = Animator(cfg)
-    return Expression(cfg, anim, Poses(cfg), random.Random(1), bus), anim, bus
+    return Primitives(cfg, anim, Poses(cfg), random.Random(1), bus), anim, bus
 
 
 def test_look_at_overshoot_and_hold(cfg: dict) -> None:
@@ -208,26 +209,52 @@ def test_look_at_overshoot_and_hold(cfg: dict) -> None:
     assert ex.hold_until - 0.0 >= hold_lo
 
 
-def test_tilt_surprise_distraction_and_petted(cfg: dict) -> None:
+def test_primitives_tilt_freeze_sag(cfg: dict) -> None:
+    """語彙の単体: かしげ / 全停止（呼吸は続く）/ 脱力（トルクは安全上限の比で、終わると上限へ戻る）。"""
     x = cfg["behavior"]["expression"]
     ex, anim, bus = rig(cfg)
     ex.tilt(0.0)
     roll = max(abs(anim.update(t)["J9"]) for t in np.arange(0, 1.5, 0.02))
     assert x["tilt_deg"][0] - 3 <= roll <= x["tilt_deg"][1] + 3
     assert ex.pending("untilt")
-    ex.surprise(2.0)
+    ex.freeze(2.0, x["surprise_freeze_s"], keep_breath=True)
     assert anim.frozen
     ex.update(2.0 + x["surprise_freeze_s"] + 1e-6)
     assert not anim.frozen
-    lo, hi = x["glance_interval_s"]
-    assert lo <= ex.next_glance_t <= hi
-    end = ex.petted(5.0)
-    assert end == pytest.approx(5.0 + x["petted_s"])
+    end = ex.sag(5.0, 0.4, 2.0)
+    assert end == pytest.approx(7.0)
     assert bus._axes[1].torque_ratio == pytest.approx(
-        cfg["poses"]["relax"]["torque_ratio"] * cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
+        0.4 * cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
     ex.update(end + 0.01)
     assert bus._axes[1].torque_ratio == pytest.approx(
         cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])   # 演出が終わっても安全上限まで
+
+
+def test_grammar_rejects_unknown_vocabulary(cfg: dict) -> None:
+    """config の打ち間違い（未知の語彙・条件）は起動時に止める。"""
+    import copy
+
+    bad = copy.deepcopy(cfg)
+    bad["behavior"]["grammar"]["ALERT"]["while"].append({"do": "wiggle", "every": [1, 2]})
+    ex, _anim, _bus = rig(cfg)
+    with pytest.raises(ValueError):
+        Grammar(bad, ex, random.Random(0), lambda: GrammarCtx("ALERT", 0.0, 0.0, False, False))
+
+
+def test_grammar_petted_fires_three_stages_in_order(cfg: dict) -> None:
+    """撫でへの 3 段応答: 呼吸を止める（≤200ms）→ 脱力（0.3〜0.8s）→ すり寄る（1〜2s）。config の表どおりの順。"""
+    ex, anim, bus = rig(cfg)
+    g = Grammar(cfg, ex, random.Random(2), lambda: GrammarCtx("PETTED", 0.0, 30.0, True, False))
+    g.enter(10.0, "PETTED")
+    for t in np.arange(10.0, 14.0, 0.02):
+        ex.update(t)
+        anim.update(t)
+    fired = [(t, n) for t, n in ex.log if n in ("hold_breath", "sag") or n.startswith("nuzzle")]
+    names = [n.split()[0] for _, n in fired]
+    assert names == ["hold_breath", "sag", "nuzzle"], fired
+    t_hold, t_sag, t_nuz = (t for t, _ in fired)
+    assert t_hold - 10.0 <= 0.2 and 0.3 <= t_sag - 10.0 <= 0.8 + 0.02 and 1.0 <= t_nuz - 10.0 <= 1.4 + 0.02
+    assert anim.last_base["J8"] > 5.0                        # 人の側（+30°）へ寄った
 
 
 def test_flick_rate_follows_novelty_and_returns_to_base(cfg: dict) -> None:
@@ -236,13 +263,17 @@ def test_flick_rate_follows_novelty_and_returns_to_base(cfg: dict) -> None:
     counts = {}
     for novelty in (1.0, 0.0):
         ex, anim, _bus = rig(cfg)
+        ctx = GrammarCtx("OBSERVE", novelty, 0.0, True, False)
+        g = Grammar(cfg, ex, random.Random(1), lambda ctx=ctx: ctx)
+        g.g = {"OBSERVE": {"while": [{"do": "flick", "rate_per_min": "novelty"}]}}   # flick だけを見る
+        g.enter(0.0, "OBSERVE")
         peak = 0.0
         for t in np.arange(0.0, 120.0, 0.02):
             ex.update(t)
-            ex.maybe_flick(t, novelty)
+            g.tick(t)
             anim.update(t)
             peak = max(peak, abs(anim.last_base["J8"]))             # 呼吸ぶんを除いた首の動き
-        counts[novelty] = ex.flicks / 2.0                       # 回/分
+        counts[novelty] = ex.counts.get("flick", 0) / 2.0        # 回/分
         assert peak <= f["yaw_deg"][1] + 0.5
         anim.update(121.0)
         assert abs(anim.last_base["J8"]) < 0.5                    # 戻っている

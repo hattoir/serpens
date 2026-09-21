@@ -215,7 +215,7 @@ class ControlLoop(threading.Thread):
             theta_head=0.0 if s.snake is None else s.snake.theta_head,
             people=[(p.x_mm, p.y_mm) for p in s.people],
             target_xy=None if s.target is None else (float(s.target.floor_mm[0]), float(s.target.floor_mm[1])),
-            waypoint=None if s.brain._waypoint is None else (float(s.brain._waypoint[0]), float(s.brain._waypoint[1])),
+            waypoint=None if s.brain.loco.waypoint is None else (float(s.brain.loco.waypoint[0]), float(s.brain.loco.waypoint[1])),
             servo=dict(s.poller.fresh_states(s.t)),
             servo_age_s={sid: s.poller.age_s(sid, s.t) for sid in s.servo_ids},
             telemetry_source=s.poller.source, missing_axes=s.poller.missing_axes(s.t),

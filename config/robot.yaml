@@ -174,8 +174,7 @@ poses:
   # 人を追跡中は「コブラが襲う直前」に見えるので、brain の guard が J7 を neck.look_max_deg に抑える
   stretch:
     hold_s: 2.5
-    duration_s: 2.0
-    interval_s: [40.0, 90.0]  # 巡回の静止中、誰もいないときにこの間隔で
+    duration_s: 2.0           # いつ出すかは behavior.grammar（PATROL の while、alone_paused）
   # 脱力（タッチ時）: 首を下げ、トルクを落とす
   relax:
     neck_deg: 0.0             # J7 を下げる
@@ -469,19 +468,16 @@ behavior:
   # 生き物らしさ（expression.py）
   expression:
     reaction_delay_s: [0.4, 0.9]      # b. 人物検出から反応開始まで（「間」。primary の後）
-    # 一次反応（因果の印象は遅延 140ms を超えると消え始め 1 秒で崩壊する: Front. Psychol. 14:1167809 / Sci. Rep. 10:22384）。
-    # 検出（≤200ms）+ 遅れ 100ms の後、150〜250ms でまず目を光らせ J8 を刺激の方向へ 2.5° ピクッと動かす。
-    # 「間」（reaction_delay_s）はその後。目の LED は機械遅延ゼロなので LED だけでも成立する
-    primary_reaction_delay_s: [0.15, 0.25]
+    # 一次反応の素材（いつ撃つかは grammar.on_notice）。因果の印象は遅延 140ms を超えると消え始め 1 秒で崩壊する
+    # （Front. Psychol. 14:1167809 / Sci. Rep. 10:22384）。目の LED は機械遅延ゼロなので LED だけでも成立する
     primary_twitch_deg: 2.5
     primary_twitch_s: 0.12            # 片道の時間（往復で 0.24s）
-    primary_eye_flash: true
     primary_flash_brightness: 255
     primary_flash_s: 0.15
     surprise_freeze_s: 0.3            # c. 反応の最初は全停止（呼吸は除く）
     # 舌のちらつき相当（舌が無いので J8 の微小往復で代替）。ガータースネークの舌フリック実測
     # （Chiszar et al., Bull. Psychon. Soc.）: 新奇環境直後 約51回/分 → 馴化後 2〜4回/分、新規刺激で 8〜10回/分。
-    # 頻度 = base + (peak − base) × novelty。止まって人を見ている状態と巡回の静止中に出る
+    # 頻度 = base + (peak − base) × novelty。どの状態で出すかは grammar（rate_per_min: novelty）
     flick:
       yaw_deg: [3.0, 8.0]
       duration_s: [0.2, 0.4]          # 往復で1回
@@ -495,20 +491,61 @@ behavior:
     look_retarget_deg: 20.0           #    ホールド中でもこれ以上ずれたら向き直す
     tilt_deg: [12.0, 18.0]            # e. 首かしげ（J9）
     tilt_hold_s: 1.2
-    tilt_interval_s: [5.0, 10.0]      #    OBSERVE / ENGAGE 中にかしげる間隔
-    # g. 視線そらし（glance_away）。GAR（そらしている時間の割合）0.5〜0.7 が会話を最も長くし、0.1 だと短くなる
-    # （Front. Robot. AI 10:1062714）。旧 15〜40 秒に 1.5 秒 = GAR 約 0.04 でほぼ見つめっぱなしだった。
-    # 「見ては外し、見ては外しが常態で、たまに長く見る」。期待値: 5.25 秒ごとに 2.25 秒そらす → GAR 約 0.43
-    glance_interval_s: [3.5, 7.0]
+    # g. 視線そらし（glance_away）。間隔は grammar（every）。GAR（そらしている時間の割合）0.5〜0.7 が会話を
+    # 最も長くし、0.1 だと短くなる（Front. Robot. AI 10:1062714）。旧 15〜40 秒に 1.5 秒 = GAR 約 0.04
     glance_away_s: [1.5, 3.0]
     glance_max_yaw_deg: 60.0
     approach_first_ratio: 0.6         # f. 接近は 60% 進む → 止まる → 残り
     approach_pause_s: [0.8, 1.5]
-    petted_s: 2.0                     # i. 脱力の時間（トルク比・首は poses.relax）
+    # i. 撫でへの応答の素材（3 段: 呼吸を止める → 脱力 → すり寄る。時刻は grammar.PETTED）。
+    # Paro は撫でに尾と目の二点で応答し、10 分の接触で痛みの主観評価 5.1→3.1（Sci. Rep. 10:9747, n=83）。
+    # 頭部のタッチは 2 点（頭・背）で左右が分からないので、すり寄る向きは追跡中の人の方向（いなければ乱数）。
+    # 胴体タッチセンサはハード側へ要求済み
+    petted:
+      nuzzle_deg: [10.0, 20.0]
+      nuzzle_duration_s: [1.0, 2.0]
     engage_neck_deg: 60.0             # 人を見るときの J7（neck.look_* の範囲にクランプ）
     alert_neck_deg: 55.0
     eyes_refresh_s: 1.0               # 目の指令を送り直す間隔（ESP32 は 3 秒来ないと呼吸に戻る）
     sleep_neck_deg: 0.0               # 眠るときは頭を床に下ろす
+  # ---- 文法（grammar.py）: 状態ごとに、どの語彙（primitives.py）をいつ撃つか。**動きの人格はここだけで変える** ----
+  #   on_notice … 人に気づいた出来事。<STATE>.on_enter … 入ってから at 秒後。<STATE>.while … every 秒ごと / rate_per_min
+  #   only: paused（巡回の静止中） / alone_paused（静止中かつ誰もいない） / person（人を追跡中）
+  # 「もう少し臆病に」= on_notice の at を長く・ALERT の flick を増やす、など
+  grammar:
+    on_notice:                                  # 一次反応（150〜250ms）。「間」の全停止は expression.reaction_delay_s
+      - {do: eye_flash, at: [0.15, 0.25]}
+      - {do: twitch,    at: [0.15, 0.25], toward: person}
+    ALERT:
+      on_enter: [{do: flick, at: 1.2, times: 3, gap_s: 0.5}]
+      while:    [{do: glance_away, every: [3.5, 7.0]}]
+    OBSERVE:
+      while:
+        - {do: flick, rate_per_min: novelty}
+        - {do: tilt, every: [5.0, 10.0]}
+        - {do: glance_away, every: [3.5, 7.0]}
+    ENGAGE:
+      while:
+        - {do: flick, rate_per_min: novelty}
+        - {do: tilt, every: [5.0, 10.0]}
+        - {do: glance_away, every: [3.5, 7.0]}
+    APPROACH:
+      while: [{do: glance_away, every: [3.5, 7.0]}]
+    RETREAT:
+      while: [{do: glance_away, every: [3.5, 7.0]}]
+    PATROL:
+      while:
+        - {do: glance_away, every: [3.5, 7.0]}
+        - {do: flick, rate_per_min: novelty, only: paused}
+        - {do: stretch, every: [40.0, 90.0], only: alone_paused}
+    PETTED:                                     # 撫でへの 3 段応答
+      on_enter:
+        - {do: hold_breath, at: 0.0, hold_s: 0.2}                    # 接触から 200ms 以内: 呼吸を一瞬止める
+        - {do: sag, at: [0.3, 0.8], torque_ratio: 0.4, release_s: 2.0}   # 脱力（トルク 40%、姿勢が沈む）
+        - {do: nuzzle, at: [1.0, 1.4], toward: person}               # 接触方向へ 10〜20° すり寄る
+    SLEEP: {}
+    COIL_REST_MOOD: {}
+    COIL_REST_HEAT: {}
   # 目（状態ごと）: [R, G, B, 明るさ, モード(0消灯 1点灯 2呼吸 3まばたき)]
   eyes:
     SLEEP: [60, 60, 120, 20, 2]

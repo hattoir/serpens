@@ -16,10 +16,12 @@ from typing import Any
 
 import numpy as np
 
-from serpens.behavior.controller import Controller, DriveCommand
-from serpens.behavior.expression import Expression
+from serpens.behavior.controller import DriveCommand
+from serpens.behavior.grammar import Grammar, GrammarCtx
+from serpens.behavior.primitives import Primitives
 from serpens.behavior.fsm import StateMachine, Transition
 from serpens.behavior.internal_state import InternalState, Stimuli
+from serpens.behavior.locomotion import Locomotion
 from serpens.behavior.utility import COIL_STATES, STATE_LABELS_JA, Context, UtilityModel, thought_line
 from serpens.hw.head_io import HeadIO
 from serpens.hw.servo_bus import ServoBus
@@ -29,7 +31,6 @@ from serpens.motion.poses import HEAD_YAW, NECK, Poses
 from serpens.perception.snake_pose import SnakePose, wrap_pi
 
 STILL_STATES = ("ALERT", "OBSERVE", "ENGAGE")            # 止まって人を見る状態
-QUIET_STATES = ("SLEEP", "PETTED") + COIL_STATES         # よそ見をしない状態
 
 
 @dataclass
@@ -77,8 +78,10 @@ class Brain:
         self.internal = InternalState(cfg)
         self.utility = UtilityModel(cfg, self.rng)
         self.fsm = StateMachine(cfg)
-        self.ctrl = Controller(cfg)
-        self.expr = Expression(cfg, animator, self.poses, self.rng, bus, head)
+        self.loco = Locomotion(cfg, animator, self.rng)     # 移動の段取り（巡回・接近・退避）
+        self.ctrl = self.loco.ctrl
+        self.expr = Primitives(cfg, animator, self.poses, self.rng, bus, head)     # 語彙
+        self.grammar = Grammar(cfg, self.expr, self.rng, self._grammar_ctx)       # 文法（config）
         self.max_range = float(cfg["person"]["max_range_mm"])
         self.safety_cfg = b["safety"]
         self._grab_since: float | None = None
@@ -90,23 +93,10 @@ class Brain:
         self._last_person: np.ndarray | None = None
         self._approach_speed = 0.0
         self._rush_rearm_t = -1.0
-        self._waypoint: np.ndarray | None = None
-        self._patrol_dir = 1.0
-        self._patrol_flip_t = 0.0
-        self.patrol_paused = False           # 巡回の stop-and-go: いま立ち止まっているか
-        self._patrol_phase_until = -1.0
-        self._approach_stage = 0
-        self._stage_goal_dist = 0.0
-        self._approach_start = np.zeros(2)
-        self._approach_dir = np.array([1.0, 0.0])
-        self._pause_until = -1.0
-        self._at_limit = False
-        self._limit_person: np.ndarray | None = None
         self._last_snake: SnakePose | None = None
         self._last_person_raw: np.ndarray | None = None
         self._next_eyes_t = 0.0
         self._last_t: float | None = None
-        self.drive = DriveCommand(False, reason="待機")
         self._events: list[str] = []
         self.status: BrainStatus | None = None
 
@@ -119,20 +109,20 @@ class Brain:
         self.expr.person_tracked = p.person_xy is not None      # 追跡中は威嚇に見える姿勢を出さない（guard）
         self._last_snake, self._last_person_raw = p.snake, p.person_xy
         person = p.person_xy if self.noticed else None
-        if self._at_limit and (person is None or self._limit_person is None or
-                               np.linalg.norm(np.asarray(person) - self._limit_person) > float(self.cfg["person"]["association_gate_mm"])):
-            self._at_limit = False
+        self.loco.release_limit(person, float(self.cfg["person"]["association_gate_mm"]))
         head_dist = None if (person is None or p.snake is None) else self.ctrl.head_distance(p.snake, person)
         stim = self._stimuli(p, person, head_dist, dt)
         self.internal.update(dt, stim, p.max_temp_c, moving=self.anim.gait.active)
         forced = self._safety(t, p)
         ev = self.utility.evaluate(self.internal, Context(person is not None, head_dist, stim.touch, self._novelty,
-                                                          self._at_limit), t)
+                                                          self.loco.at_limit), t)
         tr = forced or (None if self._hold_for_heat(p) else self.fsm.step(t, ev.noisy))
         if tr is not None:
             self._events.append(f"{tr.src}→{tr.dst}（{tr.reason}）")
             self._on_enter(t, tr.dst, p.snake, person)
         self._on_tick(t, p.snake, person, head_dist)
+        self._events += self.loco.events
+        self.loco.events = []
         self.expr.update(t)
         if t >= self._next_eyes_t:
             self.expr.set_eyes(self.fsm.state)
@@ -140,7 +130,7 @@ class Brain:
         s = self.fsm.state
         self.status = BrainStatus(t, s, STATE_LABELS_JA[s], thought_line(ev, s, self.fsm.time_to_next(t)),
                                   self.fsm.time_to_next(t), ev.noisy, self.internal.snapshot(), self.internal.heat_c,
-                                  self.drive.reason, self.noticed, self.safety, self._events)
+                                  self.loco.drive.reason, self.noticed, self.safety, self._events)
         return self.status
 
     def _perceive(self, t: float, dt: float, p: Percept) -> None:
@@ -148,11 +138,11 @@ class Brain:
         if p.person_xy is None:
             self.noticed = False
             self.expr.cancel("react")
+            self.expr.cancel("grammar:on_notice")
         elif p.target_serial != self._serial:
             self.noticed = False
             self.expr.cancel("react")
-            self.expr.cancel("primary_react")
-            self.expr.schedule(t + self.expr._u("primary_reaction_delay_s"), "primary_react", self._primary_react)
+            self.grammar.event(t, "notice")                          # 一次反応（目・ピクッ）は文法が撃つ
             self.expr.schedule(t + self.expr._u("reaction_delay_s"), "react", self._react)
         self._serial = p.target_serial
         if p.touch:
@@ -191,18 +181,17 @@ class Brain:
             return False
         return p.max_temp_c is None or p.max_temp_c > float(self.safety_cfg["overheat_resume_c"])
 
-    def _primary_react(self, t: float) -> None:
-        """a. 一次反応（因果の窓 <300ms の中で「気づいた」を見せる）。まだ気づいてはいない扱い。"""
+    def _grammar_ctx(self) -> GrammarCtx:
+        """文法が語彙を撃つ瞬間に見る外界（人の方向は撃つ時点の値）。"""
         person, snake = self._last_person_raw, self._last_snake
         direction = 0.0 if person is None or snake is None else self._yaw_to(snake, person)
-        self.expr.primary_react(t, direction, self.fsm.state)
-        self._events.append("一次反応（目・ピクッ）")
+        return GrammarCtx(self.fsm.state, self._novelty, direction, person is not None, self.loco.patrol_paused)
 
     def _react(self, t: float) -> None:
-        """c. 反応の始まり: 全停止（驚き）→ 警戒。PETTED 中は割り込まない。"""
+        """c. 反応の始まり: 全停止（驚き。呼吸は続く）→ 警戒。PETTED 中は割り込まない。"""
         self.noticed = True
         self._novelty = 1.0
-        self.expr.surprise(t)
+        self.expr.freeze(t, float(self.x["surprise_freeze_s"]), keep_breath=bool(self.x["surprise_keep_breath"]))
         self._events.append("反応開始（驚き）")
         if self.fsm.state != "PETTED":
             # safety=False: 過熱の強制休憩（COIL_REST_HEAT）からは抜けない
@@ -250,137 +239,40 @@ class Brain:
         return math.degrees(wrap_pi(bearing - snake.theta_body_raw - offset))
 
     # ---- 状態ごとの動作 ------------------------------------------------------------
-    def _set_drive(self, cmd: DriveCommand) -> None:
-        """移動指令を適用する。安全（人まで stop_distance_mm）はここで常時かける。
-
-        歩容は止めても振幅が消えるまで進む（実測で 50mm/s・1秒のブレンド中に約80mm）ので、
-        安全の停止だけは即座に振幅を 0 にする。
-        """
-        emergency = False
-        if cmd.moving and self._last_person_raw is not None and self._last_snake is not None:
-            stop = float(self.b["controller"]["stop_distance_mm"])
-            if self.ctrl.head_distance(self._last_snake, self._last_person_raw) <= stop:
-                cmd = DriveCommand(False, reason=f"安全: 人まで {stop:.0f}mm（どの状態でも前進しない）", blocked=True)
-                emergency = True
-        self.drive = cmd
-        if cmd.moving and cmd.params is not None:
-            self.anim.gait.start(cmd.params, cmd.gamma0_deg)
-        else:
-            self.anim.gait.stop(immediate=emergency)
-
     def _on_enter(self, t: float, s: str, snake: SnakePose | None, person: np.ndarray | None) -> None:
         x = self.x
-        self.expr.stop_tilting()
-        self._set_drive(DriveCommand(False, reason=STATE_LABELS_JA[s]))
+        self.grammar.enter(t, s)
+        self.loco.stop(STATE_LABELS_JA[s])
         if s not in COIL_STATES and self.anim.base.get("J1", 0.0) != self.poses.home()["J1"]:
             home = {k: v for k, v in self.poses.home().items() if k not in (HEAD_YAW, "J9")}
             self.expr.play(self.expr.with_settle(Keyframe(home, 1.5)), t)
         if s == "SLEEP":
             self.expr.play(Keyframe({NECK: float(x["sleep_neck_deg"]), HEAD_YAW: 0.0}, 2.0), t)
         elif s == "PATROL":
-            self._waypoint = None
-            lo, hi = self.b["controller"]["patrol_flip_s"]
-            self._patrol_flip_t = t + self.rng.uniform(float(lo), float(hi))
-            self.patrol_paused = False
-            self._patrol_phase_until = t + self._u_ctrl("patrol_move_s")
+            self.loco.enter_patrol(t)
             self.expr.play(Keyframe({NECK: self.poses.home()[NECK]}, 1.0), t)
         elif s in STILL_STATES and snake is not None and person is not None:
             neck = float(x["alert_neck_deg"] if s == "ALERT" else x["engage_neck_deg"])
             self.expr.look_at(t, self._yaw_to(snake, person), neck, force=True)
-            if s != "ALERT":
-                self.expr.start_tilting(t)
         elif s == "APPROACH" and snake is not None and person is not None:
-            # 進める距離 = 「人の 400mm 手前まで」と「マット端まで」の短い方。その 60% で一度止まる
-            stop = float(self.b["controller"]["stop_distance_mm"])
-            travel = min(max(self.ctrl.head_distance(snake, person) - stop, 0.0), self.ctrl.room_toward(snake, person))
-            self._approach_stage = 1
-            self._approach_start = np.array([snake.x, snake.y])
-            d = np.asarray(person, float) - self._approach_start
-            self._approach_dir = d / max(float(np.linalg.norm(d)), 1e-9)
-            self._stage_goal_dist = float(x["approach_first_ratio"]) * travel
-        elif s == "PETTED":
-            self.expr.petted(t)
+            self.loco.enter_approach(snake, person)
         elif s in COIL_STATES:
             self.expr.play(rest_keyframe(self.poses), t)
         self.expr.set_eyes(s)
 
     def _on_tick(self, t: float, snake: SnakePose | None, person: np.ndarray | None, head_dist: float | None) -> None:
         s = self.fsm.state
-        c = self.b["controller"]
-        if s not in QUIET_STATES:
-            self.expr.glance_away(t)
-        if s in STILL_STATES or (s == "PATROL" and self.patrol_paused):
-            self.expr.maybe_flick(t, self._novelty)         # 舌のちらつき相当（止まっているときだけ）
-        if s == "PATROL" and self.patrol_paused and person is None and self._last_person_raw is None:
-            self.expr.maybe_stretch(t)                      # 伸び（誰もいないときだけ）
+        self.grammar.tick(t)                                # 状態の間ずっと撃つ語彙（config の while）
         if snake is None:
-            self._set_drive(DriveCommand(False, reason="位置不明: 停止"))
+            self.loco.stop("位置不明: 停止")
             return
-        if s == "PATROL" and self._patrol_pausing(t):
-            self._set_drive(DriveCommand(False, reason="巡回: 立ち止まって様子をうかがう"))
-        elif s == "PATROL":
-            self._waypoint = self._patrol_target(t, snake)
-            # 安全: 1m 以内の速度制限は「気づいたか」に関係なく、追跡中の人に対して必ずかける
-            self._set_drive(self.ctrl.drive_to(t, snake, self._waypoint, float(c["speed_patrol_mm_s"]), self._last_person_raw))
+        if s == "PATROL":
+            self.loco.patrol(t, snake, self._last_person_raw)
         elif s == "APPROACH" and person is not None:
-            self._approach(t, snake, person, head_dist)
+            self.expr.look_at(t, self._yaw_to(snake, person))
+            self.loco.approach(t, snake, person)
         elif s == "RETREAT" and person is not None:
-            goal = self.ctrl.retreat_point(snake, person)
-            self._set_drive(self.ctrl.drive_to(t, snake, goal, float(c["speed_retreat_mm_s"]), person))
+            self.loco.retreat(t, snake, person)
             self.expr.look_at(t, self._yaw_to(snake, person))
         elif s in STILL_STATES and person is not None:
             self.expr.look_at(t, self._yaw_to(snake, person))
-            self.expr.maybe_tilt(t)
-
-    def _u_ctrl(self, key: str) -> float:
-        lo, hi = self.b["controller"][key]
-        return self.rng.uniform(float(lo), float(hi))
-
-    def _patrol_pausing(self, t: float) -> bool:
-        """巡回の stop-and-go。動く → 止まる → 動く を乱数の長さで繰り返す（呼吸は止めない）。
-
-        マット端から後退で戻っている最中は止まらない（端に頭を向けたまま居座らないため）。
-        """
-        if self._patrol_phase_until < 0.0:               # 起動直後（_on_enter を通らない）は動くところから
-            self._patrol_phase_until = t + self._u_ctrl("patrol_move_s")
-        if t >= self._patrol_phase_until and not (not self.patrol_paused and self.ctrl.phase == "back"):
-            pause_s = 0.0 if self.patrol_paused else self._u_ctrl("patrol_pause_s")
-            self.patrol_paused = pause_s > 0.0           # 静止 0 秒の設定なら歩き続ける（試験・比較用）
-            self._patrol_phase_until = t + (pause_s if self.patrol_paused else self._u_ctrl("patrol_move_s"))
-        return self.patrol_paused
-
-    def _patrol_target(self, t: float, snake: SnakePose) -> np.ndarray:
-        """巡回の目標点: 中央の円の上を、いまの位置より patrol_lead_deg 先に置く（キャロット追従）。
-
-        端に寄らないので、フェンスからの復帰がほとんど起きない。
-        向きは patrol_flip_s ごとに反転させて単調さを避ける。
-        """
-        c = self.b["controller"]
-        center = self.ctrl.center()
-        if t >= self._patrol_flip_t:
-            self._patrol_dir *= -1.0
-            lo, hi = c["patrol_flip_s"]
-            self._patrol_flip_t = t + self.rng.uniform(float(lo), float(hi))
-        d = np.array([snake.x, snake.y]) - center
-        phi = math.atan2(d[1], d[0]) + self._patrol_dir * math.radians(float(c["patrol_lead_deg"]))
-        return center + float(c["patrol_radius_mm"]) * np.array([math.cos(phi), math.sin(phi)])
-
-    def _approach(self, t: float, snake: SnakePose, person: np.ndarray, head_dist: float | None) -> None:
-        """f. 2段階の接近: 距離の 60% 進む → 0.8〜1.5 秒止まる → 残り。"""
-        c = self.b["controller"]
-        self.expr.look_at(t, self._yaw_to(snake, person))
-        if t < self._pause_until:
-            self._set_drive(DriveCommand(False, reason="接近: 一度止まって様子を見る"))
-            return
-        moved = float((np.array([snake.x, snake.y]) - self._approach_start) @ self._approach_dir)   # 人の方向への前進量
-        if self._approach_stage == 1 and moved >= self._stage_goal_dist:
-            self._approach_stage = 2
-            self._pause_until = t + self.expr._u("approach_pause_s")
-            self._events.append("接近: 60% で一時停止")
-            self._set_drive(DriveCommand(False, reason="接近: 一度止まって様子を見る"))
-            return
-        cmd = self.ctrl.drive_to(t, snake, person, float(c["speed_approach_mm_s"]), person,
-                                 stop_at_person=True, edge_is_goal=True, gait="stalk")   # 忍び寄りの波形
-        if cmd.blocked:
-            self._at_limit, self._limit_person = True, np.asarray(person, float).copy()
-        self._set_drive(cmd)
