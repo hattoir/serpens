@@ -142,6 +142,15 @@
 実機カメラ到着後に camera capture → detector → world state → behavior → command → visible response の
 End-to-End latency を測る。
 
+## 4.10 Floor Watch フェーズ 1 — 境界と契約（2026-09-25）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| Task / Event API（schemas/*.json、5 Task・4 Event、frame `home`、floor_finding の不確かさ・危険度の内訳） | `SOFTWARE_VERIFIED` | `tests/test_task_event_api.py`（10）。スキーマ合格/不合格、版違い、map_version 違い、未知フィールド、安全設定の不在 |
+| Loopback での往復（Task → 受理/拒否/冪等/stop 最優先 → Event）、Home AI 側モックが受け取る | `SOFTWARE_VERIFIED` | 同上。retain した safety_state が後からの購読に届く |
+| 本物の MQTT ブローカーとの疎通 | **未実施** | `PahoBroker` は任意依存（paho-mqtt 未導入）。フェーズ 5 で Mosquitto と試す |
+| Home AI 本体 | 作らない（決定 14） | モックのみ |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

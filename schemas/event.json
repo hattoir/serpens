@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "event.json",
+  "title": "Serpens → Home AI: Event（v1）。トピック home/serpens/event/<event>",
+  "type": "object",
+  "allOf": [{"$ref": "common.json#/$defs/header"}],
+  "required": ["event", "data_source"],
+  "properties": {
+    "v": {}, "id": {}, "t_ms": {}, "source": {},
+    "event": {"type": "string", "enum": ["task_status", "floor_finding", "safety_state", "battery"]},
+    "data_source": {"$ref": "common.json#/$defs/data_source"},
+
+    "task_id": {"type": "string", "description": "task_status: 対象の Task の id"},
+    "status": {"type": "string", "enum": ["accepted", "rejected", "running", "paused", "done", "failed", "aborted"]},
+    "reason": {"type": "string", "maxLength": 300, "description": "rejected / failed / aborted の理由（人が読める）"},
+    "progress": {"type": "number", "minimum": 0, "maximum": 1},
+
+    "finding": {"$ref": "#/$defs/finding"},
+
+    "mode": {"$ref": "common.json#/$defs/safety_mode"},
+    "stop_reason": {"$ref": "common.json#/$defs/stop_reason"},
+    "latched": {"type": "boolean"},
+    "resume_requires": {"type": "string", "enum": ["operator"], "description": "停止後は人の操作なしで再開しない"},
+    "telemetry_age_ms": {"type": "integer", "minimum": 0},
+
+    "voltage_v": {"type": "number", "minimum": 0},
+    "percent_est": {"type": "number", "minimum": 0, "maximum": 100, "description": "推定。実測の残量ではない"},
+    "low": {"type": "boolean"}
+  },
+  "additionalProperties": false,
+  "x-serpens-rules": {
+    "task_status": {"required": ["task_id", "status"]},
+    "floor_finding": {"required": ["finding"]},
+    "safety_state": {"required": ["mode", "stop_reason", "latched", "resume_requires"]},
+    "battery": {"required": ["voltage_v", "low"]}
+  },
+  "$defs": {
+    "photo": {
+      "type": "object",
+      "required": ["kind", "crop_path", "w_px", "h_px", "t_ms"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["normal", "raking", "line"]},
+        "crop_path": {"type": "string", "description": "候補の切り抜きの保存先（家の中）。原画像は外へ出さない"},
+        "w_px": {"type": "integer", "minimum": 1},
+        "h_px": {"type": "integer", "minimum": 1},
+        "t_ms": {"type": "integer", "minimum": 0},
+        "led": {"type": "string", "maxLength": 40, "description": "照明の設定名（設定値。実測ではない）"}
+      },
+      "additionalProperties": false
+    },
+    "candidate": {
+      "type": "object",
+      "required": ["kind", "confidence"],
+      "properties": {
+        "kind": {"type": "string", "enum": ["coin", "button_cell", "washer", "bead", "food_crumb", "stain_or_pattern", "unknown"]},
+        "confidence": {"type": "number", "minimum": 0, "maximum": 1}
+      },
+      "additionalProperties": false
+    },
+    "size": {
+      "type": "object",
+      "required": ["diameter_mm", "sigma_mm", "height_mm", "height_sigma_mm", "method"],
+      "properties": {
+        "diameter_mm": {"type": "number", "minimum": 0},
+        "sigma_mm": {"type": "number", "minimum": 0},
+        "height_mm": {"type": "number", "minimum": 0, "description": "線光の曲がりから。高さ 0 = 汚れ・模様"},
+        "height_sigma_mm": {"type": "number", "minimum": 0},
+        "method": {"type": "string", "enum": ["tof_camera_geometry", "line_light", "reference_object", "unknown"]}
+      },
+      "additionalProperties": false
+    },
+    "risk": {
+      "type": "object",
+      "required": ["ingestion", "sharp", "child_reachable", "child_distance_m", "score", "rationale"],
+      "properties": {
+        "ingestion": {"type": "number", "minimum": 0, "maximum": 1, "description": "誤飲: 種類×大きさ×確信度"},
+        "sharp": {"type": "number", "minimum": 0, "maximum": 1},
+        "child_reachable": {"type": "boolean", "description": "子どもが近づける場所か（家具の奥など）"},
+        "child_distance_m": {"type": ["number", "null"], "minimum": 0, "description": "最も近い子どもまでの距離。不明なら null（= 安全側で近いとみなす）"},
+        "score": {"type": "number", "minimum": 0, "maximum": 1, "description": "複合。サイズのしきい値 1 つで決めない"},
+        "rationale": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 10}
+      },
+      "additionalProperties": false
+    },
+    "finding": {
+      "type": "object",
+      "required": ["finding_id", "t_ms", "frame_id", "map_version", "pose", "photos", "candidates", "size", "risk", "state"],
+      "properties": {
+        "finding_id": {"type": "string", "minLength": 8, "maxLength": 64},
+        "t_ms": {"type": "integer", "minimum": 0},
+        "frame_id": {"const": "home"},
+        "map_version": {"type": "string", "minLength": 1},
+        "pose": {"$ref": "common.json#/$defs/pose2d_uncertain", "description": "落とし物の推定位置（姿勢推定の不確かさ込み）"},
+        "photos": {"type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/photo"}},
+        "candidates": {"type": "array", "minItems": 1, "maxItems": 5, "items": {"$ref": "#/$defs/candidate"}},
+        "size": {"$ref": "#/$defs/size"},
+        "risk": {"$ref": "#/$defs/risk"},
+        "state": {"type": "string", "enum": ["candidate", "confirmed", "resolved", "dismissed"]},
+        "task_id": {"type": "string", "description": "きっかけの Task（あれば）"}
+      },
+      "additionalProperties": false
+    }
+  }
+}

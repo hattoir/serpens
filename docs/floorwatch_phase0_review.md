@@ -109,3 +109,41 @@
 ### 4.4 フェーズ 1 でやらないこと
 
 関節角・歩容の MQTT 化、Home AI 本体、画像処理、AprilTag、IMU、実サーボ、ファーム書き込み、ROS 2。
+
+---
+
+## 5. 回答（2026-09-25。決定事項への追記）
+
+| Q | 決まったこと | 残る確認 |
+|---|---|---|
+| Q1 | 関節の割り当ては変えない。**首 = J1（上下）+ J2（横）**として gaze / glance を抽象化。J3〜J5 は姿勢保持（または反対側に少し曲げて釣り合い）。J2 の範囲を超える向きは、先にその場旋回で体を向ける。将来の頭ヨーへ差し替え可能に | — |
+| Q2 | 決定 4 は Home AI ↔ Serpens の境界だけ。PC → 機体の DRIVE/HEAD は既存のまま | — |
+| Q3 | フェーズ 1〜4 は USB。フェーズ 5 で Wi-Fi。Heartbeat / TTL は通信方式ごとに設定を分け、Wi-Fi 化で実測し直す | — |
+| Q4 | 外部カメラ経路は削除せず、検証用（位置の真値計測）として残す。開始条件の「ArUco」は「AprilTag（機体カメラ）」に読み替え | ArUco 依存の一覧は §6 |
+| Q5 | タッチは残す（ESP32-S3 の静電容量タッチ端子）。load 検出は補助 | **タッチパッドの場所（背中など）** |
+| Q6 | BNO085 は胴 2（胴の XIAO と同じ節）、I2C | — |
+| Q7 | 秋月 116312 = 7.4V 版・1:345・19.5kgf·cm。型番末尾は実物ラベルで確認。電源は a) 12V 版 STS3215（秋月 g130969、4〜14V）に変更して 2S 直結（推奨）/ b) 7.4V 版 + 約 7.0V 降圧。決まるまで電圧は設定値 | **a か b か** |
+| Q8 | 機体側で 1) 関節ごとの上限 2) **任意の連続する横関節区間の合計角の絶対値の上限**（汎用）。rest_arc は MVP で不使用 | — |
+| Q9 | 下向き ToF は胴の XIAO に直結（I2C を首の関節に通す）。前方 ToF は頭の XIAO | — |
+| Q10 | `docs/verification_status.md` に統合 | — |
+| Q11 | 座標系 `home`: `tags.yaml`（各タグの ID と姿勢）で定義。原点 = ドックのタグ中心、x = 部屋の方向、y = 左、z = 上、m / rad、yaw は反時計回り。Task / Event に `frame_id` と `map_version` を必ず入れる | — |
+| Q12 | 通知は Home AI 側。MVP は「受けてログに出す」モック | — |
+| Q13 | フェーズ 2 は手持ちカメラ。治具で頭と同条件（床から約 30mm、下向き 20〜35°、LED 照明）。床は自宅フローリング + 後で 1 種類。照明は昼 / 夜の室内灯 / ソファ下の 3 条件 | **スマホの機種** |
+| Q14 | 初期値（設定値、HARDWARE_UNVERIFIED）: カメラ床から約 30mm・下向き 25° 前後。斜め照明: 床から 5〜8mm の白色 LED を横から 5〜10° で。線光: LED + スリットをカメラから横に 30〜40mm（基線）、前方 150〜250mm に線。レーザー不使用 | — |
+| Q15 | 実サーボ操作・書き込みはしない。フェーズ 4 は「ユーザーが実行、私が解析」。手順書と記録フォーマットを用意 | — |
+
+## 6. ArUco に依存する既存コード（Q4 の報告）
+
+| 場所 | 依存の内容 | MVP での扱い |
+|---|---|---|
+| `serpens/perception/aruco_locator.py` | 検出器（DICT_4X4_50）、2 枚のマーカから自己位置 | 検証用（外部カメラの真値計測）として残す |
+| `serpens/perception/camera_observer.py`, `serpens/sim/sim_vision.py`, `serpens/sim/virtual_camera.py` | ArUco を描く / 検出する観測器 | 同上。MVP の動作経路からは外す（観測器の差し替えで） |
+| `serpens/perception/homography.py`, `snake_pose.py` | 床ホモグラフィ、マーカ観測からの姿勢 | AprilTag（機体カメラ）版は別に作る（フェーズ 3） |
+| `serpens/safety.py` `autonomy_blockers` | `pose_source != "aruco"` で実機の自律走行を拒否 | **「aprilTag」を実観測として認める読み替えが要る**（config `require_real_pose` の語彙を増やす） |
+| `serpens/sim/session.py`, `serpens/runner.py`, `serpens/gui/app.py`, `simulation/bridge.py`, `simulation/vision_loop.py`, `serpens/world_state.py`（`PoseSource.ARUCO`） | 出どころの名前・GUI 表示・World State の語彙 | `APRILTAG` を追加し、`ARUCO` は `ARUCO_EXTERNAL`（検証用）と読み替える |
+| `serpens/sim/world.py` | マーカの位置（背中の 2 枚）を世界へ置く | 検証用に残す |
+| `config/robot.yaml` `markers` / `aruco` / `vision_sim` | マーカ寸法・検出パラメータ | 残す（検証用）。AprilTag の `tags.yaml` は別ファイル |
+| `tools/make_aruco.py`, `perception_demo.py`, `perception_live.py`, `vision_check.py`, `loop_timing.py`, `check_env.py` | 印刷・デモ・評価 | 残す |
+| `tests/test_perception.py`, `test_vision_bridge.py`, `test_camera_observer.py`, `test_closed_loop.py`, `test_phase1_wiring.py`, `test_safety_limits.py`, `test_electrical_gate.py` | 上記の試験 | 残す（検証用経路の回帰） |
+
+**フェーズ 1 では触らない**（境界の追加だけ）。読み替えはフェーズ 3 で `PoseSource.APRILTAG` を足すときに一括で行う。

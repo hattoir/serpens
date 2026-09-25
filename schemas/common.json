@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.json",
+  "title": "Serpens Task / Event API 共通定義（v1）",
+  "$defs": {
+    "header": {
+      "type": "object",
+      "required": ["v", "id", "t_ms", "source"],
+      "properties": {
+        "v": {"const": 1, "description": "API の版。違う版は拒否する"},
+        "id": {"type": "string", "minLength": 8, "maxLength": 64, "description": "UUID など。同じ id の再送は冪等"},
+        "t_ms": {"type": "integer", "minimum": 0, "description": "送り手の時刻（Unix ms）"},
+        "source": {"type": "string", "enum": ["home_ai", "serpens", "mock"]}
+      }
+    },
+    "frame": {
+      "type": "object",
+      "required": ["frame_id", "map_version"],
+      "properties": {
+        "frame_id": {"const": "home", "description": "床の AprilTag 配置（tags.yaml）で定義。原点 = ドックのタグ中心、x = 部屋の方向、y = 左、z = 上、単位 m / rad、yaw は反時計回りが正"},
+        "map_version": {"type": "string", "minLength": 1, "description": "tags.yaml の版。違う版の座標は受け付けない"}
+      }
+    },
+    "pose2d": {
+      "type": "object",
+      "required": ["x_m", "y_m", "yaw_rad"],
+      "properties": {
+        "x_m": {"type": "number"},
+        "y_m": {"type": "number"},
+        "yaw_rad": {"type": "number", "minimum": -3.15, "maximum": 3.15}
+      },
+      "additionalProperties": false
+    },
+    "pose2d_uncertain": {
+      "type": "object",
+      "required": ["x_m", "y_m", "yaw_rad", "sigma_xy_m", "sigma_yaw_rad", "pose_source"],
+      "properties": {
+        "x_m": {"type": "number"},
+        "y_m": {"type": "number"},
+        "yaw_rad": {"type": "number", "minimum": -3.15, "maximum": 3.15},
+        "sigma_xy_m": {"type": "number", "minimum": 0, "description": "位置の 1σ [m]。タグを見失ってからの推定で増える"},
+        "sigma_yaw_rad": {"type": "number", "minimum": 0},
+        "pose_source": {"type": "string", "enum": ["APRILTAG", "ODOMETRY_IMU", "GROUND_TRUTH_SIM", "ARUCO_EXTERNAL", "UNKNOWN"], "description": "ARUCO_EXTERNAL は検証用の外部カメラ（真値計測）。MVP の動作経路では使わない"}
+      },
+      "additionalProperties": false
+    },
+    "safety_mode": {
+      "type": "string",
+      "enum": ["BOOT", "DISARMED", "ARMED_HOLD", "DRIVING", "FAULT_HOLD", "EMERGENCY_LATCHED", "TORQUE_DISABLED"],
+      "description": "機体側 Safety State Machine の 7 状態（docs/link_protocol.md）"
+    },
+    "stop_reason": {
+      "type": "string",
+      "enum": ["NONE", "BOOT", "OPERATOR", "HEARTBEAT_LOST", "DRIVE_TTL", "OVERHEAT", "SERVO_FAULT", "EMERGENCY", "CLIFF", "LOAD_RELEASE", "UNDERVOLTAGE", "LOOP_OVERRUN", "REBOOT", "CMD_REJECTED", "UNKNOWN"]
+    },
+    "data_source": {
+      "type": "string",
+      "enum": ["HARDWARE", "SIMULATION"],
+      "description": "値が実機由来か模擬か。混ぜない"
+    }
+  }
+}

@@ -4,7 +4,15 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-21 Phase 2 更新）
+## Current Goal（2026-09-25 Floor Watch 更新）
+
+**Floor Watch 縦 1 本**（発見 → 確認 → 位置 → 通知）へ向かう。前提と回答は `docs/floorwatch_phase0_review.md`。
+フェーズ 1（境界と契約）を実装: `schemas/*.json`、`serpens/api/`（検証器・Loopback/Paho ブローカー・端点）、
+`tests/mocks/home_ai_mock.py`、`docs/task_event_api.md`。**安全の設定は Task に無い。stop は常に最優先。**
+次: フェーズ 2（3 枚撮影の画像処理とデータセット。手持ちカメラ、治具で頭と同条件）。
+残る確認: タッチパッドの場所、電源 a/b、スマホの機種。ArUco 依存の一覧は review §6。
+
+## Current Goal（2026-09-21 Phase 2 更新・旧）
 
 **Serpens の身体と動きを、初めて実際の人間へ見せて評価できる状態にした。** 6 / 8 / 10 Yaw の overlay（同等リンク長 /
 同等身体長）、波数掃引と速度合わせ（`tools/body_compare.py`）、匿名クリップ（`tools/pilot_clips.py`）、提示順の
@@ -129,7 +137,15 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-21 Phase 2 後）
+## Next Best Actions（2026-09-25 Floor Watch フェーズ 1 後）
+
+0. フェーズ 2: 3 枚（通常 / 斜め照明 / 線光）から「床から出っ張っているか」（基準画像との差分・局所影・線光の曲がり）、
+   大きさ推定、危険度の複合判定、データセットの仕組み（1 円玉・20mm ワッシャー・ビーズ・食べかす・模様/汚れ）
+1. フェーズ 3: AprilTag（機体カメラ）+ IMU + 歩容オドメトリの自己位置と不確かさ（`PoseSource.APRILTAG` 追加、ArUco は検証用に）
+2. フェーズ 4: HARDWARE_UNVERIFIED 項目の試験ツールと記録フォーマット（ユーザーが実行、私が解析）
+3. 機体側: 連続する横関節の合計角の上限（汎用）、下向き ToF の段差停止（胴の XIAO）、通信方式ごとの Heartbeat/TTL 設定
+
+## Next Best Actions（2026-09-21 Phase 2 後・旧）
 
 0. **ユーザーが Pilot を実施**（`docs/human_pilot.md`）。回答を `output/pilot/responses.csv` に保存 → `tools/pilot_analysis.py`
 1. Pilot の結果を `docs/body_configuration_decision_template.md` に写す（決定はその後）

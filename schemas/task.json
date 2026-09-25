@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "task.json",
+  "title": "Home AI → Serpens: Task（v1）。トピック home/serpens/task",
+  "type": "object",
+  "allOf": [{"$ref": "common.json#/$defs/header"}],
+  "required": ["task"],
+  "properties": {
+    "v": {}, "id": {}, "t_ms": {}, "source": {},
+    "task": {"type": "string", "enum": ["inspect_point", "patrol_route", "highlight_point", "return_dock", "stop"]},
+    "priority": {"type": "integer", "minimum": 0, "maximum": 9, "description": "大きいほど優先。stop は常に最優先で priority を見ない"},
+    "frame_id": {"$ref": "common.json#/$defs/frame/properties/frame_id"},
+    "map_version": {"$ref": "common.json#/$defs/frame/properties/map_version"},
+    "target": {"$ref": "common.json#/$defs/pose2d", "description": "inspect_point / highlight_point の地点"},
+    "waypoints": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "common.json#/$defs/pose2d"}},
+    "duration_s": {"type": "number", "minimum": 0, "maximum": 300, "description": "highlight_point で示し続ける時間"},
+    "reason": {"type": "string", "maxLength": 200, "description": "stop の理由（記録用）"}
+  },
+  "additionalProperties": false,
+  "description": "安全の設定（速度上限・角度・TTL など）を変えるフィールドは意図的に無い。安全は機体側で完結し、外から変えられない",
+  "x-serpens-rules": {
+    "inspect_point": {"required": ["frame_id", "map_version", "target"]},
+    "patrol_route": {"required": ["frame_id", "map_version", "waypoints"]},
+    "highlight_point": {"required": ["frame_id", "map_version", "target"]},
+    "return_dock": {"required": []},
+    "stop": {"required": []}
+  }
+}

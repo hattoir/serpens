@@ -313,7 +313,7 @@ OBSERVE → PRIORITIZE → DESIGN → BUILD → TEST → CRITIQUE → FIX → DO
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-415 件通るのが正常（2026-09-21 Phase 2 時点。MuJoCo 未導入の環境では 16 件 skip）。**1 件でも落ちたら先に直す。**
+425 件通るのが正常（2026-09-25 Floor Watch フェーズ 1 時点。MuJoCo 未導入の環境では 16 件 skip）。**1 件でも落ちたら先に直す。**
 このリポジトリのテストは安全機構の振る舞いを直接検証しているので、
 落ちたテストを「タイミングの問題」として通す方向に直してはいけない
 （実際に 1 件、テストが正しくて実装が間違っていた例がある。`agent/DECISIONS.md` 参照）。

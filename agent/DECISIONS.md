@@ -17,6 +17,24 @@
 
 ---
 
+## 2026-09-25 — Floor Watch: Home AI との境界は Task / Event API だけ。MQTT を関節制御に使わない
+
+**Decision**: Home AI ↔ Serpens は `home/serpens/task`（5 種）と `home/serpens/event/*`（4 種）の JSON だけで接続する。
+Task に安全の設定（速度・角度・TTL・トルク）を変えるフィールドは置かない。stop は常に最優先、同じ id は冪等、
+`map_version` 違いと実行できない理由（安全ゲート・自己位置なし）は rejected。`safety_state` は retain。
+検証器は標準ライブラリだけの最小部分集合（`jsonschema` を依存に足さない）。MQTT クライアントは任意依存（Loopback で試験）。
+Serpens 内部の PC → 機体（USB 駆動リンク）はそのまま。5 サーボ MVP でも関節数を前提にしない。首 = J1 + J2 で視線を作る。
+
+**Why**: 決定事項 3・4・14（境界だけ MQTT、PC は Task だけ、別リポジトリ）。安全は機体側で完結し外から触れない、を
+API の形で保証する。依存を増やさないのは、`opencv-contrib` の罠（README §1）と同じく環境の再現性のため。
+
+**Alternatives**: (1) 関節角を MQTT で送る（通信遅延で動きが乱れ、安全経路が PC 依存になる）
+(2) `jsonschema` / `paho-mqtt` を必須依存にする（フェーズ 5 で必要になったら足す）。
+
+**Trade-offs**: 最小検証器は JSON Schema の全機能を持たない（対応範囲は validate.py に明記）。本物のブローカーとは未疎通。
+
+---
+
 ## 2026-09-21 — Human Evaluation を最優先ゲートにし、身体構成の決定は Pilot 後へ
 
 **Decision**: 検証レベルを SOFTWARE_VERIFIED / KINEMATIC_SIM / PHYSICS_SIM / HARDWARE_VERIFIED / HUMAN_EVALUATED の

@@ -367,6 +367,7 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\pilot_clips.py --seed 1
 .\.venv\Scripts\python.exe tools\pilot_order.py --participants 10 --seed 42
 .\.venv\Scripts\python.exe tools\pilot_analysis.py output\pilot\responses.csv --key output\pilot\clip_key.json
+# Floor Watch: Home AI との Task / Event API（docs/task_event_api.md、schemas/*.json）は pytest で検証（ハード不要）
 # 動きの質（静止率・一次反応・GAR・可視波数・LDJ。KINEMATIC_SIM。回帰指標であって人の評価の代替ではない）
 .\.venv\Scripts\python.exe tools\motion_quality.py
 # 模擬 Vision の閉ループを故障ごとに試す（Phase 4。実カメラの値ではない）
