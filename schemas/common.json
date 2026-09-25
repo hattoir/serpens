@@ -46,8 +46,8 @@
     },
     "safety_mode": {
       "type": "string",
-      "enum": ["BOOT", "DISARMED", "ARMED_HOLD", "DRIVING", "FAULT_HOLD", "EMERGENCY_LATCHED", "TORQUE_DISABLED"],
-      "description": "機体側 Safety State Machine の 7 状態（docs/link_protocol.md）"
+      "enum": ["BOOT", "DISARMED", "ARMED_HOLD", "DRIVING", "FAULT_HOLD", "EMERGENCY_LATCHED", "TORQUE_DISABLED", "OFFLINE"],
+      "description": "機体側 Safety State Machine の 7 状態（docs/link_protocol.md）+ OFFLINE（LWT。Serpens が黙って消えたとブローカーが出す）"
     },
     "stop_reason": {
       "type": "string",
