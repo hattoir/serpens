@@ -4,7 +4,14 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-25 Floor Watch 更新）
+## Current Goal（2026-09-25 Floor Watch フェーズ 2 更新）
+
+フェーズ 1 のレビュー対応（stop 最優先・待ち行列・retain/LWT・危険物別枠・resolved は人だけ）と、
+フェーズ 2 の画像処理を**合成画像で**通した（`serpens/floorwatch/`: 幾何・光の面の較正・4 枚 → 判定・危険度・データセット）。
+合成での検出率 90% / 誤報率 0%。**実写は未**（カメラ機種の回答待ち）。Mosquitto 疎通は道具だけ用意（未実施）。
+次: 実写データセット（治具・1 円玉の較正）→ 閾値調整 → フェーズ 3（AprilTag + IMU + オドメトリの自己位置）。
+
+## Current Goal（2026-09-25 Floor Watch 更新・旧）
 
 **Floor Watch 縦 1 本**（発見 → 確認 → 位置 → 通知）へ向かう。前提と回答は `docs/floorwatch_phase0_review.md`。
 フェーズ 1（境界と契約）を実装: `schemas/*.json`、`serpens/api/`（検証器・Loopback/Paho ブローカー・端点）、
@@ -137,7 +144,14 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-25 Floor Watch フェーズ 1 後）
+## Next Best Actions（2026-09-25 フェーズ 2 後）
+
+0. **実写**: 手持ちカメラ + 治具で `docs/floorwatch_phase2.md` §3 の品目を撮り、`tools/floorwatch_eval.py --root` で評価
+1. Mosquitto を PC に入れて `tests/test_mqtt_live.py`（retain / LWT / QoS1 再送）を回す（`pip install paho-mqtt`）
+2. フェーズ 3: `PoseSource.APRILTAG`、IMU + 歩容オドメトリ、σ の増え方。開始条件は「σ と局所センサーの健全性」で書く（ARUCO→APRILTAG の置換にしない）
+3. 段差（線状）の合成サンプルと形での区別
+
+## Next Best Actions（2026-09-25 Floor Watch フェーズ 1 後・旧）
 
 0. フェーズ 2: 3 枚（通常 / 斜め照明 / 線光）から「床から出っ張っているか」（基準画像との差分・局所影・線光の曲がり）、
    大きさ推定、危険度の複合判定、データセットの仕組み（1 円玉・20mm ワッシャー・ビーズ・食べかす・模様/汚れ）

@@ -151,6 +151,17 @@ End-to-End latency を測る。
 | 本物の MQTT ブローカーとの疎通 | **未実施** | `PahoBroker` は任意依存（paho-mqtt 未導入）。フェーズ 5 で Mosquitto と試す |
 | Home AI 本体 | 作らない（決定 14） | モックのみ |
 
+## 4.11 Floor Watch フェーズ 2 — 画像処理（2026-09-25、`docs/floorwatch_phase2.md`）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| 幾何（1.5mm → 21.3px、0.3mm → 4.3px、視野中心 71mm）と光の面の較正（名目からずれた面でも高さが戻る） | `SOFTWARE_VERIFIED` | `tests/test_floorwatch.py` |
+| 合成画像での検出率 90%（19/21）・誤報率 0%（0/9）、線上の高さ ±1mm、鏡面の途切れ | **SIMULATED（合成画像）** | `tools/floorwatch_eval.py --synthetic` → `output/floorwatch_eval.md` |
+| 実写（手持ちカメラ、治具）での検出率・誤報率 | **未測定** | フェーズ 2 の完成条件。カメラ機種の回答待ち |
+| 候補の種類の分類 | **未実装** | 実写データが揃ってから（合成で作ると過適合） |
+| フェーズ 1 レビュー 1〜5（stop 最優先・待ち行列破棄・stop 前の Task 拒否・retain 拒否・LWT OFFLINE・危険物別枠・resolved は人だけ） | `SOFTWARE_VERIFIED` | `tests/test_task_event_api.py`（16） |
+| 本物の MQTT（retain / LWT / QoS1 再送） | **未実施** | `tests/test_mqtt_live.py`（paho-mqtt + Mosquitto が要る。無ければ skip） |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**
