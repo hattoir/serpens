@@ -205,10 +205,8 @@ api:                          # Home AI との境界（MQTT）。docs/task_event
 
 localization:                 # フェーズ 3: 自己位置（座標系 home、m / rad）。**すべて DESIGN / ASSUMED。実機で校正**
   tag_map_file: config/tags.yaml
-  camera:                     # 頭カメラで AprilTag を見るときのパラメータ。FOV 65° は未確認（→ f ≈ 640/2/tan(32.5°) = 502px）
-    f_px: 502.0
-    width_px: 640
-    height_px: 480
+  camera:                     # 頭カメラで AprilTag を見るときのパラメータ。解像度と f は floor_watch.camera.modes から（ASSUMED）
+    mode: tag_vga
     height_m: 0.03            # 首を水平にしたときの床からレンズまで（未確認）
     forward_m: 0.30           # 機体基準点（胴 2 の IMU）からレンズまでの前後（節ピッチ 95mm × 3 前後。未確認）
     fov_deg: 65.0             # 水平視野（未確認）
@@ -270,9 +268,14 @@ floor_watch:
     reach_mm: 250.0           # 頭からこの距離の物だけ合成画像に入れる（視野の目安）
     crop_pad_px: 12
   camera:
-    f_px: 1000.0               # 焦点距離（画素）。目安の計算に使った値
-    width_px: 640
-    height_px: 480
+    # 解像度ごとに f を持つ（2026-09-27）。**すべて ASSUMED**: FOV 65° から f = W/2/tan(32.5°) で逆算。型番と FOV は定規（100 / 300mm）で
+    # 実測して置き換える。70〜200mm のピントも確認（ボケるならレンズ調整か OV5640）。床見は最大解像度の静止画、タグ探しは VGA
+    modes:
+      floor_still:        {width_px: 1600, height_px: 1200, f_px: 1256.0, note: "OV2640 UXGA 静止画（床見）。ASSUMED"}
+      floor_still_ov3660: {width_px: 2048, height_px: 1536, f_px: 1608.0, note: "OV3660 QXGA 静止画（型番が OV3660 なら）。ASSUMED"}
+      tag_vga:            {width_px: 640, height_px: 480, f_px: 502.0, note: "VGA 動画（タグ探し）。ASSUMED"}
+      synthetic_ref:      {width_px: 640, height_px: 480, f_px: 1000.0, note: "合成の回帰試験用。2026-09-25 レビューの設計値（1.5mm → 21.3px）"}
+    floor_mode: floor_still    # 床見に使うモード
     height_mm: 30.0            # 床からカメラまで（中立姿勢の候補）
     pitch_deg: 25.0            # 下向き。視野中心は床 71mm 先（= 30 / sin25°）
   line_light:
@@ -289,7 +292,11 @@ floor_watch:
     coin_thickness_mm: 1.5     # 1 円玉。1・2・3 枚重ねの段で光の面を較正する
     stack_counts: [1, 2, 3]
   detect:
-    motion_max_px: 1.0         # 最初と最後の通常画像がこれ以上動いていたら撮り直し
+    # 画素単位のしきい値は reference_f_px（レビューの設計値）で決めた値。使うモードの f に比例して拡大する（面積は 2 乗）
+    reference_f_px: 1000.0
+    scale_with_f: [background_blur_px, blob_close_px, line_search_px, line_context_rows, line_min_rows, dropout_rows_min]
+    scale_with_f2: [min_blob_px]
+    motion_max_px: 1.0         # 最初と最後の通常画像がこれ以上動いていたら撮り直し（画素。解像度に依らず「動いたか」）
     background_poly_degree: 2  # 背景 = 通常画像に頑健に当てはめた多項式の面。基準床は使わない（実機では同じ視点の空の床が無い）
     background_blur_px: 9      # 差分の前に木目の細かい縞を落とす
     blob_close_px: 15          # 前景の塊をつなぐ（木目でちぎれるのを防ぐ）
@@ -298,6 +305,7 @@ floor_watch:
     noise_sigma_min: 2.0       # σ の下限（カメラ雑音の目安。合成では noise_sigma と同じ）
     shadow_ratio_max: 0.7      # 斜め/通常 の比（局所正規化後）がこれ以下なら影
     shadow_band_min: 0.15      # 塊の奥（上）の帯にこの割合以上の影があれば「影あり」
+    shadow_band_rows_ratio: 1.0   # 帯の高さ = 塊の高さ × これ（1 円玉の影 ≈ 18mm ≈ 塊の奥行き。2.0 だと帯が薄まり UXGA で 0.14 に落ちた）
     line_search_px: 120        # 予測した床の線の位置から左右にこの範囲で線を探す
     line_min_intensity: 60     # これ以上なら線が乗っている（全消灯を引いた後）
     line_context_rows: 12      # 物の前後の床上の線（局所基準）に使う行数
@@ -786,8 +794,10 @@ safety_limits:
 # サーボ STS3215（出典は docs/sts3215_registers.md）
 # ---------------------------------------------------------------------------
 servo:
-  # **採用候補: FEETECH STS3215-C044（7.4V / 1:191）。未購入・未実測。**
-  # 旧 12V・1:345（30kgf·cm）の値を C044 へ流用しないこと。値の出どころが違う
+  # **プロファイルの数値は STS3215-C044（7.4V / 1:191）の CAD 参照値。未購入・未実測。**
+  # 2026-09-27: 暫定の採用候補は 秋月 g116312 = C001（7.4V / **1:345**、ページ値 19.5kgf·cm、未実測）。1:191 は古い資料。
+  # C001 の定格・ストールが確認できたら、このプロファイルと software_torque_limit_ratio（ストール比）を作り直す。
+  # 旧 12V・1:345（30kgf·cm）の値を 7.4V 版へ流用しないこと。値の出どころが違う
   model: STS3215-C044
   nominal_voltage_v: 7.4
   gear_ratio: "1:191"

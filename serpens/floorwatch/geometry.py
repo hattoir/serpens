@@ -28,10 +28,12 @@ class Camera:
     pitch_deg: float
 
     @staticmethod
-    def from_cfg(cfg: dict[str, Any]) -> "Camera":
+    def from_cfg(cfg: dict[str, Any], mode: str | None = None) -> "Camera":
+        """floor_watch.camera.modes[mode]（省略時 floor_mode）の解像度と f（ASSUMED）で作る。"""
         c = cfg["floor_watch"]["camera"]
-        return Camera(float(c["f_px"]), float(c["width_px"]) / 2.0, float(c["height_px"]) / 2.0,
-                      int(c["width_px"]), int(c["height_px"]), float(c["height_mm"]), float(c["pitch_deg"]))
+        m = c["modes"][mode or c["floor_mode"]]
+        return Camera(float(m["f_px"]), float(m["width_px"]) / 2.0, float(m["height_px"]) / 2.0,
+                      int(m["width_px"]), int(m["height_px"]), float(c["height_mm"]), float(c["pitch_deg"]))
 
     # 世界 → カメラ: xc = 右, yc = 下, zc = 前（光軸）
     @property

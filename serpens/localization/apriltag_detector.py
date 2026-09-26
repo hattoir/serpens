@@ -46,8 +46,9 @@ class HeadCamera:
     @classmethod
     def from_cfg(cls, cfg: dict[str, Any]) -> "HeadCamera":
         c = cfg["localization"]["camera"]
-        w, h = int(c["width_px"]), int(c["height_px"])
-        return cls(float(c["f_px"]), w / 2.0, h / 2.0, w, h, float(c["height_m"]), float(c["forward_m"]))
+        m = cfg["floor_watch"]["camera"]["modes"][c["mode"]]
+        w, h = int(m["width_px"]), int(m["height_px"])
+        return cls(float(m["f_px"]), w / 2.0, h / 2.0, w, h, float(c["height_m"]), float(c["forward_m"]))
 
     @property
     def K(self) -> np.ndarray:

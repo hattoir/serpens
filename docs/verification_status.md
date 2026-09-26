@@ -157,7 +157,7 @@ End-to-End latency を測る。
 | 項目 | レベル | 根拠 |
 |---|---|---|
 | 幾何（1.5mm → 21.3px、0.3mm → 4.3px、視野中心 71mm）と光の面の較正（名目からずれた面でも高さが戻る） | `SOFTWARE_VERIFIED` | `tests/test_floorwatch.py` |
-| 合成画像（**基準床なし**、あごの斜め照明、継ぎ目を含む n = 70）: patrol / inspect とも 98〜100%（41〜42/42、95%CI 88〜100%。雑音で実行ごとに揺れる）・誤報 0%（0/28、95%CI 上限 12%）、線上の高さ ±1mm、鏡面 → height null + specular_break → metal_disc | **SIMULATED（合成画像。影も線も理想的なので楽観値）** | `tools/floorwatch_eval.py --synthetic` → `output/floorwatch_eval.md`、`tests/test_floorwatch.py`（9） |
+| 合成画像（**基準床なし**、あごの斜め照明、継ぎ目を含む n = 70）: 設計値モード（f=1000）で patrol / inspect とも 98〜100%（95%CI 88〜100%。雑音で実行ごとに揺れる）、実機モード（UXGA f ≈ 1256 ASSUMED）で patrol 98% / inspect 100%・誤報 0%（0/28、95%CI 上限 12%）、線上の高さ ±1mm、鏡面 → height null + specular_break → metal_disc | **SIMULATED（合成画像。影も線も理想的なので楽観値）** | `tools/floorwatch_eval.py --synthetic` → `output/floorwatch_eval.md`、`tests/test_floorwatch.py`（9） |
 | レビュー 2026-09-26 の 1〜7（高さ null + 理由 / 測れない = 出っ張り扱い / metal_disc 別枠 / 基準床なし / 撮影順と動き検出 / あご照明・影は奥 / 2 段評価と信頼区間 / 継ぎ目の合成） | `SOFTWARE_VERIFIED`（合成） | 同上 |
 | 実写（手持ちカメラ、治具）での検出率・誤報率 | **未測定** | フェーズ 2 の完成条件。カメラ機種の回答待ち |
 | 候補の種類の分類 | **未実装** | 実写データが揃ってから（合成で作ると過適合） |

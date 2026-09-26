@@ -67,6 +67,17 @@ def _sub(img: np.ndarray, dark: np.ndarray) -> np.ndarray:
     return np.clip(np.float32(img) - np.float32(dark), 0, None)
 
 
+def scaled_thresholds(cfg: dict[str, Any], cam: Camera) -> dict[str, Any]:
+    """画素単位のしきい値を、使うモードの f / reference_f_px に比例させる（面積は 2 乗）。設計値は f=1000 で決めた。"""
+    det = dict(cfg["floor_watch"]["detect"])
+    k = cam.f_px / float(det["reference_f_px"])
+    for key in det["scale_with_f"]:
+        det[key] = int(round(det[key] * k)) if isinstance(det[key], int) else det[key] * k
+    for key in det["scale_with_f2"]:
+        det[key] = int(round(det[key] * k * k)) if isinstance(det[key], int) else det[key] * k * k
+    return det
+
+
 def robust_background(img: np.ndarray, degree: int, z: float, iters: int = 3, step: int = 4) -> np.ndarray:
     """同じ画像の床に低次の多項式面を頑健に当てはめる（残差 z·σ 超えを外して繰り返す）。基準床の代わり。"""
     H, W = img.shape
@@ -129,7 +140,7 @@ def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[s
 def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: dict[str, Any],
            with_line: bool = True) -> tuple[list[Candidate], LineTrace | None, np.ndarray]:
     """frames: normal / raking / line / dark / normal2。with_line=False は巡回中の発見（線なし）。"""
-    det = cfg["floor_watch"]["detect"]
+    det = scaled_thresholds(cfg, cam)
     if "normal2" in frames:
         m = motion_px(frames["normal"], frames["normal2"])
         if m >= float(det["motion_max_px"]):
@@ -238,7 +249,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     dx_mm = w * scale if np.isfinite(scale) else float("nan")
     dy_mm = float(top[1] - foot[1]) if foot is not None and top is not None else float("inf")   # 床上の前後の長さ
     roundish = np.isfinite(dx_mm) and np.isfinite(dy_mm) and 0.5 <= dx_mm / max(dy_mm, 1e-3) <= 2.0
-    band = shadow[max(0, y - 2 * h):y, x:x + w]                       # 影は物の奥 = 塊の上辺から上へ
+    band = shadow[max(0, y - int(h * float(det["shadow_band_rows_ratio"]))):y, x:x + w]   # 影は物の奥 = 塊の上辺から上へ
     has_shadow = band.size > 0 and band.mean() > float(det["shadow_band_min"])
     on_line, hs, missing = _line_evidence((x, y, w, h), tr, det)
     dropout = on_line and missing >= int(det["dropout_rows_min"])

@@ -35,13 +35,14 @@ def main() -> int:
     ap.add_argument("--synthetic", action="store_true", help="合成データセットを作り直してから評価")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--out", type=Path, default=Path("output/floorwatch_eval.md"))
+    ap.add_argument("--mode", type=str, default=None, help="floor_watch.camera.modes の名前（省略時 floor_mode = 実機の静止画モード）")
     args = ap.parse_args()
     cfg = load_config()
-    cam, plane = Camera.from_cfg(cfg), LightPlane.design(cfg)
+    cam, plane = Camera.from_cfg(cfg, args.mode), LightPlane.design(cfg)
     if args.synthetic:
         make_synthetic(args.root, cam, plane, default_lighting(cfg), seed=args.seed)
     res = evaluate(args.root, cam, plane, cfg)
-    lines = [f"# Floor Watch 評価（source = {res['source']}、n = {res['n']}）", "",
+    lines = [f"# Floor Watch 評価（source = {res['source']}、n = {res['n']}、カメラ {cam.width_px}×{cam.height_px} f={cam.f_px:.0f}px ASSUMED）", "",
              "基準床なし（局所背景）。光の面は DESIGN 値（較正なし）。実写では 1 円玉の段で較正してから。", ""]
     lines += _stage_lines("patrol（巡回中: 通常 + 斜めだけ、線なし）", res["stages"]["patrol"])
     lines += _stage_lines("inspect（停止して線光あり）", res["stages"]["inspect"])

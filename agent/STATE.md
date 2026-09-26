@@ -156,6 +156,16 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
+## 2026-09-27 の回答と反映
+
+- カメラ: 床見は最大解像度の静止画（OV2640 UXGA f ≈ 1256 px / OV3660 QXGA f ≈ 1608 px）、タグ探しは VGA（f ≈ 502 px）で両立。
+  `floor_watch.camera.modes` に解像度ごとの f（**すべて ASSUMED**、FOV 65° からの逆算）。画素単位のしきい値は f に比例（`detect.scale_with_f`）。
+  合成の回帰試験は `synthetic_ref`（レビューの設計値 f=1000）で回し、実機モードは幾何のテストと `tools/floorwatch_eval.py --mode` で確認。
+  型番・FOV は定規（100 / 300 mm）で実測、70〜200 mm のピント確認（ボケるならレンズ調整か OV5640）。
+- 減速比: 暫定 1:345（秋月 g116312 = C001、ページ値、未実測）。1:191 は古い資料。config の servo プロファイルは C044 の参照値のままで、
+  C001 の定格・ストールが分かったらトルク上限のレジスタ比を作り直す（`docs/safety_limits.md`）。
+- Mosquitto のサービス停止・無効化はユーザーが管理者で実行する。
+
 ## Current Goal（2026-09-26 フェーズ 5 を模擬で 1 本）
 
 **縦一本が模擬でつながった**: Home AI モック → Loopback MQTT → Endpoint → `FloorWatchExecutor` → `InspectMission`（移動・位置合わせ・撮影・判定）

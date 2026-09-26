@@ -3,6 +3,7 @@ floor_finding（推定した自己位置 + σ）→ Home AI モックが受け�
 """
 from __future__ import annotations
 
+import copy
 import math
 from pathlib import Path
 
@@ -24,6 +25,8 @@ START = BodyPose(150.0, 150.0, math.pi / 4)      # 尾をマットの隅に置�
 
 
 def rig(cfg: dict, scene: FloorScene, tmp_path: Path, seed: int = 3):
+    cfg = copy.deepcopy(cfg)
+    cfg["floor_watch"]["camera"]["floor_mode"] = "synthetic_ref"            # 合成は設計値の解像度で（実機モードは UXGA）
     session = SimSession(cfg, start=START, seed=seed)
     session.step()
     tm = TagMap.from_cfg(cfg)

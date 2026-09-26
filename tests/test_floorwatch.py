@@ -13,7 +13,7 @@ import pytest
 
 from serpens.config import load_config
 from serpens.floorwatch.dataset import SYNTHETIC_ITEMS, evaluate, make_synthetic, read_samples, wilson
-from serpens.floorwatch.detect import MotionError, detect
+from serpens.floorwatch.detect import MotionError, detect, scaled_thresholds
 from serpens.floorwatch.geometry import Camera, LightPlane
 from serpens.floorwatch.risk import assess, size_factor
 from serpens.floorwatch.synthetic import Disc, Renderer, Scene, Seam, Stain, default_lighting
@@ -24,9 +24,12 @@ def cfg() -> dict:
     return load_config()
 
 
+REF_MODE = "synthetic_ref"          # 合成の回帰試験はレビューの設計値（f=1000、640×480）で回す。実機モードは幾何のテストで確認
+
+
 @pytest.fixture(scope="module")
 def rig(cfg: dict):
-    cam, plane, lt = Camera.from_cfg(cfg), LightPlane.design(cfg), default_lighting(cfg)
+    cam, plane, lt = Camera.from_cfg(cfg, REF_MODE), LightPlane.design(cfg), default_lighting(cfg)
     return cam, plane, Renderer(cam, plane, lt)
 
 
@@ -38,9 +41,16 @@ def objects(fr, cam, plane, cfg, with_line=True):
 # ---- 幾何 ------------------------------------------------------------------------------
 def test_geometry_matches_the_design_numbers(cfg: dict) -> None:
     """レビューの目安: f=1000px・高さ 30mm・下向き 25° で視野中心は床 71mm 先、1.5mm の段が約 21px。"""
-    cam, plane = Camera.from_cfg(cfg), LightPlane.design(cfg)
+    cam, plane = Camera.from_cfg(cfg, REF_MODE), LightPlane.design(cfg)
     p = cam.floor_point(cam.cx, cam.cy)
     assert np.linalg.norm(p - cam.center) == pytest.approx(71.0, abs=0.5)
+    # 実機モード（UXGA 静止画、f ≈ 1256 ASSUMED）では 1.5mm → 約 27px、0.3mm → 約 5px。しきい値は f に比例して拡大する
+    hw = Camera.from_cfg(cfg)
+    assert hw.width_px == 1600 and hw.f_px == pytest.approx(1600 / 2 / np.tan(np.radians(32.5)), rel=0.01)
+    uh, vh, _ = hw.project(np.array([1.5, p[1], 1.5]))
+    assert uh - hw.cx == pytest.approx(21.3 * hw.f_px / 1000.0, rel=0.03)
+    sc = scaled_thresholds(cfg, hw)
+    assert sc["line_search_px"] == round(120 * hw.f_px / 1000.0) and sc["min_blob_px"] == round(30 * (hw.f_px / 1000.0) ** 2)
     assert plane.line_u_on_floor(cam, cam.cy) == pytest.approx(cam.cx, abs=0.01)     # 床の線は中心線の真下
     u, v, _ = cam.project(np.array([1.5, p[1], 1.5]))                                # 1 円玉の上面に乗った線
     assert u - cam.cx == pytest.approx(21.3, abs=0.5)

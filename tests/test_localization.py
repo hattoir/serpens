@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 
 from serpens.config import load_config
-from serpens.localization.apriltag_detector import AprilTagDetector
+from serpens.localization.apriltag_detector import AprilTagDetector, HeadCamera
 from serpens.localization.estimator import PoseEstimator, TagObservation, start_blockers, wrap
 from serpens.localization.sim_observer import SimTagObserver
 from serpens.localization.sim_run import run_loop_sim
@@ -41,6 +41,8 @@ def test_tag_map_defines_frame_home_and_rejects_duplicates(cfg: dict, tmap: TagM
                           "tags": [{"id": 1, "x_m": 0, "y_m": 0, "z_m": 0, "yaw_rad": 0}] * 2})
     with pytest.raises(ValueError):
         TagMap.from_dict({"frame_id": "room", "map_version": "x", "family": "tag36h11", "tag_size_m": 0.06, "tags": []})
+    hc = HeadCamera.from_cfg(cfg)
+    assert (hc.width_px, hc.height_px) == (640, 480) and hc.f_px == pytest.approx(502.0, abs=1.0)   # タグ探しは VGA
 
 
 def _exact_obs(tmap: TagMap, tid: int, x: float, y: float, yaw: float, t: float = 0.0) -> TagObservation:
