@@ -4,7 +4,9 @@
 シミュレーションの Ground Truth を「Vision が成功した」として数えないため。
 
     GROUND_TRUTH_SIM … シミュレータが知っている真値（**Vision の成果ではない**）
-    ARUCO            … マーカから推定した自己位置
+    APRILTAG         … 頭カメラの AprilTag + IMU + 歩容オドメトリ（フェーズ 3、座標系 home）。最近タグで補正した
+    ODOMETRY_IMU     … 同じ推定器だが、タグを見ずに推測航法中（σ が育つ）
+    ARUCO            … 外部カメラのマーカから推定した自己位置（EX-01 の経路。MVP では検証用 = ARUCO_EXTERNAL）
     PERSON_DETECTOR  … 人物検出から推定した人の位置
     DEAD_RECKONING   … 指令からの推測（観測なし）
     UNKNOWN          … 出どころ不明（使わない）
@@ -23,7 +25,10 @@ class PoseSource(str, Enum):
     """姿勢がどこから来たか。"""
 
     GROUND_TRUTH_SIM = "GROUND_TRUTH_SIM"
+    APRILTAG = "APRILTAG"
+    ODOMETRY_IMU = "ODOMETRY_IMU"
     ARUCO = "ARUCO"
+    ARUCO_EXTERNAL = "ARUCO"          # 別名（検証用の外部カメラであることを名前で示す）
     PERSON_DETECTOR = "PERSON_DETECTOR"
     DEAD_RECKONING = "DEAD_RECKONING"
     UNKNOWN = "UNKNOWN"
@@ -31,7 +36,7 @@ class PoseSource(str, Enum):
     @property
     def is_vision(self) -> bool:
         """カメラから得た推定か（**Ground Truth は含まない**）。"""
-        return self in (PoseSource.ARUCO, PoseSource.PERSON_DETECTOR)
+        return self in (PoseSource.ARUCO, PoseSource.APRILTAG, PoseSource.PERSON_DETECTOR)
 
 
 @dataclass(frozen=True)
@@ -45,6 +50,8 @@ class Pose2D:
     at_s: float = 0.0                     # いつの観測か
     confidence: float = 1.0               # 0〜1（Vision では検出スコア）
     simulated: bool = False               # 模擬画像から得た推定（ARUCO でも実カメラではない）
+    sigma_xy_mm: float | None = None      # 不確かさ（フェーズ 3 の推定器が付ける。無ければ None）
+    sigma_yaw_rad: float | None = None
 
     def distance_to(self, other: "Pose2D") -> float:
         return math.hypot(self.x_mm - other.x_mm, self.y_mm - other.y_mm)

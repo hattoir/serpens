@@ -164,6 +164,15 @@ End-to-End latency を測る。
 | フェーズ 1 レビュー 1〜5（stop 最優先・待ち行列破棄・stop 前の Task 拒否・retain 拒否・LWT OFFLINE・危険物別枠・resolved は人だけ） | `SOFTWARE_VERIFIED` | `tests/test_task_event_api.py`（16） |
 | 本物の MQTT（retain / LWT が keepalive の 1.5 倍で出る / 正常終了の OFFLINE / 再接続の上書き / QoS1 再送） | `SOFTWARE_VERIFIED`（本物の Mosquitto 2.1.2、2026-09-26。4 件: 黙ったクライアントの LWT は keepalive 2 s に対し 2〜5 s の窓で到着、ソケット断は即時、正常終了の OFFLINE は即時、再接続後の購読者は OFFLINE を見ない、QoS1 再送） | `tests/test_mqtt_live.py`（Mosquitto を 127.0.0.1 の一時ポートでサブプロセス起動。無ければ skip） |
 
+## 4.12 Floor Watch フェーズ 3 — 自己位置（2026-09-26、`docs/floorwatch_phase3.md`）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| 地図 `config/tags.yaml`（座標系 home、map_version）、推定器（予測・タグ補正・ゲート・IMU の磁北差）、開始条件が σ と IMU / オドメトリの健全性で決まる | `SOFTWARE_VERIFIED` | `tests/test_localization.py`（7） |
+| 周回の閉ループで σ が正直（\|誤差\| ≤ 3σ が 98〜100%、滑り 5〜10%）、タグを見ずに走れる距離 ≈ 0.7〜1.1 m | **KINEMATIC_SIM 相当（SIMULATED）** | `tools/localization_sim.py` → `output/localization_sim.md` |
+| AprilTag 検出 → 距離 3% / 方位 0.02 rad / 面の向き 0.06 rad | **合成画像** | `tests/test_localization.py` |
+| 実カメラでの検出、実 IMU、実歩容の滑り、部屋のタグ配置 | **未測定** | フェーズ 4 の試験ツールで |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

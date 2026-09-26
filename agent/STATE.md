@@ -156,7 +156,22 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-26 レビュー対応後）
+## Current Goal（2026-09-26 フェーズ 3 着手）
+
+自己位置を**模擬で**通した（`serpens/localization/`: tags.yaml、推定器、σ で書いた開始条件、AprilTag 検出、周回の閉ループ）。
+タグを見ずに走れる距離 ≈ 0.7〜1.1 m（σ_xy 0.15 m）、滑り 15% は ASSUMED。**カメラの FOV（65°）と床見の f = 1000 px の矛盾**が
+未解決（`docs/floorwatch_phase3.md` §4）。次はフェーズ 4（試験ツール・記録形式）か、フェーズ 5 の縦一本（inspect_point → 移動 →
+撮影 → 判定 → floor_finding）を模擬で繋ぐ。
+
+## Next Best Actions（2026-09-26 フェーズ 3 後）
+
+0. フェーズ 5 を模擬で縦に繋ぐ: Endpoint の Executor に locomotion + 推定器 + 撮影 + detect + risk を接続し、inspect_point → floor_finding が
+   Loopback で往復する（開始条件は `start_blockers` / `autonomy_blockers`）
+1. フェーズ 4: 実機試験の記録形式（滑り・IMU・タグ検出率・接触 load・電流・撮影所要時間）と解析ツール
+2. カメラ型番と FOV の回答 → f_px を 1 つに統一（床見と タグ探しの両立を数字で確認）
+3. 実写データセット（フェーズ 2）とタグ配置の実測（フェーズ 3）は部品到着後
+
+## Next Best Actions（2026-09-26 レビュー対応後・旧）
 
 0. **実写**: 治具（あご LED 6mm 前向き、線光 30mm 横 45°）で `docs/floorwatch_phase2.md` §3 の品目 + 床の継ぎ目を撮り、
    `tools/floorwatch_eval.py --root` で 2 段評価。合成の 98% / 0% は実写で下がる前提

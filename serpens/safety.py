@@ -138,7 +138,7 @@ class AutonomyInputs:
     """開始条件の判定に使う事実だけを集めたもの。"""
 
     robot_is_real: bool
-    pose_source: str                  # "aruco" / "sim" / "none"
+    pose_source: str                  # "apriltag" / "odometry_imu" / "aruco"（検証用）/ "sim" / "none"
     pose_age_s: float | None
     calibration_present: bool
     drive_link_ok: bool
@@ -146,6 +146,39 @@ class AutonomyInputs:
     telemetry_axes: int
     expected_axes: int
     telemetry_age_s: float | None
+    # フェーズ 3: σ と局所センサーの健全性（require_sigma の出どころでは必須。None = 報告なし）
+    sigma_xy_m: float | None = None
+    sigma_yaw_rad: float | None = None
+    imu_ok: bool | None = None
+    odometry_ok: bool | None = None
+
+
+def _pose_blockers(cfg: dict[str, Any], a: dict[str, Any], inputs: AutonomyInputs) -> list[str]:
+    """自己位置の開始条件。出どころが実観測で、新しく、（要る出どころでは）σ と IMU / オドメトリが健全。"""
+    sources = a["pose_sources"]
+    if inputs.pose_source not in sources:
+        return [f"自己位置が実観測ではない（現在: {inputs.pose_source}）。"
+                f"認める出どころ: {', '.join(sources)}。実観測の位置が制御へ入るまで実機の自律走行は禁止"]
+    if inputs.pose_age_s is None:
+        return ["自己位置が未取得"]
+    out = []
+    if inputs.pose_age_s > float(a["pose_max_age_s"]):
+        out.append(f"自己位置が古い（{inputs.pose_age_s:.1f}s > {a['pose_max_age_s']}s）")
+    if not bool(sources[inputs.pose_source]["require_sigma"]):
+        return out
+    st = cfg["localization"]["start"]
+    if inputs.sigma_xy_m is None or inputs.sigma_yaw_rad is None:
+        out.append("自己位置の不確かさ（σ）が報告されていない")
+    else:
+        if inputs.sigma_xy_m > float(st["max_sigma_xy_m"]):
+            out.append(f"自己位置の不確かさが大きい（σ_xy {inputs.sigma_xy_m:.2f}m > {st['max_sigma_xy_m']}m）")
+        if inputs.sigma_yaw_rad > float(st["max_sigma_yaw_rad"]):
+            out.append(f"向きの不確かさが大きい（σ_yaw {inputs.sigma_yaw_rad:.2f}rad > {st['max_sigma_yaw_rad']}rad）")
+    if bool(st["require_imu"]) and not inputs.imu_ok:
+        out.append("IMU が健全ではない（未受信か古い）")
+    if not inputs.odometry_ok:
+        out.append("オドメトリ（歩容の位相）が更新されていない")
+    return out
 
 
 def autonomy_blockers(cfg: dict[str, Any], inputs: AutonomyInputs) -> list[str]:
@@ -159,13 +192,7 @@ def autonomy_blockers(cfg: dict[str, Any], inputs: AutonomyInputs) -> list[str]:
     if not inputs.robot_is_real:
         return out
     if bool(a["require_real_pose"]):
-        if inputs.pose_source != "aruco":
-            out.append(f"自己位置が実観測ではない（現在: {inputs.pose_source}）。"
-                       "ArUco からの位置が制御へ入るまで実機の自律走行は禁止（Phase 4）")
-        elif inputs.pose_age_s is None:
-            out.append("自己位置が未取得")
-        elif inputs.pose_age_s > float(a["pose_max_age_s"]):
-            out.append(f"自己位置が古い（{inputs.pose_age_s:.1f}s > {a['pose_max_age_s']}s）")
+        out.extend(_pose_blockers(cfg, a, inputs))
     if bool(a["require_calibration"]) and not inputs.calibration_present:
         out.append(f"床の校正が無い（{cfg['homography']['file']}。tools/calibrate_floor.py で作成）")
     if bool(a["require_drive_link"]) and not inputs.drive_link_ok:

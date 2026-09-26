@@ -203,6 +203,50 @@ api:                          # Home AI との境界（MQTT）。docs/task_event
   safety_state_max_age_ms: 5000  # 受け側: 自分の時計でこれ以上届かなければ状態不明（停止扱い）
   mqtt_keepalive_s: 20           # LWT はブローカーが keepalive の 1.5 倍で出す（MQTT 3.1.1 §3.1.2.10）→ 約 30 s で OFFLINE
 
+localization:                 # フェーズ 3: 自己位置（座標系 home、m / rad）。**すべて DESIGN / ASSUMED。実機で校正**
+  tag_map_file: config/tags.yaml
+  camera:                     # 頭カメラで AprilTag を見るときのパラメータ。FOV 65° は未確認（→ f ≈ 640/2/tan(32.5°) = 502px）
+    f_px: 502.0
+    width_px: 640
+    height_px: 480
+    height_m: 0.03            # 首を水平にしたときの床からレンズまで（未確認）
+    forward_m: 0.30           # 機体基準点（胴 2 の IMU）からレンズまでの前後（節ピッチ 95mm × 3 前後。未確認）
+    fov_deg: 65.0             # 水平視野（未確認）
+    tag_search_pitch_deg: 0.0 # タグを探すときの首の俯角（0 = 水平。床を見るときは floor_watch.camera.pitch_deg）
+  apriltag:
+    family: tag36h11
+    min_range_m: 0.15
+    max_range_m: 2.5
+    max_view_angle_deg: 60.0  # タグの面をこれより斜めから見ると検出しないとみなす
+    sigma_range_frac: 0.03    # 距離誤差 = 3% × 距離（ASSUMED）
+    sigma_bearing_rad: 0.01
+    sigma_yaw_rad: 0.05
+    gate_chi2: 11.3           # Mahalanobis のゲート（3 自由度 99%）。偽検出・誤 ID を捨てる
+    hold_s: 1.0               # 最後の補正からこの時間は pose_source = APRILTAG、以後 ODOMETRY_IMU
+    sim_miss_prob: 0.1        # 合成観測: 見えるはずのタグを見逃す確率
+  odometry:                   # 歩容オドメトリ。1 周期の前進量は behavior.controller.advance_per_cycle_mm（要実機校正）
+    sigma_along_frac: 0.15    # 前進量の 15% を誤差に積む（滑りは未測定 → HARDWARE_UNVERIFIED）
+    sigma_lateral_frac: 0.10
+    sigma_yaw_frac: 0.20      # IMU 無しで歩容の指令から回転を取るときの誤差（回転量の 20%）
+    sigma_yaw_floor_rad: 0.005
+    max_age_s: 1.0            # これ以上位相が更新されなければ「オドメトリ無し」
+  imu:                        # BNO085（胴 2、I2C）。値は ASSUMED
+    yaw_sigma_rad: 0.02       # 絶対 yaw の誤差（磁北基準。home との差はタグで補正するたびに取り直す）
+    delta_sigma_rad: 0.005    # 1 ステップの yaw 差分の誤差（ジャイロ積分）
+    yaw_drift_rad_per_s: 0.002
+    max_age_s: 0.5
+  start:                      # 自律走行 / inspect_point を受ける条件。σ と局所センサーの健全性で書く
+    max_sigma_xy_m: 0.15
+    max_sigma_yaw_rad: 0.20
+    require_imu: true
+  sim:                        # 閉ループ模擬（sim_run.py / tools/localization_sim.py）の経路。KINEMATIC_SIM 相当
+    waypoints: [[2.5, -0.8], [2.5, 0.8], [0.5, 0.8], [0.5, -0.8]]   # 部屋の中の長方形（m）。最後の点から出発
+    waypoint_reach_m: 0.1
+    temporal_freq_hz: 0.3     # 歩容の周波数（前進 = advance_per_cycle_mm × 周波数 ≈ 0.11 m/s）
+    max_turn_rad_s: 0.6
+    turn_gain: 2.0
+    true_yaw_noise_rad: 0.01  # 真の回転に乗る雑音（1 歩ごと。推定器は知らない）
+
 floor_watch:
   camera:
     f_px: 1000.0               # 焦点距離（画素）。目安の計算に使った値
@@ -508,7 +552,13 @@ behavior:
       stale_after_s: 2.0
     # 実機の自律走行を許可する条件（シミュレーションのデモには適用しない）
     autonomy:
-      require_real_pose: true       # 実観測（ArUco）の自己位置が必要。仮想位置では走らせない
+      require_real_pose: true       # 実観測の自己位置が必要。仮想位置では走らせない
+      # 実観測と認める出どころ。require_sigma の出どころは σ と局所センサーの健全性（localization.start）でも判定する
+      # （フェーズ 3。「ArUco → AprilTag の置換」ではなく σ で書く）。aruco = 検証用の外部カメラ（EX-01 の経路）
+      pose_sources:
+        apriltag: {require_sigma: true}
+        odometry_imu: {require_sigma: true}
+        aruco: {require_sigma: false}
       pose_max_age_s: 0.5
       require_calibration: true     # 床の校正ファイルが必要
       require_drive_link: true      # ESP32 駆動リンク（heartbeat）が必要。Phase 2 までは実機走行不可
