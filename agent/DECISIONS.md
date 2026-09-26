@@ -17,6 +17,26 @@
 
 ---
 
+## 2026-09-26 — Floor Watch の inspect は展示の行動を通さず、Task が無ければ止まっている
+
+**Decision**: `FloorWatchExecutor` は Endpoint の Executor として SimSession に `mission` を差し込み、active のあいだ brain.tick を
+呼ばない（移動は `Controller.drive_to` の安全だけ通す）。Task が無いあいだは `IdleHold` が歩容を止める。停止位置の散り
+（惰行が歩容の位相で 33〜188 mm）と蛇行の横ずれは、開ループの補正ではなく **停止後に頭から地点までの (前方, 左) を測り、
+短い前後の微調整（振幅を即 0）と頭ヨーで線を地点に置く** 閉ループで吸収する。Task stop は機体を HOLD にし、再開は API の
+operator_resume と機体側の開始操作の両方（人）。
+
+**Why**: 展示の brain は人に反応して勝手に動く（PATROL に戻る）ので、Floor Watch の「Task 以外で動かない」と両立しない。
+惰行の開ループ補正は位相依存で当たらなかった（0.5 で 33 mm、1.3 で 188 mm）。線幅 3 mm、床カメラの横視野 ±23 mm に対し
+蛇行の横ずれは ±5 cm あり、頭ヨーで向けないと地点が視野に入らない。
+
+**Alternatives**: brain に「TASK」状態を足す（展示の語彙と混ざる）/ 惰行の補正表を位相ごとに持つ（実機で崩れる）/
+機体ごと向き直す（時間がかかり、また惰行が乗る）。
+
+**Trade-offs**: 位置合わせの測定は模擬では真値。実機では推定姿勢（σ 数 cm）になるので、JUDGE 後の候補ベースの AIM が主になる。
+IdleHold のあいだ呼吸などの表現は止まる（Task 待ちの「生きている感」は後で）。
+
+**Context**: 2026-09-26。KINEMATIC_SIM、合成画像、合成タグ観測。実機の値はゼロ。
+
 ## 2026-09-26 — 自己位置の開始条件は σ と局所センサーの健全性で書く（出どころの名前の置換にしない）
 
 **Decision**: フェーズ 3 の推定器（AprilTag + IMU + 歩容オドメトリ）は (x, y, yaw) + 共分散を持ち、`start_blockers` /

@@ -173,6 +173,14 @@ End-to-End latency を測る。
 | AprilTag 検出 → 距離 3% / 方位 0.02 rad / 面の向き 0.06 rad | **合成画像** | `tests/test_localization.py` |
 | 実カメラでの検出、実 IMU、実歩容の滑り、部屋のタグ配置 | **未測定** | フェーズ 4 の試験ツールで |
 
+## 4.13 Floor Watch フェーズ 5 — 縦一本（2026-09-26、`docs/floorwatch_phase5.md`）
+
+| 項目 | レベル | 根拠 |
+|---|---|---|
+| Home AI モック → inspect_point → 移動（KINEMATIC_SIM）→ 位置合わせ（前後の微調整 + 頭ヨーで線を地点へ）→ 撮影（合成）→ 判定 → floor_finding（推定姿勢 + σ、切り抜きだけ保存）→ モックが通知 | **SIMULATED（模擬の縦一本）** | `tests/test_floorwatch_slice.py`（3） |
+| 開始条件（機体の停止・位置の確認待ち・σ・IMU・オドメトリ）で rejected、stop で aborted + HOLD、再開は operator_resume と機体側の開始操作の両方（人） | `SOFTWARE_VERIFIED` | 同上 |
+| 実機での移動・撮影・照明制御・実タグ・実 IMU | **未実施** | フェーズ 4 の試験ツールと部品到着後 |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

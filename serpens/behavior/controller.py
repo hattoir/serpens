@@ -82,6 +82,10 @@ class Controller:
         f = min(max(speed / self._advance[gait], float(self.c["min_temporal_freq_hz"])), f_max)
         return replace(base, temporal_freq_hz=-f if backward else f, turn_bias_deg=0.0)
 
+    def creep(self, speed_mm_s: float, backward: bool = False, reason: str = "微調整") -> DriveCommand:
+        """向きを変えずに少しだけ進む / 下がる（inspect の位置合わせ。人との距離の安全は set_drive 側でかかる）。"""
+        return DriveCommand(True, self._params(speed_mm_s, backward=backward), 0.0, speed_mm_s, reason)
+
     def _heading_error(self, pose: SnakePose, target: np.ndarray) -> float:
         b = math.atan2(target[1] - pose.y, target[0] - pose.x)
         return math.degrees(wrap_pi(b - pose.theta_body))

@@ -156,18 +156,26 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Current Goal（2026-09-26 フェーズ 3 着手）
+## Current Goal（2026-09-26 フェーズ 5 を模擬で 1 本）
+
+**縦一本が模擬でつながった**: Home AI モック → Loopback MQTT → Endpoint → `FloorWatchExecutor` → `InspectMission`（移動・位置合わせ・撮影・判定）
+→ floor_finding（フェーズ 3 の推定姿勢 + σ、フェーズ 2 の判定、切り抜きだけ保存）→ モックが通知（`docs/floorwatch_phase5.md`）。
+Task が無いあいだは `IdleHold` で止まる（展示の巡回に戻らない）。stop → HOLD、再開は人の操作 2 つ。
+実機の値はゼロ。次はフェーズ 4（実機試験の記録形式と解析ツール）か、patrol_route / highlight_point の模擬。
+
+## Current Goal（2026-09-26 フェーズ 3 着手・旧）
 
 自己位置を**模擬で**通した（`serpens/localization/`: tags.yaml、推定器、σ で書いた開始条件、AprilTag 検出、周回の閉ループ）。
 タグを見ずに走れる距離 ≈ 0.7〜1.1 m（σ_xy 0.15 m）、滑り 15% は ASSUMED。**カメラの FOV（65°）と床見の f = 1000 px の矛盾**が
 未解決（`docs/floorwatch_phase3.md` §4）。次はフェーズ 4（試験ツール・記録形式）か、フェーズ 5 の縦一本（inspect_point → 移動 →
 撮影 → 判定 → floor_finding）を模擬で繋ぐ。
 
-## Next Best Actions（2026-09-26 フェーズ 3 後）
+## Next Best Actions（2026-09-26 フェーズ 5 模擬後）
 
-0. フェーズ 5 を模擬で縦に繋ぐ: Endpoint の Executor に locomotion + 推定器 + 撮影 + detect + risk を接続し、inspect_point → floor_finding が
-   Loopback で往復する（開始条件は `start_blockers` / `autonomy_blockers`）
-1. フェーズ 4: 実機試験の記録形式（滑り・IMU・タグ検出率・接触 load・電流・撮影所要時間）と解析ツール
+0. フェーズ 4: 実機試験の記録形式（滑り・IMU・タグ検出率・接触 load・電流・撮影所要時間・停止の惰行距離）と解析ツール。
+   模擬で決めた数（惰行 1.3 × 速さ × blend_s、滑り 15%、view_target 90 mm）はここで実測値に置き換える
+0'. patrol_route（各点で inspect）と highlight_point（物 → 人 → 物）を模擬で。人が近いときの inspect の可否
+1. （旧 1）実機試験の記録形式と解析ツール
 2. カメラ型番と FOV の回答 → f_px を 1 つに統一（床見と タグ探しの両立を数字で確認）
 3. 実写データセット（フェーズ 2）とタグ配置の実測（フェーズ 3）は部品到着後
 

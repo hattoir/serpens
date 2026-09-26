@@ -111,6 +111,11 @@ class GaitEngine:
         """振幅が 0 でなければ動作中。"""
         return self._gain > 0.0 or self._target_gain > 0.0
 
+    @property
+    def phase_rad(self) -> float:
+        """時間位相の積分（歩容オドメトリ: 1 周期 = 2π で advance_per_cycle_mm 進む。後退は負）。"""
+        return self._phase
+
     def start(self, preset_or_params: str | GaitParams, gamma0_deg: float | None = None) -> None:
         """歩容を開始（または切替）。γ0 の目標は gamma0_deg（省略時はプリセットの turn_bias_deg）。"""
         p = self.presets[preset_or_params] if isinstance(preset_or_params, str) else preset_or_params

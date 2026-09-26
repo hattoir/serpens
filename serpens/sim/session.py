@@ -113,6 +113,7 @@ class SimSession:
         self._torque_off = False
         self._last_drive: DriveState | None = None
         self.status: BrainStatus | None = None
+        self.mission: Any | None = None              # Floor Watch の inspect（フェーズ 5）。active の間は brain を通さない
 
     @property
     def t(self) -> float:
@@ -229,9 +230,13 @@ class SimSession:
             frame = self.head.latest
             touch = bool(frame and (frame.touch_head or frame.touch_back))
         person_xy = None if self.target is None else self.target.floor_mm
-        self.status = self.brain.tick(t, Percept(self.snake, person_xy, self._serial, touch,
-                                                 self.poller.max_temperature_c(t),
-                                                 self.poller.max_abs_load(t) or 0.0))
+        if self.mission is not None and self.mission.active:
+            self.mission.tick(t, self.snake, person_xy)     # 展示の行動は使わず、移動の安全（人との距離・端）だけ通す
+            self.brain.expr.update(t)
+        else:
+            self.status = self.brain.tick(t, Percept(self.snake, person_xy, self._serial, touch,
+                                                     self.poller.max_temperature_c(t),
+                                                     self.poller.max_abs_load(t) or 0.0))
         self.robot.send(t, MotionCommand.from_animator(self.anim, self.robot.body, t))
         return self.status
 
