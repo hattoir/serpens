@@ -148,7 +148,8 @@ End-to-End latency を測る。
 |---|---|---|
 | Task / Event API（schemas/*.json、5 Task・4 Event、frame `home`、floor_finding の不確かさ・危険度の内訳） | `SOFTWARE_VERIFIED` | `tests/test_task_event_api.py`（10）。スキーマ合格/不合格、版違い、map_version 違い、未知フィールド、安全設定の不在 |
 | Loopback での往復（Task → 受理/拒否/冪等/stop 最優先 → Event）、Home AI 側モックが受け取る | `SOFTWARE_VERIFIED` | 同上。retain した safety_state が後からの購読に届く |
-| 本物の MQTT ブローカーとの疎通 | **未実施** | `PahoBroker` は任意依存（paho-mqtt 未導入）。フェーズ 5 で Mosquitto と試す |
+| フェーズ 1 追加確認 8〜11（operator_resume は MQTT から到達しない / safety_state の 2 s 周期送信と受け側時計での失効 / 正常終了の OFFLINE と再接続の上書き / stop と緊急停止の将来の分離を文書化） | `SOFTWARE_VERIFIED`（Loopback） | `tests/test_task_event_api_review.py`（3）+ `tests/test_task_event_api.py`（16） |
+| 本物の MQTT ブローカーとの疎通 | 下の 4.11 を見る | |
 | Home AI 本体 | 作らない（決定 14） | モックのみ |
 
 ## 4.11 Floor Watch フェーズ 2 — 画像処理（2026-09-25、`docs/floorwatch_phase2.md`）
@@ -156,11 +157,12 @@ End-to-End latency を測る。
 | 項目 | レベル | 根拠 |
 |---|---|---|
 | 幾何（1.5mm → 21.3px、0.3mm → 4.3px、視野中心 71mm）と光の面の較正（名目からずれた面でも高さが戻る） | `SOFTWARE_VERIFIED` | `tests/test_floorwatch.py` |
-| 合成画像での検出率 90%（19/21）・誤報率 0%（0/9）、線上の高さ ±1mm、鏡面の途切れ | **SIMULATED（合成画像）** | `tools/floorwatch_eval.py --synthetic` → `output/floorwatch_eval.md` |
+| 合成画像（**基準床なし**、あごの斜め照明、継ぎ目を含む n = 70）: patrol / inspect とも 98〜100%（41〜42/42、95%CI 88〜100%。雑音で実行ごとに揺れる）・誤報 0%（0/28、95%CI 上限 12%）、線上の高さ ±1mm、鏡面 → height null + specular_break → metal_disc | **SIMULATED（合成画像。影も線も理想的なので楽観値）** | `tools/floorwatch_eval.py --synthetic` → `output/floorwatch_eval.md`、`tests/test_floorwatch.py`（9） |
+| レビュー 2026-09-26 の 1〜7（高さ null + 理由 / 測れない = 出っ張り扱い / metal_disc 別枠 / 基準床なし / 撮影順と動き検出 / あご照明・影は奥 / 2 段評価と信頼区間 / 継ぎ目の合成） | `SOFTWARE_VERIFIED`（合成） | 同上 |
 | 実写（手持ちカメラ、治具）での検出率・誤報率 | **未測定** | フェーズ 2 の完成条件。カメラ機種の回答待ち |
 | 候補の種類の分類 | **未実装** | 実写データが揃ってから（合成で作ると過適合） |
 | フェーズ 1 レビュー 1〜5（stop 最優先・待ち行列破棄・stop 前の Task 拒否・retain 拒否・LWT OFFLINE・危険物別枠・resolved は人だけ） | `SOFTWARE_VERIFIED` | `tests/test_task_event_api.py`（16） |
-| 本物の MQTT（retain / LWT / QoS1 再送） | **未実施** | `tests/test_mqtt_live.py`（paho-mqtt + Mosquitto が要る。無ければ skip） |
+| 本物の MQTT（retain / LWT が keepalive の 1.5 倍で出る / 正常終了の OFFLINE / 再接続の上書き / QoS1 再送） | `SOFTWARE_VERIFIED`（本物の Mosquitto 2.1.2、2026-09-26。4 件: 黙ったクライアントの LWT は keepalive 2 s に対し 2〜5 s の窓で到着、ソケット断は即時、正常終了の OFFLINE は即時、再接続後の購読者は OFFLINE を見ない、QoS1 再送） | `tests/test_mqtt_live.py`（Mosquitto を 127.0.0.1 の一時ポートでサブプロセス起動。無ければ skip） |
 
 ## 5. 書くときの約束
 

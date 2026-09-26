@@ -62,19 +62,20 @@
       "type": "object",
       "required": ["kind", "confidence"],
       "properties": {
-        "kind": {"type": "string", "enum": ["coin", "button_cell", "magnet", "medicine", "washer", "bead", "food_crumb", "stain_or_pattern", "unknown"]},
+        "kind": {"type": "string", "enum": ["coin", "button_cell", "magnet", "medicine", "metal_disc", "washer", "bead", "food_crumb", "stain_or_pattern", "unknown"]},
         "confidence": {"type": "number", "minimum": 0, "maximum": 1}
       },
       "additionalProperties": false
     },
     "size": {
       "type": "object",
-      "required": ["diameter_mm", "sigma_mm", "height_mm", "height_sigma_mm", "method"],
+      "required": ["diameter_mm", "sigma_mm", "height_mm", "height_sigma_mm", "height_reason", "method"],
       "properties": {
         "diameter_mm": {"type": "number", "minimum": 0},
         "sigma_mm": {"type": "number", "minimum": 0},
-        "height_mm": {"type": "number", "minimum": 0, "description": "線光の曲がりから。高さ 0 = 汚れ・模様"},
-        "height_sigma_mm": {"type": "number", "minimum": 0},
+        "height_mm": {"type": ["number", "null"], "minimum": 0, "description": "線光から。**測れないときは null**（0 は「平ら = 汚れ」と読まれる）。理由は height_reason"},
+        "height_sigma_mm": {"type": ["number", "null"], "minimum": 0},
+        "height_reason": {"type": "string", "enum": ["measured", "specular_break", "off_line", "too_few_rows"], "description": "specular_break = 線が途切れた（鏡面 = 金属の疑い）"},
         "method": {"type": "string", "enum": ["tof_camera_geometry", "line_light", "reference_object", "unknown"]}
       },
       "additionalProperties": false
@@ -89,7 +90,7 @@
         "child_distance_m": {"type": ["number", "null"], "minimum": 0, "description": "最も近い子どもまでの距離。不明なら null（= 安全側で近いとみなす）"},
         "score": {"type": "number", "minimum": 0, "maximum": 1, "description": "複合。サイズのしきい値 1 つで決めない"},
         "mandatory_notify": {"type": "boolean", "description": "ボタン電池・磁石・薬が候補にあれば、確信度が低くても true（score の掛け算とは別枠）"},
-        "critical_kinds": {"type": "array", "items": {"type": "string", "enum": ["button_cell", "magnet", "medicine"]}, "maxItems": 3, "description": "mandatory_notify の根拠になった候補"},
+        "critical_kinds": {"type": "array", "items": {"type": "string", "enum": ["button_cell", "magnet", "medicine", "metal_disc"]}, "maxItems": 4, "description": "mandatory_notify の根拠になった候補"},
         "rationale": {"type": "array", "items": {"type": "string", "maxLength": 120}, "maxItems": 10}
       },
       "additionalProperties": false

@@ -198,6 +198,11 @@ legacy_poses:
 # Floor Watch（床の落とし物）。**すべて DESIGN 値 / HARDWARE_UNVERIFIED。** 幾何の出典: 2026-09-25 のレビュー入力。
 # 実写（手持ちカメラ、治具で頭と同条件）で置き換えるまで、合成画像でのパイプライン検証にだけ使う
 # ---------------------------------------------------------------------------
+api:                          # Home AI との境界（MQTT）。docs/task_event_api.md
+  safety_state_period_ms: 2000   # safety_state を変化が無くても出す周期。受け側の失効（下）より十分短く
+  safety_state_max_age_ms: 5000  # 受け側: 自分の時計でこれ以上届かなければ状態不明（停止扱い）
+  mqtt_keepalive_s: 20           # LWT はブローカーが keepalive の 1.5 倍で出す（MQTT 3.1.1 §3.1.2.10）→ 約 30 s で OFFLINE
+
 floor_watch:
   camera:
     f_px: 1000.0               # 焦点距離（画素）。目安の計算に使った値
@@ -211,31 +216,43 @@ floor_watch:
     tilt_deg: 45.0             # 光の面を内側へ。床の線がカメラ中心線の真下を前後に走る。高さ 1mm → 横ずれ 1mm
     width_mm_initial: 3.0      # 線幅の初期値（床上 3mm ≈ 40px）。式には入れず、点灯−消灯の床画像から自動推定する
     physical_note: "0.3mm スリット 2 枚を 20mm 離した二重スリットで床上約 2mm の見込み（未検証）"
-  raking:
-    lateral_mm: 30.0
-    led_height_mm: [8.0, 17.0] # 照射角 15° / 30° に対応する LED の高さ（横 30mm のまま）
-    angle_deg: [15.0, 30.0]
+  raking:                      # 斜め照明はあごの位置（床から約 6mm、カメラの真下付近）から前向き。影は物の奥（画像の上側）
+    led_height_mm: 6.0
+    led_forward_mm: 0.0        # カメラ直下からの前後位置
+    shadow_max_mm: 150.0       # LED より高い物の影は長く伸びる（合成の上限）
   calibration:
     coin_thickness_mm: 1.5     # 1 円玉。1・2・3 枚重ねの段で光の面を較正する
     stack_counts: [1, 2, 3]
   detect:
-    diff_z: 3.0                # 基準床との差分（ノイズ σ の倍数）で前景
+    motion_max_px: 1.0         # 最初と最後の通常画像がこれ以上動いていたら撮り直し
+    background_poly_degree: 2  # 背景 = 通常画像に頑健に当てはめた多項式の面。基準床は使わない（実機では同じ視点の空の床が無い）
+    background_blur_px: 9      # 差分の前に木目の細かい縞を落とす
+    blob_close_px: 15          # 前景の塊をつなぐ（木目でちぎれるのを防ぐ）
+    diff_z: 3.0                # 背景との差分（ノイズ σ の倍数）で前景
+    shadow_object_rows_ratio: 0.5   # 影だけの候補: 影の幅 × これ を物の行数とみなす（物は影の手前）
     noise_sigma_min: 2.0       # σ の下限（カメラ雑音の目安。合成では noise_sigma と同じ）
-    shadow_ratio_max: 0.7      # 斜め/通常 の比がこれ以下なら影
-    line_search_px: 120        # 床の線の位置から左右にこの範囲で線を探す
+    shadow_ratio_max: 0.7      # 斜め/通常 の比（局所正規化後）がこれ以下なら影
+    shadow_band_min: 0.15      # 塊の奥（上）の帯にこの割合以上の影があれば「影あり」
+    line_search_px: 120        # 予測した床の線の位置から左右にこの範囲で線を探す
     line_min_intensity: 60     # これ以上なら線が乗っている（全消灯を引いた後）
+    line_context_rows: 12      # 物の前後の床上の線（局所基準）に使う行数
+    line_min_rows: 3           # 高さを「測れた」とする最低行数
     min_blob_px: 30
-    height_object_min_mm: 0.5  # これ以上なら「出っ張り」（模様・汚れは 0）
+    object_min_diameter_mm: 2.0   # これより小さい塊は物としない（雑音・木目のかけら。飲み込みの危険も小さい）
+    height_object_min_mm: 0.5  # これ以上なら「出っ張り」
     dropout_rows_min: 3        # 線の途切れがこの行数以上なら出っ張りの証拠（鏡面）
+    line_aspect_min: 4.0       # 縦横比がこれ以上なら線状（継ぎ目・段差）
+    metal_disc_diameter_mm: [5.0, 25.0]   # 途切れ + 円形 + この直径 → metal_disc（ボタン電池の可能性、危険物側）
+    metal_disc_confidence: 0.6
   synthetic:
     noise_sigma: 2.0
     shadow_factor: 0.35
   risk:
     # 誤飲リスクはサイズのしきい値 1 つで決めない（決定事項 9）。種類 × 大きさ × 確信度 × 子どもの距離 × 届くか
     ingestion_size_mm: [3.0, 32.0]      # この範囲の大きさは飲み込みうる（下限は粒、上限は幼児の口の目安。要根拠）
-    kind_ingestion: {coin: 0.9, button_cell: 1.0, magnet: 1.0, medicine: 1.0, washer: 0.9, bead: 0.8, food_crumb: 0.2, stain_or_pattern: 0.0, unknown: 0.5}
-    kind_sharp: {coin: 0.1, button_cell: 0.1, magnet: 0.1, medicine: 0.0, washer: 0.3, bead: 0.0, food_crumb: 0.0, stain_or_pattern: 0.0, unknown: 0.3}
-    critical_kinds: [button_cell, magnet, medicine]   # score とは別枠で必ず通知
+    kind_ingestion: {coin: 0.9, button_cell: 1.0, magnet: 1.0, medicine: 1.0, metal_disc: 1.0, washer: 0.9, bead: 0.8, food_crumb: 0.2, stain_or_pattern: 0.0, unknown: 0.5}
+    kind_sharp: {coin: 0.1, button_cell: 0.1, magnet: 0.1, medicine: 0.0, metal_disc: 0.1, washer: 0.3, bead: 0.0, food_crumb: 0.0, stain_or_pattern: 0.0, unknown: 0.3}
+    critical_kinds: [button_cell, magnet, medicine, metal_disc]   # score とは別枠で必ず通知（metal_disc = 分類器ができるまでの代用）
     critical_min_confidence: 0.05
     child_near_m: 2.0                   # 子どもがこれより近ければ距離係数 1（不明も 1 = 安全側）
     unreachable_factor: 0.5             # 子どもが届かない場所なら score をこの倍率に

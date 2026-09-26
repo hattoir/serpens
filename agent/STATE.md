@@ -4,7 +4,19 @@
 
 _last updated: 2026-09-14_
 
-## Current Goal（2026-09-25 Floor Watch フェーズ 2 更新）
+## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
+
+レビュー 1〜7 と 8〜11 を実装した。画像処理は**基準床を使わない**（実機では同じ視点の空の床が無い）形に変え、
+測れない高さは null + 理由、測れない = 出っ張り扱い、線の途切れ + 円形 + 5〜25mm は `metal_disc` として必ず通知。
+斜め照明はあご（床から 6mm、前向き。影は物の奥）、撮影順 通常→斜め→線光→全消灯→通常 と動き検出（≥1px で撮り直し）、
+2 段評価（patrol = 線なし / inspect = 線あり、線外の見逃しは別枠）、継ぎ目（溝・段差 0.2〜0.5mm）の合成。
+合成 n = 70 で patrol / inspect とも 98〜100%、誤報 0%（**楽観値**。影も線も理想的）。
+API: safety_state の 2 s 周期送信、受け側時計での失効、正常終了の OFFLINE、再接続の上書き、operator_resume は MQTT 不可。
+`tests/test_mqtt_live.py` は Mosquitto をサブプロセス起動する形に書き直した。Mosquitto 2.1.2 を winget で導入し、本物のブローカーで 4 件通した（447 passed）。**注意: インストーラーが Windows サービス（mosquitto、自動起動、1883）を登録して起動した。**
+管理者権限が無く止められなかったので、ユーザーが管理者 PowerShell で `Stop-Service mosquitto; Set-Service mosquitto -StartupType Disabled` を実行する（テストはサービスを使わない）。
+**実写は未**（Q5 タッチパッド / Q7 電源 / Q13 スマホ機種 / 治具写真の回答待ち）。
+
+## Current Goal（2026-09-25 Floor Watch フェーズ 2 更新・旧）
 
 フェーズ 1 のレビュー対応（stop 最優先・待ち行列・retain/LWT・危険物別枠・resolved は人だけ）と、
 フェーズ 2 の画像処理を**合成画像で**通した（`serpens/floorwatch/`: 幾何・光の面の較正・4 枚 → 判定・危険度・データセット）。
@@ -144,12 +156,13 @@ Phase 2/3 の**仮想実機**が揃った（2026-09-15）。SimulatedSnake（PC 
 - ESP32 ⇄ サーボバスの配線方式（`firmware/serpens_esp32/README.md` の「決まっていないこと」）
 - CAD / PCB の担当（憲章はこのリポジトリの作業に含めているが、これまで機械設計は別担当）
 
-## Next Best Actions（2026-09-25 フェーズ 2 後）
+## Next Best Actions（2026-09-26 レビュー対応後）
 
-0. **実写**: 手持ちカメラ + 治具で `docs/floorwatch_phase2.md` §3 の品目を撮り、`tools/floorwatch_eval.py --root` で評価
-1. Mosquitto を PC に入れて `tests/test_mqtt_live.py`（retain / LWT / QoS1 再送）を回す（`pip install paho-mqtt`）
+0. **実写**: 治具（あご LED 6mm 前向き、線光 30mm 横 45°）で `docs/floorwatch_phase2.md` §3 の品目 + 床の継ぎ目を撮り、
+   `tools/floorwatch_eval.py --root` で 2 段評価。合成の 98% / 0% は実写で下がる前提
+1. 管理者で Mosquitto サービスを止めて無効化する（上記）。paho-mqtt は `.venv` に入れた（requirements には入れない）
 2. フェーズ 3: `PoseSource.APRILTAG`、IMU + 歩容オドメトリ、σ の増え方。開始条件は「σ と局所センサーの健全性」で書く（ARUCO→APRILTAG の置換にしない）
-3. 段差（線状）の合成サンプルと形での区別
+3. 候補の種類の分類器（実写が揃ってから）。metal_disc の代用を置き換える
 
 ## Next Best Actions（2026-09-25 Floor Watch フェーズ 1 後・旧）
 

@@ -27,7 +27,7 @@ Serpens 内部の PC → 機体（歩容パラメータ・首角・停止）は�
 
 | task | 必須 | 意味 |
 |---|---|---|
-| `inspect_point` | frame_id, map_version, target{x_m,y_m,yaw_rad} | 地点へ行き、止まり、3 枚撮って判定する |
+| `inspect_point` | frame_id, map_version, target{x_m,y_m,yaw_rad} | 地点へ行き、止まり、5 枚撮って（照明 3 条件 + 全消灯 + 動き確認）判定する |
 | `patrol_route` | frame_id, map_version, waypoints[1..64] | 巡回（各点で inspect） |
 | `highlight_point` | frame_id, map_version, target, (duration_s) | 発見した物の位置を身体で示す（物 → 人 → 物） |
 | `return_dock` | — | ドックへ戻る（MVP では別機能。受理はするが実行は後） |
@@ -58,7 +58,7 @@ FAULT / EMERGENCY（`safety_state` の mode）でも待ち行列を破棄し、�
 |---|---|---|
 | `task_status` | task_id, status, (reason, progress) | |
 | `floor_finding` | finding | 下記 |
-| `safety_state` | mode（7 状態 + OFFLINE）, stop_reason, latched, resume_requires="operator" | **停止後は人の操作なしで再開しない**をそのまま外へ出す。retain。接続断は LWT が `mode: OFFLINE` を retain で出す |
+| `safety_state` | mode（7 状態 + OFFLINE）, stop_reason, latched, resume_requires="operator" | **停止後は人の操作なしで再開しない**をそのまま外へ出す。retain。**変化が無くても周期的に出す**（`api.safety_state_period_ms` = 2 s < 受け側の失効 5 s、`Endpoint.tick`）。異常切断は LWT が `mode: OFFLINE` を retain で出す（keepalive の 1.5 倍後）。**正常終了は LWT が出ないので自分で OFFLINE（stop_reason OPERATOR）を出す**（`Endpoint.close`）。再接続では今の状態で retain を上書きする（`Endpoint.announce`） |
 | `battery` | voltage_v, low, (percent_est) | percent は推定 |
 
 すべての Event に `data_source`（HARDWARE / SIMULATION）。模擬の値を実測と混ぜない。
@@ -70,14 +70,18 @@ FAULT / EMERGENCY（`safety_state` の mode）でも待ち行列を破棄し、�
 | finding_id, t_ms, frame_id, map_version | 識別と座標系 |
 | pose | x_m, y_m, yaw_rad, **sigma_xy_m, sigma_yaw_rad**（姿勢推定の不確かさ）, pose_source（APRILTAG / ODOMETRY_IMU / GROUND_TRUTH_SIM / ARUCO_EXTERNAL / UNKNOWN） |
 | photos[1..3] | kind（normal / raking / line）、**crop_path（候補の切り抜き。原画像は家の外へ出さない）**、w_px, h_px, t_ms, led |
-| candidates[1..5] | kind（coin / button_cell / washer / bead / food_crumb / stain_or_pattern / unknown）, confidence |
-| size | diameter_mm ± sigma_mm、height_mm ± height_sigma_mm（線光。高さ 0 = 汚れ・模様）、method |
+| candidates[1..5] | kind（coin / button_cell / magnet / medicine / **metal_disc** / washer / bead / food_crumb / stain_or_pattern / unknown）, confidence。metal_disc = 分類器ができるまでの代用: 線の途切れ + 円形 + 直径 5〜25mm（ボタン電池の可能性）→ critical_kinds に入れて必ず通知 |
+| size | diameter_mm ± sigma_mm、height_mm ± height_sigma_mm（線光）、**height_reason**（measured / specular_break / off_line / too_few_rows）、method。**測れない高さは 0 ではなく null**（0 は「平ら = 汚れ」と読まれる。鏡面 = 金属 = ボタン電池そのものが 0 になるのが最悪） |
 | risk | ingestion, sharp, child_reachable, child_distance_m（不明は null = 近いとみなす）, **score（複合。サイズのしきい値 1 つで決めない）**, **mandatory_notify + critical_kinds（ボタン電池・磁石・薬は score と別枠。確信度が低くても通知）**, rationale[] |
 | state / state_by | candidate → confirmed →（**人の操作だけ**: state_by=operator）resolved / dismissed。ロボットの再訪は `reobservations[{t_ms, seen, pose_sigma_xy_m}]` に記録するだけで状態を変えない |
 
 ## 5. 受け側（Home AI）の規則
 
-- `safety_state` は `t_ms` が古ければ無効（モックは 5 秒）。retain で残った古い状態を今の状態と取り違えない。
+- `safety_state` の鮮度は**受け側の時計**で「最後に生で届いてからの時間」で判定する（`api.safety_state_max_age_ms` = 5 s。
+  送り側の `t_ms` は時計ずれがあるので使わない）。Serpens は 2 s 周期で出すので、5 s 届かなければ状態不明 = 停止扱い。
+  購読時に retain で届いた値は「最後に知られた状態」で、周期送信が届くまで鮮度は保証しない（`HomeAiMock.safety_fresh`）。
+- **`operator_resume` は MQTT / Home AI から呼べない。** トピックに無く、Task に見せかけた `operator_resume` / `resume` /
+  `clear_fault` / `arm`（フィールドでも）は `rejected`。再開は機体のボタンか運用者の端末（人の操作）だけ。
 - `floor_finding` は `risk.score ≥ 0.5` **または** `risk.mandatory_notify` で通知する。
 
 ## 5'. エラー時の扱い
@@ -86,6 +90,12 @@ FAULT / EMERGENCY（`safety_state` の mode）でも待ち行列を破棄し、�
 - ブローカー断: Serpens は Task を受けられないだけで、機体の安全は既存の Heartbeat / TTL（USB）が守る。この API は安全経路ではない。
 - 版を上げるときは `v` を上げ、旧版は拒否する（黙って解釈しない）。
 
+### 5''. stop と緊急停止（いまの割り切りと将来）
+
+いまは**どの stop も `operator_resume` が要る**（大人が見ている MVP ではこれでよい）。将来は分ける:
+「stop = 取り消し（実行中と待ち行列を捨てる。新しい Task は受ける）」と「緊急停止 = ラッチ（人の操作まで受けない）」。
+分けるときも安全側の既定（分からなければラッチ）は変えない。
+
 ## 6. 通知
 
 Serpens は Event を出すだけ。誰にどう通知するかは Home AI が決める（決定事項 12）。
@@ -93,5 +103,9 @@ MVP では `tests/mocks/home_ai_mock.py` が「受け取ってログに出す We
 
 ## 7. 本物のブローカーで確かめるもの
 
-retain・LWT・QoS1 の再送はループバックでは確かめられない。`tests/test_mqtt_live.py`（paho-mqtt と Mosquitto が
-localhost:1883 にあれば動く。無ければ skip）。ハード不要なのでフェーズ 5 を待たず PC 上で行う。
+retain・LWT・QoS1 の再送はループバックでは確かめられない。`tests/test_mqtt_live.py` が確かめる:
+retain が後からの購読に届く / **LWT が keepalive の約 1.5 倍で出る**（MQTT 3.1.1 §3.1.2.10。テストは keepalive 2 s で
+2〜5 s を許容。ソケットが閉じた場合（プロセス落ち）は即座に出る）/ 正常終了の OFFLINE が即時に出る / 再接続で retain が今の状態に置き換わる / QoS1 + clean_session=False の再送。
+**Mosquitto は常駐サービスにしない**: テストが 127.0.0.1 限定・一時ポート・一時設定（匿名・永続化なし）でサブプロセス起動し、
+終わったら止める。paho-mqtt は開発用の任意依存（`pip install paho-mqtt`。requirements には入れない）。
+mosquitto 実行ファイルは PATH / 環境変数 `SERPENS_MOSQUITTO` / `C:\Program Files\mosquitto` / `%LOCALAPPDATA%\Programs\mosquitto` から探し、無ければ skip。

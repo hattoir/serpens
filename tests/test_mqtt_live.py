@@ -1,33 +1,44 @@
-"""本物の MQTT ブローカーでしか確かめられないもの: retain・LWT・QoS1 の再送。**ハード不要。**
+"""本物の MQTT ブローカーでしか確かめられないもの: retain・LWT（keepalive の 1.5 倍）・正常終了の OFFLINE・
+再接続の上書き・QoS1 の再送。**ハード不要。**
 
-前提（無ければ skip）:
-  - paho-mqtt（`pip install paho-mqtt`。requirements には入れていない）
-  - Mosquitto が localhost:1883 で動いている（`mosquitto -v`）。環境変数 SERPENS_MQTT_HOST で変えられる
+Mosquitto は常駐サービスにしない: このテストが **127.0.0.1 限定・一時ポート・一時設定** でサブプロセス起動し、終わったら止める。
+前提（無ければ skip）: paho-mqtt（開発用の任意依存、`pip install paho-mqtt`）と mosquitto 実行ファイル
+（PATH、SERPENS_MOSQUITTO 環境変数、または C:\\Program Files\\mosquitto\\mosquitto.exe）。
 """
 from __future__ import annotations
 
 import json
 import os
+import shutil
 import socket
+import subprocess
+import sys
 import time
+from pathlib import Path
 
 import pytest
 
 paho = pytest.importorskip("paho.mqtt.client")
 
-HOST = os.environ.get("SERPENS_MQTT_HOST", "127.0.0.1")
-PORT = int(os.environ.get("SERPENS_MQTT_PORT", "1883"))
+KEEPALIVE_S = 2                       # テストを速くするため短く（本番は config api.mqtt_keepalive_s）
+HOST = "127.0.0.1"
 
 
-def _broker_up() -> bool:
-    try:
-        with socket.create_connection((HOST, PORT), timeout=0.5):
-            return True
-    except OSError:
-        return False
+def _mosquitto_exe() -> str | None:
+    for cand in (os.environ.get("SERPENS_MOSQUITTO"), shutil.which("mosquitto"),
+                 r"C:\Program Files\mosquitto\mosquitto.exe", "/usr/sbin/mosquitto", "/opt/homebrew/sbin/mosquitto"):
+        if cand and Path(cand).exists():
+            return cand
+    return None
 
 
-pytestmark = pytest.mark.skipif(not _broker_up(), reason=f"MQTT ブローカーが {HOST}:{PORT} に無い")
+pytestmark = pytest.mark.skipif(_mosquitto_exe() is None, reason="mosquitto 実行ファイルが無い")
+
+
+def _free_port() -> int:
+    with socket.socket() as s:
+        s.bind((HOST, 0))
+        return int(s.getsockname()[1])
 
 
 def _wait(pred, timeout_s: float = 3.0) -> bool:
@@ -39,63 +50,136 @@ def _wait(pred, timeout_s: float = 3.0) -> bool:
     return False
 
 
-def test_retained_safety_state_and_lwt_offline() -> None:
+@pytest.fixture(scope="module")
+def broker_port(tmp_path_factory) -> int:
+    """一時設定で Mosquitto をサブプロセス起動（127.0.0.1 のみ・匿名・永続化なし）。"""
+    port = _free_port()
+    conf = tmp_path_factory.mktemp("mosq") / "mosquitto.conf"
+    conf.write_text(f"listener {port} {HOST}\nallow_anonymous true\npersistence false\nlog_dest stderr\n", encoding="utf-8")
+    proc = subprocess.Popen([_mosquitto_exe(), "-c", str(conf)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0)
+
+    def up() -> bool:
+        try:
+            with socket.create_connection((HOST, port), timeout=0.2):
+                return True
+        except OSError:
+            return False
+    if not _wait(up, 5.0):
+        proc.kill()
+        pytest.skip("Mosquitto が起動しなかった")
+    yield port
+    proc.terminate()
+    try:
+        proc.wait(3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+
+
+def _endpoint(port: int, client_id: str):
     from serpens.api.bridge import PahoBroker, event_topic
     from serpens.api.endpoint import Endpoint, Executor
-
-    topic = event_topic("safety_state")
 
     class Ex(Executor):
         def start(self, task): ...
         def stop(self, reason): ...
-
-    # Serpens 側: will を持って接続し、safety_state を retain で出す
+    topic = event_topic("safety_state")
     will = (topic, {"v": 1, "id": "will-000001", "t_ms": int(time.time() * 1000), "source": "serpens",
                     "event": "safety_state", "data_source": "SIMULATION", "mode": "OFFLINE", "stop_reason": "UNKNOWN",
                     "latched": True, "resume_requires": "operator"}, True)
-    serpens = PahoBroker(HOST, PORT, client_id="serpens-test", will=will)
+    serpens = PahoBroker(HOST, port, client_id=client_id, will=will, keepalive_s=KEEPALIVE_S)
     ep = Endpoint.__new__(Endpoint)                            # set_will を通さずに組む（Paho は接続前に will）
     ep.broker, ep.executor, ep.map_version, ep.data_source = serpens, Ex(), "tags-v0", "SIMULATION"
     ep.clock_ms, ep.statuses, ep.active_task_id, ep.queue = lambda: int(time.time() * 1000), {}, None, []
-    ep.locked_reason, ep.last_stop_t_ms, ep.mode = None, None, "DISARMED"
+    ep.locked_reason, ep.last_stop_t_ms, ep.mode, ep.safety_period_ms = None, None, "DISARMED", 2000
+    ep.last_safety, ep.last_safety_pub_ms = None, None
+    serpens.subscribe("home/serpens/task", ep._on_task)
+    serpens.on_connect(ep.announce)
+    return serpens, ep, topic
+
+
+def _home(port: int, topic: str):
+    from serpens.api.bridge import PahoBroker
+    got: list[tuple[dict, bool, float]] = []
+    home = PahoBroker(HOST, port, client_id="home-test")
+    home.subscribe(topic, lambda _t, m, r: got.append((m, r, time.time())))
+    return home, got
+
+
+def test_retained_safety_state_and_lwt_fires_at_1_5x_keepalive(broker_port: int) -> None:
+    """retain が後からの購読に届く。黙った（ハング・ケーブル抜け）クライアントの LWT は keepalive の 1.5 倍で出る。"""
+    serpens, ep, topic = _endpoint(broker_port, "serpens-lwt")
     ep.safety_state("DRIVING", "NONE", latched=False)
-    time.sleep(0.3)
-
-    # 後から購読した Home AI に retain が届く
-    got: list[tuple[dict, bool]] = []
-    home = PahoBroker(HOST, PORT, client_id="home-test")
-    home.subscribe(topic, lambda _t, m, r: got.append((m, r)))
-    assert _wait(lambda: any(m["mode"] == "DRIVING" for m, _ in got)), got
-    assert any(r for _m, r in got)                               # retain フラグが立っている
-
-    # Serpens が黙って消える → ブローカーが LWT（OFFLINE）を retain で出す
-    serpens._c.loop_stop()
-    serpens._c.socket().close()                                  # disconnect を送らずに切る
-    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _ in got), timeout_s=10.0), got
+    home, got = _home(broker_port, topic)
+    assert _wait(lambda: any(m["mode"] == "DRIVING" for m, _r, _t in got)), got      # 後から購読した側に retain が届く
+    assert any(r for _m, r, _t in got)
+    t_drop = time.time()
+    serpens.freeze()                                                                 # 黙る（PINGREQ が止まる。ソケットは開いたまま）
+    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got), timeout_s=KEEPALIVE_S * 3), got
+    dt = [t for m, _r, t in got if m["mode"] == "OFFLINE"][0] - t_drop
+    assert KEEPALIVE_S * 1.0 <= dt <= KEEPALIVE_S * 2.5, f"LWT まで {dt:.2f}s（期待 ≈ 1.5 × {KEEPALIVE_S}s）"
+    serpens.drop_socket()
     home.close()
 
 
-def test_qos1_redelivery_reaches_a_reconnecting_subscriber() -> None:
+def test_lwt_fires_immediately_when_the_socket_dies(broker_port: int) -> None:
+    """プロセス落ち（FIN/RST が出る）は keepalive を待たずに即座に OFFLINE。"""
+    serpens, ep, topic = _endpoint(broker_port, "serpens-crash")
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    home, got = _home(broker_port, topic)
+    assert _wait(lambda: any(m["mode"] == "DRIVING" for m, _r, _t in got))
+    t_drop = time.time()
+    serpens.drop_socket()
+    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got), timeout_s=KEEPALIVE_S), got
+    assert [t for m, _r, t in got if m["mode"] == "OFFLINE"][0] - t_drop < KEEPALIVE_S
+    home.close()
+
+
+def test_graceful_close_publishes_offline_immediately_and_reconnect_overwrites(broker_port: int) -> None:
+    serpens, ep, topic = _endpoint(broker_port, "serpens-close")
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    home, got = _home(broker_port, topic)
+    assert _wait(lambda: any(m["mode"] == "DRIVING" for m, _r, _t in got))
+    t0 = time.time()
+    ep.close()                                                                       # 正常終了: 自分で OFFLINE、LWT は出ない
+    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got)), got
+    assert [t for m, _r, t in got if m["mode"] == "OFFLINE"][0] - t0 < KEEPALIVE_S * 0.9
+    # 立ち上げ直し → 接続時に今の状態で retain を上書き
+    serpens2, ep2, _ = _endpoint(broker_port, "serpens-close-2")
+    ep2.mode = "DISARMED"
+    assert _wait(lambda: serpens2.connections >= 1)
+    ep2.safety_state("DISARMED", "BOOT", latched=False)
+    late, got_late = _home(broker_port, topic)
+    assert _wait(lambda: any(m["mode"] == "DISARMED" and r for m, r, _t in got_late)), got_late
+    assert not any(m["mode"] == "OFFLINE" for m, _r, _t in got_late)                 # retain は DISARMED に置き換わっている
+    ep2.close()
+    home.close()
+    late.close()
+
+
+def test_qos1_redelivery_reaches_a_reconnecting_subscriber(broker_port: int) -> None:
     """QoS1 + clean_session=False: 切断中に出た Task が再接続後に届く。"""
     import paho.mqtt.client as mqtt
 
     seen: list[dict] = []
-    sub = mqtt.Client(client_id="serpens-durable", clean_session=False)
+    sub = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="serpens-durable", clean_session=False)
     sub.on_message = lambda _c, _u, m: seen.append(json.loads(m.payload))
-    sub.connect(HOST, PORT)
+    sub.connect(HOST, broker_port)
     sub.subscribe("home/serpens/task", qos=1)
     sub.loop_start()
     time.sleep(0.2)
     sub.loop_stop()
     sub.disconnect()                                             # 購読を残したまま離脱
 
-    pub = mqtt.Client(client_id="home-pub")
-    pub.connect(HOST, PORT)
+    pub = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="home-pub")
+    pub.connect(HOST, broker_port)
+    pub.loop_start()                                             # QoS1 の PUBACK を受けるにはループが要る
     pub.publish("home/serpens/task", json.dumps({"v": 1, "id": "t-durable-1", "t_ms": 1, "source": "home_ai",
-                                                  "task": "return_dock"}), qos=1).wait_for_publish()
+                                                  "task": "return_dock"}), qos=1).wait_for_publish(3.0)
+    pub.loop_stop()
     pub.disconnect()
 
-    sub.connect(HOST, PORT)                                      # 再接続 → 溜まっていた QoS1 が届く
+    sub.connect(HOST, broker_port)                               # 再接続 → 溜まっていた QoS1 が届く
     sub.loop_start()
     assert _wait(lambda: any(m["id"] == "t-durable-1" for m in seen)), seen
     sub.loop_stop()

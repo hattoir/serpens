@@ -5,6 +5,7 @@
   - Loopback で Task → 受理/拒否 → Event の往復。Home AI 側モックが受け取る
   - レビュー 1〜5: stop は何があっても受理 / stop・FAULT で待ち行列を破棄しロック / stop 前の Task は rejected /
     retain 付き Task は拒否 / LWT の OFFLINE と古い safety_state の無効化 / 危険物の別枠通知 / resolved は人だけ
+  - レビュー 8〜11（周期送信・operator_resume・正常終了/再接続）は tests/test_task_event_api_review.py
 """
 from __future__ import annotations
 
@@ -38,7 +39,7 @@ def finding(**over: Any) -> dict[str, Any]:
                    {"kind": "raking", "crop_path": "data/findings/f-00000001/raking.png", "w_px": 160, "h_px": 120, "t_ms": 1100},
                    {"kind": "line", "crop_path": "data/findings/f-00000001/line.png", "w_px": 160, "h_px": 120, "t_ms": 1200}],
         "candidates": [{"kind": "washer", "confidence": 0.7}, {"kind": "button_cell", "confidence": 0.2}],
-        "size": {"diameter_mm": 19.0, "sigma_mm": 3.0, "height_mm": 1.5, "height_sigma_mm": 0.8, "method": "line_light"},
+        "size": {"diameter_mm": 19.0, "sigma_mm": 3.0, "height_mm": 1.5, "height_sigma_mm": 0.8, "height_reason": "measured", "method": "line_light"},
         "risk": {"ingestion": 0.8, "sharp": 0.1, "child_reachable": True, "child_distance_m": None, "score": 0.75,
                  "mandatory_notify": True, "critical_kinds": ["button_cell"],
                  "rationale": ["washer/button_cell 19mm", "高さあり（模様ではない）", "子どもの距離 不明 → 近いとみなす"]},
@@ -218,17 +219,19 @@ def test_retained_task_is_rejected(rig) -> None:
     assert ex2.started == [] and "retain" in h2.last_reason(old)
 
 
-def test_lwt_offline_is_retained_and_stale_safety_state_is_ignored(rig) -> None:
-    """3: 接続断で OFFLINE が retain で出る。受け側は古い safety_state を無効にする。"""
+def test_lwt_offline_is_retained_and_staleness_uses_the_receivers_clock(rig) -> None:
+    """3 + 9: 接続断で OFFLINE が retain で出る。鮮度は受け側の時計で「最後に届いてから」で判定（t_ms は使わない）。"""
     broker, ep, ex, home, clock = rig
     ep.safety_state("DRIVING", "NONE", latched=False)
-    assert home.safety["mode"] == "DRIVING"
+    assert home.safety["mode"] == "DRIVING" and home.safety_fresh()
+    clock.t += SAFETY_MAX_AGE_MS + 1                                               # 周期送信が来なければ状態不明
+    assert not home.safety_fresh()
+    assert ep.tick() and home.safety_fresh()                                       # 変化が無くても出し直す
     broker.simulate_disconnect()
     assert home.safety["mode"] == "OFFLINE" and home.safety["latched"] and home.safety["resume_requires"] == "operator"
     assert [p for p in broker.log if p.retain][-1].payload["mode"] == "OFFLINE"
-    clock.t += SAFETY_MAX_AGE_MS + 1                                               # 時間が経ってから購読
-    late = HomeAiMock(broker, map_version=MAP, clock_ms=clock)
-    assert late.safety is None and late.stale and late.stale[0]["mode"] == "OFFLINE"
+    late = HomeAiMock(broker, map_version=MAP, clock_ms=clock)                    # 後から購読: retain 分は鮮度を保証しない
+    assert late.safety["mode"] == "OFFLINE" and late.safety_retained and not late.safety_fresh()
 
 
 def test_critical_kinds_notify_even_with_low_confidence(rig) -> None:

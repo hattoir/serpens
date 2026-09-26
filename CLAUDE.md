@@ -291,6 +291,13 @@ OBSERVE → PRIORITIZE → DESIGN → BUILD → TEST → CRITIQUE → FIX → DO
 <!-- END:agent-os -->
 
 # serpens — このプロジェクト固有
+## CAD・ハードウェア作業の共通認識
+
+CAD・機構・部品配置・機械仕様に関わる作業では、最初に **[CAD.md](CAD.md)** を読む。
+2026-09-26のFloor Watch MVPは5サーボ（J1 Pitch、J2〜J5 Yaw）・車輪なし腹面。
+以下に残る9軸説明は従来構成であり、現MVPのCAD構成と混同しない。
+CAD.mdの値は確度と検証範囲を確認し、既存の制御設定を自動で置き換えない。
+
 
 > Serpens EX-1 — 9軸（胴体ヨー×6 + 首ピッチ J7 + 頭ヨー J8 + 頭ロール J9）ヘビ型ロボット制御。
 
@@ -301,6 +308,7 @@ OBSERVE → PRIORITIZE → DESIGN → BUILD → TEST → CRITIQUE → FIX → DO
 
 ## 作業を始める前に読む
 
+0. **`../PRODUCT.md`** — プロダクト全体の共通認識（何を作るか・変えない原則・現在地）。**矛盾する作業をしない**
 1. **`docs/product_status.md`** — サブシステムごとの現在地と、実機が無くても進む作業の優先順。**一次資料**
 2. `agent/STATE.md` — セッション間の引き継ぎ・仮定・検証記録
 3. `agent/ROADMAP.md` — 構想設計書のフェーズとの対応
@@ -313,7 +321,7 @@ OBSERVE → PRIORITIZE → DESIGN → BUILD → TEST → CRITIQUE → FIX → DO
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-439 件通るのが正常（2026-09-25 Floor Watch フェーズ 2 時点。MuJoCo 未導入の環境では 16 件 skip）。**1 件でも落ちたら先に直す。**
+447 件通るのが正常（2026-09-26 Floor Watch レビュー対応時点。MuJoCo 未導入の環境では 16 件 skip、mosquitto 実行ファイルが無い環境では `tests/test_mqtt_live.py` の 4 件 skip）。**1 件でも落ちたら先に直す。**
 このリポジトリのテストは安全機構の振る舞いを直接検証しているので、
 落ちたテストを「タイミングの問題」として通す方向に直してはいけない
 （実際に 1 件、テストが正しくて実装が間違っていた例がある。`agent/DECISIONS.md` 参照）。

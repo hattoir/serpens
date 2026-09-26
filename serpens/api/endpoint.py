@@ -5,11 +5,15 @@ locomotion / behavior へ繋ぐ）に渡す。ここでは**安全の設定は�
 
 規則（docs/task_event_api.md）:
   - **stop は何より先に判定し、版違い・スキーマ違反・map_version 違いでも受理する**（止める方向は常に通す）
-  - stop / FAULT / EMERGENCY で待ち行列を破棄し、人の操作（operator_resume）まで新しい Task を受けない
+  - stop / FAULT / EMERGENCY で待ち行列を破棄し、人の操作（operator_resume）まで新しい Task を受けない。
+    **operator_resume は MQTT / Home AI からは呼べない**（トピックに無い。Task に見せかけても拒否）
   - stop より前に発行された Task（t_ms が stop の t_ms 以前。QoS1 再送・再接続で後から届く）は rejected
   - Task トピックの retain は禁止: retain 付きで届いた Task は rejected
   - 同じ id の再送は冪等（前回と同じ task_status を返す）
   - Event には必ず data_source（HARDWARE / SIMULATION）。safety_state は retain、LWT で OFFLINE を retain
+  - safety_state は変化時だけでなく **周期的（api.safety_state_period_ms < 受け側の失効 5s）** に出す（`tick`）。
+    受け側は自分の時計で「最後に届いてからの時間」で失効を判定する（送り側の t_ms は使わない）
+  - LWT は異常切断でしか出ない → 正常終了では自分で OFFLINE を出す（`close`）。再接続では今の状態で上書き（`announce`）
   - finding の resolved / dismissed は人の操作だけ（state_by=operator）。ロボットの再訪は reobservations に留める
 """
 from __future__ import annotations
@@ -21,9 +25,11 @@ from typing import Any, Callable
 
 from serpens.api.bridge import QOS, RETAINED_EVENTS, TOPIC_TASK, Broker, event_topic
 from serpens.api.validate import validate_event, validate_task
+from serpens.config import load_config
 
 API_VERSION = 1
 LOCKING_MODES = ("FAULT_HOLD", "EMERGENCY_LATCHED", "TORQUE_DISABLED", "OFFLINE")
+RESUME_WORDS = ("operator_resume", "resume", "clear_fault", "arm")   # MQTT から来たらそれだけで拒否
 
 
 class Executor:
@@ -57,25 +63,31 @@ class Endpoint:
     map_version: str
     data_source: str = "SIMULATION"              # 実機のときだけ HARDWARE
     clock_ms: Callable[[], int] = lambda: int(time.time() * 1000)
+    safety_period_ms: int | None = None          # None → config api.safety_state_period_ms
     statuses: dict[str, dict[str, Any]] = field(default_factory=dict)   # task id → 最後の task_status
     active_task_id: str | None = None
     queue: list[dict[str, Any]] = field(default_factory=list)           # 受理済みで未開始の Task
     locked_reason: str | None = None            # stop / FAULT / EMERGENCY 後。人の操作で解く
     last_stop_t_ms: int | None = None           # これ以前に発行された Task は捨てる
     mode: str = "DISARMED"
+    last_safety: dict[str, Any] | None = None   # 最後に出した safety_state のフィールド（周期送信・再接続で再送）
+    last_safety_pub_ms: int | None = None
 
     def __post_init__(self) -> None:
-        self.broker.set_will(event_topic("safety_state"), self._offline_payload(), retain=True)
+        if self.safety_period_ms is None:
+            self.safety_period_ms = int(load_config()["api"]["safety_state_period_ms"])
+        self.broker.set_will(event_topic("safety_state"), self._offline_payload("UNKNOWN"), retain=True)
         self.broker.subscribe(TOPIC_TASK, self._on_task)
+        self.broker.on_connect(self.announce)
 
     # ---- 送信 -------------------------------------------------------------------
     def _base(self, event: str) -> dict[str, Any]:
         return {"v": API_VERSION, "id": str(uuid.uuid4()), "t_ms": self.clock_ms(), "source": "serpens",
                 "event": event, "data_source": self.data_source}
 
-    def _offline_payload(self) -> dict[str, Any]:
-        """LWT: 接続が切れたらブローカーがこれを retain で出す（t_ms は接続時の値。受け側は古さで無効にする）。"""
-        return {**self._base("safety_state"), "mode": "OFFLINE", "stop_reason": "UNKNOWN", "latched": True,
+    def _offline_payload(self, stop_reason: str) -> dict[str, Any]:
+        """LWT / 正常終了の OFFLINE。LWT の t_ms は接続時の値なので受け側は t_ms で鮮度を判断しない。"""
+        return {**self._base("safety_state"), "mode": "OFFLINE", "stop_reason": stop_reason, "latched": True,
                 "resume_requires": "operator"}
 
     def emit(self, event: str, **fields: Any) -> dict[str, Any]:
@@ -103,7 +115,37 @@ class Endpoint:
         fields: dict[str, Any] = {"mode": mode, "stop_reason": stop_reason, "latched": latched, "resume_requires": "operator"}
         if telemetry_age_ms is not None:
             fields["telemetry_age_ms"] = telemetry_age_ms
-        self.emit("safety_state", **fields)
+        self.last_safety = fields
+        self._publish_safety()
+
+    def _publish_safety(self) -> None:
+        if self.last_safety is not None:
+            self.emit("safety_state", **self.last_safety)
+            self.last_safety_pub_ms = self.clock_ms()
+
+    def tick(self) -> bool:
+        """周期送信: 前回から safety_period_ms 以上経っていれば同じ safety_state を出し直す（変化が無くても）。"""
+        if self.last_safety is None:
+            return False
+        if self.last_safety_pub_ms is None or self.clock_ms() - self.last_safety_pub_ms >= int(self.safety_period_ms or 0):
+            self._publish_safety()
+            return True
+        return False
+
+    def announce(self) -> None:
+        """（再）接続直後: retain に残っている古い状態（LWT の OFFLINE など）を今の状態で上書きする。"""
+        if self.last_safety is None:
+            self.last_safety = {"mode": self.mode, "stop_reason": "BOOT", "latched": self.mode in LOCKING_MODES,
+                                "resume_requires": "operator"}
+        self._publish_safety()
+
+    def close(self) -> None:
+        """正常終了。LWT は異常切断でしか出ないので、自分で OFFLINE を retain で出してから切る。"""
+        self.broker.publish(event_topic("safety_state"), self._offline_payload("OPERATOR"), qos=QOS, retain=True)
+        self.last_safety = None
+        closer = getattr(self.broker, "close", None)
+        if callable(closer):
+            closer()
 
     def floor_finding(self, finding: dict[str, Any]) -> dict[str, Any]:
         errs = finding_rule_errors(finding)
@@ -118,7 +160,7 @@ class Endpoint:
         self.emit("battery", **fields)
 
     def operator_resume(self) -> None:
-        """人の操作。stop / FAULT 後のロックを解く（自動では解かない）。"""
+        """人の操作（機体のボタン / 運用者の端末）。stop / FAULT 後のロックを解く。**MQTT からは到達しない。**"""
         self.locked_reason = None
 
     # ---- 受信 -------------------------------------------------------------------
@@ -140,6 +182,9 @@ class Endpoint:
             self._discard_queue(f"stop {task_id}")
             self.locked_reason = f"stop {task_id}"
             self.task_status(task_id, "accepted")
+            return
+        if str(msg.get("task", "")).lower() in RESUME_WORDS or any(k in RESUME_WORDS for k in msg):
+            self.task_status(task_id, "rejected", "再開・解除は MQTT / Home AI からはできない（人の操作だけ）")
             return
         if retained:                                       # Task トピックの retain は禁止
             self.task_status(task_id, "rejected", "retain 付きの Task は受け付けない")

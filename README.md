@@ -368,7 +368,8 @@ XIAO ESP32S3（頭部）は別の USB で PC に接続します（115200 bps、�
 .\.venv\Scripts\python.exe tools\pilot_order.py --participants 10 --seed 42
 .\.venv\Scripts\python.exe tools\pilot_analysis.py output\pilot\responses.csv --key output\pilot\clip_key.json
 # Floor Watch: Home AI との Task / Event API（docs/task_event_api.md、schemas/*.json）は pytest で検証（ハード不要）
-# Floor Watch の画像処理を合成データで評価（SIMULATED。実写は data/floorwatch/<set> を --root で）
+# Floor Watch の画像処理を合成データで 2 段（patrol / inspect）評価（SIMULATED。実写は data/floorwatch/<set> を --root で）
+# 本物の MQTT（retain / LWT / QoS1）: pip install paho-mqtt（開発用の任意依存）+ mosquitto 実行ファイルがあれば tests/test_mqtt_live.py が一時ポートで起動して検証
 .\.venv\Scripts\python.exe tools\floorwatch_eval.py --synthetic
 # 動きの質（静止率・一次反応・GAR・可視波数・LDJ。KINEMATIC_SIM。回帰指標であって人の評価の代替ではない）
 .\.venv\Scripts\python.exe tools\motion_quality.py
