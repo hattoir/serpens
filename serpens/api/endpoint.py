@@ -72,6 +72,7 @@ class Endpoint:
     mode: str = "DISARMED"
     last_safety: dict[str, Any] | None = None   # 最後に出した safety_state のフィールド（周期送信・再接続で再送）
     last_safety_pub_ms: int | None = None
+    closed: bool = False                        # close() 後。OFFLINE の後に announce / tick で古い状態を出し直さない
 
     def __post_init__(self) -> None:
         if self.safety_period_ms is None:
@@ -134,15 +135,19 @@ class Endpoint:
 
     def announce(self) -> None:
         """（再）接続直後: retain に残っている古い状態（LWT の OFFLINE など）を今の状態で上書きする。"""
+        if self.closed:                                    # 正常終了の途中で再接続しても OFFLINE を上書きしない
+            return
         if self.last_safety is None:
             self.last_safety = {"mode": self.mode, "stop_reason": "BOOT", "latched": self.mode in LOCKING_MODES,
                                 "resume_requires": "operator"}
         self._publish_safety()
 
     def close(self) -> None:
-        """正常終了。LWT は異常切断でしか出ないので、自分で OFFLINE を retain で出してから切る。"""
-        self.broker.publish(event_topic("safety_state"), self._offline_payload("OPERATOR"), qos=QOS, retain=True)
+        """正常終了。LWT は異常切断でしか出ないので、自分で OFFLINE を retain で出してから切る。
+        先に状態を捨てる: announce（ネットワークスレッド）や tick（主ループ）が OFFLINE の後に古い状態を出さないように。"""
+        self.closed = True
         self.last_safety = None
+        self.broker.publish(event_topic("safety_state"), self._offline_payload("OPERATOR"), qos=QOS, retain=True)
         closer = getattr(self.broker, "close", None)
         if callable(closer):
             closer()

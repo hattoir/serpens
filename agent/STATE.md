@@ -4,6 +4,11 @@
 
 _last updated: 2026-09-14_
 
+## 2026-09-29 MQTT: 生きている機体が OFFLINE と出る不具合を直した（SOFTWARE_VERIFIED、詳細は DECISIONS 同日 / DEC-SERPENS-0001）
+
+`PahoBroker.publish` がネットワークスレッド上で PUBACK を 2 s 待って固まり、keepalive 切れで LWT が出ていた。
+試験側の client_id 衝突（`home-test` ×2）がそれを隠していた。残り: `Endpoint(PahoBroker)` は `set_will` が例外になり組めない（試験は `__new__` で回避）／切断中の publish は paho が RuntimeError を投げる（主ループまで上がる）。
+
 ## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
 
 レビュー 1〜7 と 8〜11 を実装した。画像処理は**基準床を使わない**（実機では同じ視点の空の床が無い）形に変え、
