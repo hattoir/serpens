@@ -1,0 +1,308 @@
+{
+  "source": "KINEMATIC_SIM（側面視 2D、y = 0 断面、0.5 mm 格子）。安全の判定ではない",
+  "results": [
+    {
+      "kind": "RECOVERY",
+      "rows": [
+        {
+          "phi_deg": 0,
+          "overlap_mm2": 0.0,
+          "n_gaps": 11,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 43.7
+        },
+        {
+          "phi_deg": 5,
+          "overlap_mm2": 0.0,
+          "n_gaps": 12,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 40.2
+        },
+        {
+          "phi_deg": 10,
+          "overlap_mm2": 0.0,
+          "n_gaps": 12,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 37.3
+        },
+        {
+          "phi_deg": 15,
+          "overlap_mm2": 0.0,
+          "n_gaps": 12,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 33.1
+        },
+        {
+          "phi_deg": 20,
+          "overlap_mm2": 0.0,
+          "n_gaps": 12,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 28.9
+        },
+        {
+          "phi_deg": 25,
+          "overlap_mm2": 0.0,
+          "n_gaps": 12,
+          "gaps_8_25_mm": [
+            24.7
+          ],
+          "min_gap_mm": 24.7
+        },
+        {
+          "phi_deg": 30,
+          "overlap_mm2": 0.0,
+          "n_gaps": 8,
+          "gaps_8_25_mm": [
+            20.5
+          ],
+          "min_gap_mm": 20.5
+        },
+        {
+          "phi_deg": 35,
+          "overlap_mm2": 0.0,
+          "n_gaps": 7,
+          "gaps_8_25_mm": [
+            16.3
+          ],
+          "min_gap_mm": 16.3
+        },
+        {
+          "phi_deg": 40,
+          "overlap_mm2": 0.0,
+          "n_gaps": 7,
+          "gaps_8_25_mm": [
+            12.1,
+            21.4
+          ],
+          "min_gap_mm": 12.1
+        },
+        {
+          "phi_deg": 45,
+          "overlap_mm2": 0.0,
+          "n_gaps": 7,
+          "gaps_8_25_mm": [
+            8.0,
+            17.0,
+            23.6
+          ],
+          "min_gap_mm": 8.0
+        }
+      ],
+      "closing_gaps": [
+        {
+          "r_mm": 48,
+          "gap_mm_by_phi": [
+            [
+              0,
+              45.7
+            ],
+            [
+              5,
+              41.5
+            ],
+            [
+              10,
+              37.3
+            ],
+            [
+              15,
+              33.1
+            ],
+            [
+              20,
+              28.9
+            ],
+            [
+              25,
+              24.7
+            ],
+            [
+              30,
+              20.5
+            ],
+            [
+              35,
+              16.3
+            ],
+            [
+              40,
+              12.1
+            ],
+            [
+              45,
+              8.0
+            ]
+          ]
+        },
+        {
+          "r_mm": 50,
+          "gap_mm_by_phi": [
+            [
+              0,
+              56.3
+            ],
+            [
+              5,
+              51.9
+            ],
+            [
+              10,
+              47.6
+            ],
+            [
+              15,
+              43.2
+            ],
+            [
+              20,
+              38.8
+            ],
+            [
+              25,
+              34.5
+            ],
+            [
+              30,
+              30.1
+            ],
+            [
+              35,
+              25.7
+            ],
+            [
+              40,
+              21.4
+            ],
+            [
+              45,
+              17.0
+            ]
+          ]
+        },
+        {
+          "r_mm": 52,
+          "gap_mm_by_phi": [
+            [
+              0,
+              64.4
+            ],
+            [
+              5,
+              59.9
+            ],
+            [
+              10,
+              55.4
+            ],
+            [
+              15,
+              50.8
+            ],
+            [
+              20,
+              46.3
+            ],
+            [
+              25,
+              41.7
+            ],
+            [
+              30,
+              37.2
+            ],
+            [
+              35,
+              32.7
+            ],
+            [
+              40,
+              28.1
+            ],
+            [
+              45,
+              23.6
+            ]
+          ]
+        }
+      ],
+      "n_closing_radii": 3
+    },
+    {
+      "kind": "VISOR",
+      "rows": [
+        {
+          "phi_deg": 0,
+          "overlap_mm2": 0.0,
+          "n_gaps": 4,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 91.6
+        },
+        {
+          "phi_deg": 5,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 87.3
+        },
+        {
+          "phi_deg": 10,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 82.9
+        },
+        {
+          "phi_deg": 15,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 78.5
+        },
+        {
+          "phi_deg": 20,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 74.2
+        },
+        {
+          "phi_deg": 25,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 69.8
+        },
+        {
+          "phi_deg": 30,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 65.4
+        },
+        {
+          "phi_deg": 35,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 61.1
+        },
+        {
+          "phi_deg": 40,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 56.7
+        },
+        {
+          "phi_deg": 45,
+          "overlap_mm2": 0.0,
+          "n_gaps": 5,
+          "gaps_8_25_mm": [],
+          "min_gap_mm": 52.4
+        }
+      ],
+      "closing_gaps": [],
+      "n_closing_radii": 0
+    }
+  ]
+}

@@ -117,3 +117,10 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - CSAR の振り付け: `docs/design/csar_choreography_2026-09-29.md`（状態 × 子どもの状況、UNKNOWN = NEAR 扱い、禁止候補、Engineering への数値の問い、OPEN-010）
 - Head Yaw の評価、ENTRY-0011 の代替案 A〜G（Design の推し順は A → C → G＋E）、人の評価のフォーマット、backlog: `docs/design/sd01_variants_and_fallbacks_2026-09-29.md`
 - 次: SD-01E の頭を Recovery copy に別コンポーネントで作る → 人の評価用の描き出し（`tools/fusion_render_set.md`）→ Head Yaw の首の意匠
+
+## 更新（2026-09-29 夜）
+
+- Fusion が一度戻った間に、Recovery copy（v4 で保存）へ **SD-01E の頭**を別コンポーネントとして追加（HEAD A は無変更、J1E ジョイントつき、既定は非表示）。人の評価用の描き出し 16 枚（A / E × 4 姿勢 × 横・真上）
+- **J1 頭–首の入れ子 VISOR** を 2D で検討: いまの形は頭を上げると外から届くすき間が閉じる（25° から）。VISOR ならどの角度でも届く 8〜25 mm のすき間なし・重なり 0（KINEMATIC_SIM、ENTRY-0013 に追記）。**P0 の案として Engineering 待ち**
+- 描き出しの途中で Fusion がまた応答しなくなった。正面・3/4 の撮り直しは次の Fusion 作業
+- 次: (1) 正面・3/4 の撮り直し (2) VISOR を Recovery copy の別コンポーネントで形にする（元の首・頭は残す）(3) Head Yaw の首の意匠 (4) 目の光り方の絵
