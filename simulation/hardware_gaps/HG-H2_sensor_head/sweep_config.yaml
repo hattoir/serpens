@@ -1,0 +1,26 @@
+# HG-H2 — 掃引の設定。1 変数ずつ（OAT）振り、残りは nominal
+workers: 12
+seed: 20260929
+oat:
+  fov_h_deg: [50.0, 80.0, 100.0]
+  width_px: [640, 1024, 2048]          # 縦は 4:3 で決める
+  cam_height_mm: [20.0, 45.0, 60.0]
+  cam_pitch_deg: [15.0, 35.0, 50.0]
+  distortion_k1: [-0.10, -0.20, -0.35]
+  focus_mm: [70.0, 200.0, 500.0, 5000.0]
+  aperture_mm: [0.5, 1.5]
+  motion_blur_px: [2.0, 5.0, 10.0]
+  exposure_gain: [0.5, 1.5, 2.5]
+  read_noise: [5.0, 10.0]
+  floor_albedo: [0.2, 0.8]
+  raking_led_height_mm: [3.0, 12.0, 25.0]
+  shadow_factor: [0.2, 0.6, 0.85]
+  line_width_mm: [1.0, 6.0]
+  ambient_lux: [50.0, 150.0]
+# 最悪側の組み合わせ（固定焦点が遠く + ぶれ + 暗い床 + 歪み）
+worst_case:
+  focus_mm: 5000.0
+  motion_blur_px: 5.0
+  floor_albedo: 0.2
+  distortion_k1: -0.20
+  exposure_gain: 0.5

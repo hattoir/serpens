@@ -1,0 +1,46 @@
+# HG-H2 センサーヘッド — 仮定（**すべて探索用。実カメラ未購入**）
+gap_id: HG-H2_sensor_head
+gap_class: [SENSOR_GAP]
+label: SYNTHETIC_SENSOR_SIM          # 合成画像での性能（SOFTWARE / PHYSICS_SIM 扱い）。実画像の性能とは分ける
+
+# 基準の条件（config/robot.yaml floor_watch の ASSUMED 値に合わせる）
+nominal:
+  fov_h_deg: 65.0                    # 水平画角。f = W/2 / tan(FOV/2)（config の f_px 1256 @ 1600px と同じ）
+  width_px: 1600                     # UXGA 静止画（床見）
+  height_px: 1200
+  cam_height_mm: 30.0
+  cam_pitch_deg: 25.0
+  distortion_k1: 0.0                 # 放射歪み（正規化座標）。0 = ピンホール。検出器はピンホールを仮定する
+  aperture_mm: 1.0                   # 有効口径 = 焦点距離 / F 値（小型モジュールで 0.6〜1.5 程度、ASSUMPTION）
+  focus_mm: 100.0                    # ピントの合う距離（固定焦点モジュールは遠くに合わせてあることが多い = UNKNOWN）
+  motion_blur_px: 0.0                # 撮影中の横ぶれ
+  exposure_gain: 1.0
+  read_noise: 2.0                    # 画素値の標準偏差
+  shot_noise_k: 0.05                 # 光子ショット雑音: σ² = read² + k · 画素値
+  floor_albedo: 0.5
+  raking_led_height_mm: 6.0
+  shadow_factor: 0.35                # 斜め照明の影の暗さ（0 = 真っ暗、1 = 影なし）。LED の明るさと環境光で変わる
+  line_width_mm: 3.0
+  ambient_lux: 8.0
+
+# 小物の代わり（円盤で近似。高さ = 厚み、albedo = 明るさ。色は明るさに縮めている = 限界）
+surrogates:
+  coin_1yen:       {kind: coin,        diameter_mm: 20.0, height_mm: 1.5, albedo: 0.85, specular: false}
+  button_cr2032:   {kind: button_cell, diameter_mm: 20.0, height_mm: 3.2, albedo: 0.75, specular: true}
+  button_lr44:     {kind: button_cell, diameter_mm: 11.6, height_mm: 5.4, albedo: 0.75, specular: true}
+  bead_6mm:        {kind: bead,        diameter_mm: 6.0,  height_mm: 6.0, albedo: 0.70, specular: false}
+  pill_white:      {kind: medicine,    diameter_mm: 8.0,  height_mm: 3.5, albedo: 0.95, specular: false}
+  magnet_neo:      {kind: magnet,      diameter_mm: 10.0, height_mm: 3.0, albedo: 0.70, specular: true}
+  magnet_ferrite:  {kind: magnet,      diameter_mm: 10.0, height_mm: 4.0, albedo: 0.10, specular: false}
+  crumb:           {kind: food_crumb,  diameter_mm: 4.0,  height_mm: 2.0, albedo: 0.45, specular: false}
+negatives:
+  stain_dark:  {albedo: 0.30, diameter_mm: 18.0}
+  stain_light: {albedo: 0.70, diameter_mm: 18.0}
+  seam_groove: {along: x, height_mm: 0.5}
+critical_kinds: [button_cell, magnet, medicine]    # 危険物（config floor_watch.risk.critical_kinds と同じ系統）
+
+# 合否の基準（ASSUMPTION）
+criteria:
+  min_recall_inspect: 0.90           # 停止して線光あり（線上の物）
+  min_recall_patrol: 0.70            # 巡回中（線なし）
+  max_false_alarm: 0.20

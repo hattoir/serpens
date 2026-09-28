@@ -1,0 +1,46 @@
+# HG-H0 摩擦 — 仮定（**すべて探索用。実測値ではない**）
+# 値を変えたら run.py を回し直す。実測 CSV が来たら run.py --measured で上書きの材料にする（この表は書き換えない）。
+gap_id: HG-H0_friction
+gap_class: [PARAMETER_GAP, MODEL_GAP]   # μ の値（PARAMETER）と、異方性摩擦の法則の形（MODEL）
+label: PLANAR_FRICTION_SIM              # PHYSICS_SIM の一種。HARDWARE_VERIFIED にしない
+
+# 比べる構成（config の overlay）。名前は User 指示（2026-09-29）の表記と対応させる
+configs:
+  FW5:              {overlay: config/robot_fw5.yaml,              motors: 5, body_yaw: 4, head_yaw: false, note: "現行 CAD（FW03）。4 Body Yaw + Head Pitch"}
+  FW6_HEADYAW:      {overlay: config/robot_fw6_headyaw.yaml,      motors: 6, body_yaw: 4, head_yaw: true,  note: "6 モーター案 B。4 Body Yaw + Head Pitch + Head Yaw"}
+  FW6_YAW5:         {overlay: config/robot_fw6_yaw5.yaml,         motors: 6, body_yaw: 5, head_yaw: false, note: "6 モーター案 A。5 Body Yaw + Head Pitch"}
+  FW7_YAW5_HEADYAW: {overlay: config/robot_fw7_yaw5_headyaw.yaml, motors: 7, body_yaw: 5, head_yaw: true,  note: "5 Body Yaw + Head Pitch + Head Yaw（7 本。参照）"}
+  FW7_YAW6:         {overlay: config/robot_fw7_yaw6.yaml,         motors: 7, body_yaw: 6, head_yaw: false, note: "6 Body Yaw + Head Pitch 相当（7 本。参照）"}
+
+# 合否の基準（ASSUMPTION。Floor Watch の巡回に要る最低限の目安）
+criteria:
+  min_speed_mm_s: 50.0          # 4m 四方の部屋の外周 16m を 5 分強
+  max_turn_radius_mm: 600.0     # 家具のあいだで向きを変えられる程度（体長 0.6〜0.8m）
+  torque_margin: 0.8            # 必要トルク ≤ 上限 × これ
+  software_torque_limit_nm: 0.45
+  joint_limit_deg: 50.0         # software_operational_limit。振幅 + 旋回の γ はこれを超えられない
+  drift_authority: 0.5          # 直進のずれ ≤ 使える γ で出せる旋回 × これ（残りは本当の旋回に使う）
+
+# 床ごとの事前分布（**探索用の幅**。User 指示の探索範囲 μ_forward 0.1–1.2 / μ_lateral 0.1–2.0 の中に置く）
+# ratio = μ_lateral / μ_forward。腹面インサート（PETG / TPU、平ら / 鱗 / 畝）の違いは ratio の幅に含める
+floors:
+  WOOD:   {mu_forward: [0.15, 0.50], ratio: [1.0, 3.0], lr_asym: 0.10, fb_ratio: [0.8, 2.0], ks_spread: 0.20, point_sigma: 0.05}
+  RUG:    {mu_forward: [0.30, 0.90], ratio: [1.0, 5.0], lr_asym: 0.15, fb_ratio: [0.8, 3.0], ks_spread: 0.25, point_sigma: 0.15}
+  CARPET: {mu_forward: [0.40, 1.20], ratio: [1.0, 8.0], lr_asym: 0.20, fb_ratio: [0.8, 3.0], ks_spread: 0.30, point_sigma: 0.25}
+# lr_asym   … 左右の差の最大（μ_left = μ_lat(1+a)、μ_right = μ_lat(1−a)、a は ±この幅で一様）
+# fb_ratio  … μ_back / μ_forward の幅
+# ks_spread … 静止摩擦で測った比と、滑っているときの比のずれ（方向ごとに違う倍率 1〜1+これ）
+# point_sigma … 接地点ごとの μ のばらつき（床のむら・摩耗。対数正規の σ）
+
+# Wheel Belly（受動輪）の事前分布。同じモデルで「前後 = 転がり抵抗、横 = ゴムの横滑り」とみなす
+wheel:
+  WOOD:   {mu_roll: [0.01, 0.04], mu_side: [0.5, 0.9]}
+  RUG:    {mu_roll: [0.05, 0.15], mu_side: [0.4, 0.8]}
+  CARPET: {mu_roll: [0.08, 0.25], mu_side: [0.4, 0.8]}
+  geometry: FW5                 # 現行 CAD の胴に車輪を付けた場合
+
+# 摩擦法則の形（MODEL GAP）。前後・横の値だけでは区別できない（45° の滑り方向で区別できる）
+laws: {decoupled: 0.5, ellipse: 0.5}   # Monte Carlo での事前確率
+
+gait:
+  freq_hz: 0.5                  # 展示機の既定。サーボ速度の余裕は HG-H1 で見る
