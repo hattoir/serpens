@@ -154,3 +154,19 @@ def test_the_floor_line_recovers_camera_height_and_pitch_errors(cfg: dict, setup
     fixed = replace(cam, height_mm=cam.height_mm + dh, pitch_deg=cam.pitch_deg + dp).floor_point(bx + bw / 2, by + bh)
     raw = cam.floor_point(bx + bw / 2, by + bh)
     assert abs(fixed[1] - 65.0) < 3.0 < abs(raw[1] - 65.0)      # 手前の縁 65mm: 名目では大きくずれ、補正で戻る
+
+
+def test_brow_line_traced_by_column_reads_coins_and_tall_parts(cfg: dict, setup) -> None:
+    """VIS-0004: 眉の線（左右に走る）を列ごとに追うと、平たい硬貨は頬と同じく読め、背の高い細い物は頬より実際に近い。"""
+    from serpens.floorwatch.detect import scaled_thresholds
+    from simulation.h2_brow_line import compare_on_object
+    from simulation.h2_line_light import placements
+    cam, cheek, lt = setup
+    det = scaled_thresholds(cfg, cam)
+    brow = next(p for p in placements(cfg) if p.name == "brow_z64_y71").plane()
+    coin = compare_on_object(cfg, cam, cheek, brow, 71.0, lt, Disc(0.0, 71.0, 20.0, 1.5, 0.85), 1, det)
+    assert coin["brow"]["height_mm"] == pytest.approx(1.5, abs=0.2) and coin["cheek"]["height_mm"] == pytest.approx(1.5, abs=0.2)
+    pill = compare_on_object(cfg, cam, cheek, brow, 71.0, lt, Disc(0.0, 71.0, 8.0, 3.5, 0.9), 1, det)
+    assert abs(pill["brow"]["height_mm"] - 3.5) < abs(pill["cheek"]["height_mm"] - 3.5)
+    cell = compare_on_object(cfg, cam, cheek, brow, 71.0, lt, Disc(0.0, 71.0, 20.0, 3.2, 0.9, True), 1, det)
+    assert cell["brow"]["dropout"] and cell["cheek"]["dropout"]                 # 鏡面は両方で途切れる（metal_disc の証拠）
