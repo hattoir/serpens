@@ -1,7 +1,7 @@
 # Decision candidate DEC-CAND-DESIGN-0001 — 外観の方向 SD-01「Bean head ＋ 同心ナックル」
 
 - Project: serpens / Agent: Design / Run: DESIGN-2026-09-29-01 / Date: 2026-09-29
-- **状態: 提案（正式 Decision ではない）。** Engineering の確認（integration-log ENTRY-0005〜0011）と User の判断が要る
+- **状態: 継続検討（User、2026-09-29、USER-DEC-SERPENS-DESIGN-0001 #3）。CAD_CONCEPT / KINEMATIC_SIM。** 4 mm 一定の gap は安全確定ではない（Engineering 検証待ち）。ENTRY-0011 は Engineering 回答待ち
 - 根拠の詳細: `docs/design/concepts_2026-09-29.md`、数値: `docs/design/results/concept_metrics_2026-09-29.json`（DESIGN_ESTIMATE、HUMAN_EVALUATED = 0）
 
 ## Decision（案）

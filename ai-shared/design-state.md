@@ -2,16 +2,30 @@
 
 Design Agent が現在の設計状態を書く（Engineering Agent は書き換えない）。
 
-Last updated: 2026-09-29（Run DESIGN-2026-09-29-01）
+Last updated: 2026-09-29（Run DESIGN-2026-09-29-01、User Decision USER-DEC-SERPENS-DESIGN-0001 を反映）
 Updated by: Design Agent（Claude Code）
 Git branch: `agent/design-floor-watch`（commit は別 worktree で行う。共有の作業ツリーの HEAD は動かさない。ENTRY-0004）
 
 **HUMAN_EVALUATED = 0 / HARDWARE_UNVERIFIED。数値は DESIGN_ESTIMATE。Design の提案であって正式 Decision ではない。**
 詳細: `../docs/design/concepts_2026-09-29.md`、数値: `../docs/design/results/concept_metrics_2026-09-29.json`
 
+## User Decisions（2026-09-29、USER-DEC-SERPENS-DESIGN-0001。Design Run の成果に対する User の判断）
+
+| # | 決定 | Design への効き方 |
+|---|---|---|
+| 1 | **CSAR を採用**。危険物を見つけてもその場で見せびらかさない / 再確認と位置登録の後、基本は危険物から少し離れる / 子どもが近い時は危険物ではなく子ども側を見る / **危険物のそばでとぐろは MVP で不採用** / 将来、遮蔽効果と誘導リスクを実験して再評価 | OPEN-SERPENS-DESIGN-004 = 採用（A）、005 = 離れる（A）。「遮蔽としてのとぐろ」は将来の実験候補に移す（MVP の行動には入れない） |
+| 2 | **6 本目は暫定で Head Yaw** として Design を進めてよい。**最終決定ではない**。H0 摩擦試験で純粋な蛇行で十分動けるなら Head Yaw、移動性能が足りなければ Body Yaw を再検討 | 頭 yaw を首に置く意匠を進める。Body Yaw（全長 668 mm）に戻っても成り立つよう、頭・首の意匠を胴の節数に依存させない |
+| 3 | **SD-01（Bean Head ＋ 同心ナックル）は継続検討してよい**。ただし **4 mm 一定のすき間は安全確定ではない**（Engineering 検証待ち）。**CAD_CONCEPT / KINEMATIC_SIM として扱う** | 挟み込みの数値は「2D の形の計算（KINEMATIC_SIM）」とだけ書く。安全・合格の語を使わない |
+| 4 | **Agent ごとに Git worktree を分ける方針を正式採用**。Design Agent は Design worktree 以外の branch を切り替えない。shared / main の worktree の rebase や conflict には触れない | Design の commit は Design worktree（`agent/design-floor-watch`）だけ。共有ツリーの `ai-shared/` は追記のみ |
+| 5 | `agent/design-floor-watch` は、**Design worktree が clean で rebase 中でないことを確認してから push してよい**。main への merge は禁止 | push 前に `git status` と rebase 状態を確認する |
+| 6 | Fusion の SD-01 は、Fusion が復帰しても**既存ファイルを上書きせず、Recovery copy として別名保存**。最後の正常保存版を保持 | 復帰したら、まず状態を読み取り → 別名保存（例 `..._RECOVERY_20260929`）→ 元ファイルは触らない |
+| 7 | **背板の修正は Recovery の後に続ける**。未保存の状態が分からないまま破壊的な編集をしない | 背板の作り直しは Recovery copy 上で、状態を読んでから |
+| 8 | **ENTRY-0011（電装配置と同心ナックルの衝突）は Engineering の回答待ち**。Design だけで解決を確定しない | 段付きナックル等は「案」として出すだけ |
+
 ## Current concept
 
-**SD-01「Bean head ＋ 同心ナックル」**（Design 推奨。Engineering の確認待ち）
+**SD-01「Bean head ＋ 同心ナックル」**（User が継続検討を承認。**CAD_CONCEPT / KINEMATIC_SIM**。Engineering の確認待ち）
+**6 本目は暫定 Head Yaw**（H0 摩擦試験しだいで Body Yaw を再検討）。**CSAR は User 採用**
 
 - 最重要原則への答え: **「見つけたら、見せびらかさず、離れて、大人に知らせる。子どもが来たら、こっちを見てもらう。」**
   幼児は視線・指さしの先を見るので、発見の合図（物を見る・指す・物の横でとぐろ）は子どもを危険物へ連れていく。
@@ -38,7 +52,8 @@ Git branch: `agent/design-floor-watch`（commit は別 worktree で行う。共�
 ## Body concept（B1 同心ナックル）
 
 - 前の節の後端 = 関節軸まわりの円柱（半径 46。J2 は 34）、後ろの節の前端 = 半径 +4 の受け（唇 ±40°）、関節の上を後ろの節の丸い背板（半径 48 / 36）が覆う
-- 挟み込み（2D 近似）: B0 卵殻は 10〜40° で側面のすき間が 22.6 → 8.8 mm と 8〜25 mm の帯を通って閉じる。B1 は 0〜50° で 4.0 mm 一定、V 溝 約 97°
+- 挟み込み（2D の形の計算、KINEMATIC_SIM）: B0 卵殻は 10〜40° で側面のすき間が 22.6 → 8.8 mm と 8〜25 mm の帯を通って閉じる。B1 は 0〜50° で 4.0 mm 一定、V 溝 約 97°。
+  **4 mm 一定は安全確定ではない**（公差・上下の板・ケーブル・指の模型での確認は未。Engineering 検証待ち、User Decision 3）
 - **Fusion で見つかった収まりの問題**: B1 では各関節の後ろ 0〜46 mm（中段）が**前の節の円柱**になる。FW03 の電池・尾 MCU・ヒューズ・スピーカー／アンプが関節の継ぎ目をまたぐ（ENTRY-0011）。
   電装を約 20〜35 mm 後ろへずらすか、中段の円柱を小さく（半径 ≈ 32）して外側を段付きにする必要がある
 
@@ -51,6 +66,7 @@ Git branch: `agent/design-floor-watch`（commit は別 worktree で行う。共�
 
 ## Interaction concept
 
+- **CSAR は User 採用（2026-09-29）**。MVP の流れ: 見つける → 再確認（撮影）→ 位置登録 → **少し離れる** → 保護者へ通知。子どもが近ければ子ども側を見る。危険物のそばのとぐろは MVP で不採用（遮蔽効果と誘導リスクは将来の実験）
 - CSAR: R1 子どもが近い（2.0 m 以内または不明）間は物を見ない・指さない / R2 物の場所を目立たせない（撮影の閃光を含む）/
   R3 見つけたら離れる（とぐろ・生きたピンはしない）/ R4 まず保護者へ通知 / R5 子どもが来たら頭と目を子どもへ、物から外す
 - Discovery Loop（子どもがいない時）: 気づく → 体ごと一直線に静止して撮影（表現用 LED 全消灯＝息を止めて見つめる）→ 周りを見る → 保護者を見る（短い明るい音）→ もう一度物 → 離れる
@@ -80,10 +96,16 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 | 背板を胴より 2 mm 厚く出す（Fusion 初版） | 横から見て屋根の板が載ったように見えた → 胴の面と同じ高さにした |
 | 眉のライン光を顔の面から 10 mm 以上下げる | 鼻先が近い床（38〜48 mm）への光を遮る（計算） |
 
+## Fusion の状態（2026-09-29）
+
+- `Serpens_DESIGN_SD01_BEAN_KNUCKLE_CONCEPT_NOT_FOR_PRINT`: 最後の正常保存はジョイント追加の直後。背板の作り直しの実行中に Fusion の API が応答しなくなり、以後の変更の保存状態は**不明**
+- User Decision 6・7: 復帰したら上書きせず **Recovery copy として別名保存**し、元ファイル（最後の正常保存版）を保持する。背板の修正は Recovery copy の上で、状態を読み取ってから続ける
+
 ## Next experiments
 
-1. 静止画の予備評価: H0 / H1 / H2（同じ色・角度）を human_pilot の尺度で（ai-outbox/experiments）
-2. B1 の段付きナックル（中段の円柱 r ≈ 32 ＋ 外側 r46）の 2D/Fusion 検討 → 電装を動かさずに済むか
-3. 6 本目が頭 yaw になった場合の首の意匠（首 50 mm 延長）
-4. Engineering の返答（ENTRY-0005〜0011）を受けて SD-01 を改訂
-5. 腹板インサートの形を H0 クーポンに入れる相談
+1. （Fusion 復帰後）状態の読み取り → Recovery copy を別名保存 → 背板を胴と同じ高さに作り直す
+2. 6 本目 = 暫定 Head Yaw の首の意匠（首 50 mm 延長に頭 yaw サーボ）。Body Yaw に戻っても頭・首を流用できる形に
+3. 静止画の予備評価: H0 / H1 / H2（同じ色・角度）を human_pilot の尺度で（ai-outbox/experiments）
+4. ENTRY-0011 は Engineering の回答待ち（段付きナックル r ≈ 32 は案として保持、確定しない）
+5. 将来の実験候補: 「遮蔽としてのとぐろ」の遮蔽効果と誘導リスク（MVP 外）
+6. 腹板インサートの形を H0 クーポンに入れる相談

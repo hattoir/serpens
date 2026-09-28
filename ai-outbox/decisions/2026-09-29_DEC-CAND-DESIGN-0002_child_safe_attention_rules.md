@@ -1,7 +1,7 @@
 # Decision candidate DEC-CAND-DESIGN-0002 — Child-Safe Attention Rules（CSAR）
 
 - Project: serpens / Agent: Design / Run: DESIGN-2026-09-29-01 / Date: 2026-09-29
-- **状態: 提案。安全に関わるので Human Approval と Engineering の確認が要る**（ENTRY-0008、OPEN-SERPENS-DESIGN-004/005）
+- **状態: User 採用（2026-09-29、USER-DEC-SERPENS-DESIGN-0001 #1）。** 実行条件の設計は Engineering（ENTRY-0008）。危険物のそばのとぐろは MVP 不採用、遮蔽効果と誘導リスクは将来の実験
 - Design は安全の数値（速度・距離・トルク）を変えていない
 
 ## Decision（案）
