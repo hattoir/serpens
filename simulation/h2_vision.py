@@ -176,11 +176,14 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
         stains.append(Stain(float(rng.uniform(-10, 10)), float(rng.uniform(55, 100)), 18.0, 0.3))
     elif negative == "seam":
         seams.append(Seam("x", float(rng.uniform(55, 100)), 0.3, "step"))
+    toy_box = None
     if c.clutter:
-        objs.append(Disc(float(rng.choice([-1.0, 1.0]) * 28.0), y + float(rng.uniform(-15, 15)) if target else 80.0,
-                         25.0, 25.0, 0.6, False, "toy"))
+        toy = Disc(float(rng.choice([-1.0, 1.0]) * 28.0), y + float(rng.uniform(-15, 15)) if target else 80.0,
+                   25.0, 25.0, 0.6, False, "toy")
+        objs.append(toy)
+        toy_box = true_bbox_px(cam_t, toy.x_mm, toy.y_mm, toy.diameter_mm, toy.height_mm)
     frames = r.render(Scene(objs, stains, seams, seed=seed, floor=c.floor, texture_contrast=c.texture_contrast,
-                            floor_height_sigma_mm=c.floor_height_sigma_mm))
+                            floor_height_sigma_mm=c.floor_height_sigma_mm), noise_seed=seed)   # 試行ごとに再現できる雑音
     out = Trial(target)
     for stage, with_line in (("patrol", False), ("inspect", True)):
         try:
@@ -190,7 +193,8 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
         found = _objects(cands)
         hit = _hit_in_image(found, true_bbox_px(cam_t, x, y, TARGETS[target][0], TARGETS[target][1]),
                             pad_px=0.01 * cam_nom.f_px) if target else None
-        others = [f for f in found if f is not hit and not (c.clutter and abs(f.floor_xy_mm[0]) > 15.0)]   # 陰性の誤報に使う
+        # 陰性の誤報に使う。隣の物（おもちゃ）そのものを見つけた候補は誤報ではない（画像でおもちゃの写る範囲と重なるもの）
+        others = [f for f in found if f is not hit and not (toy_box is not None and _hit_in_image([f], toy_box, 0.01 * cam_nom.f_px))]
         out.stage_hits[stage] = hit is not None
         out.false_objects[stage] = len(others)
         if stage == "inspect" and hit is not None:

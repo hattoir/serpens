@@ -158,7 +158,8 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     ratio = raking / np.maximum(normal, 1.0)
     ratio = ratio / max(float(np.median(ratio)), 1e-3)                  # 全体で正規化（露出差）
-    shadow = (ratio < float(det["shadow_ratio_max"])).astype(np.uint8)
+    # 通常画像で暗すぎる画素（黒い繊維・暗い床）は、明るさの落ち込みを見分けられない → 影としない（比が雑音になる。VIS-0005）
+    shadow = ((ratio < float(det["shadow_ratio_max"])) & (normal >= float(det["shadow_min_signal"]))).astype(np.uint8)
     shadow = cv2.morphologyEx(shadow, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     tr = trace_line(_sub(frames["line"], dark), cam, plane, det) if with_line and "line" in frames else None
     n, _labels, stats, _cents = cv2.connectedComponentsWithStats(fg, connectivity=8)
@@ -215,7 +216,13 @@ def _line_only_boxes(tr: LineTrace | None, boxes: list[tuple[int, int, int, int]
     valid = ~np.isnan(tr.u_floor)
     present = ~np.isnan(tr.u_line)
     base = _running_baseline(tr.height_mm, int(det["line_baseline_rows"]))
-    raised = present & (np.abs(np.nan_to_num(tr.height_mm - base)) >= float(det["height_object_min_mm"]))
+    resid = tr.height_mm - base
+    # 床そのものの凹凸（カーペットの毛足など）が閾値を超えると、何も無い床で線だけの候補が出る（VIS-0005: 毛足 σ0.8mm で誤報 0.78）。
+    # 閾値は床の線の揺れ（頑健な σ）の line_rough_z 倍と height_object_min_mm の大きい方にする（平らな床では従来どおり）
+    r = resid[present & ~np.isnan(resid)]
+    rough = float(np.median(np.abs(r - np.median(r))) / 0.6745) if r.size else 0.0
+    thr = max(float(det["height_object_min_mm"]), float(det["line_rough_z"]) * rough)
+    raised = present & (np.abs(np.nan_to_num(resid)) >= thr)
     anomaly = valid & (~present | raised)
     rows_present = np.flatnonzero(present)
     ctx = int(det["line_context_rows"])

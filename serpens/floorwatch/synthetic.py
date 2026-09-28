@@ -233,11 +233,12 @@ class Renderer:
                 shadow |= (fy > sm.pos_mm) & (fy <= sm.pos_mm + length) & (owner < 0)
         return shadow
 
-    def render(self, scene: Scene) -> dict[str, np.ndarray]:
+    def render(self, scene: Scene, noise_seed: int | None = None) -> dict[str, np.ndarray]:
+        """noise_seed: 雑音の乱数の種（試験の再現用）。None なら撮影ごとに違う雑音（従来どおり）。"""
         cam, lt = self.cam, self.lt
         surf, albedo, specular, owner = self._surface(scene)
-        tex = np.where(owner >= 0, 1.0, _floor_texture(np.nan_to_num(self.floor_xy), scene.seed, scene.floor,
-                                                       scene.texture_contrast))
+        tex = np.where(owner >= 0, 1.0, np.clip(_floor_texture(np.nan_to_num(self.floor_xy), scene.seed, scene.floor,
+                                                               scene.texture_contrast), 0.15, None))   # 繊維も真っ黒にはならない
         base = albedo * tex
         shadow = self._shadow(scene, owner)
         # 線光: 表面の点と光の面の距離。幅は床の上（水平）で測る → 面の法線の水平成分で割る
@@ -249,7 +250,7 @@ class Renderer:
         if lt.line_scatter_mm > 0:                                       # 毛足で線がにじむ（床の上だけ）
             halo = 0.5 * np.exp(-0.5 * (np.maximum(dist - lt.line_width_mm / 2, 0.0) / lt.line_scatter_mm) ** 2)
             line = np.where(ok & (owner < 0) & ~lit, halo, line)
-        rng = np.random.default_rng()
+        rng = np.random.default_rng(noise_seed)
         signals = {"normal": (lt.normal_lux, np.ones_like(base)),
                    "raking": (lt.raking_lux, np.where(shadow, lt.shadow_factor, 1.0)),
                    "line": (lt.line_lux, line + 0.03),

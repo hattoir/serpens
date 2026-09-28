@@ -183,3 +183,18 @@ def test_floor_toned_object_split_into_side_fragments_is_found_from_its_shadow(c
         fr = r.render(Scene([Disc(0.0, y, 15.0, h, 0.6, False, "x")], seed=int(y + h)))
         cands, _tr, _fg = detect(fr, cam, plane, cfg, with_line=False)
         assert _hit_in_image([c for c in cands if c.is_object], true_bbox_px(cam, 0.0, y, 15.0, h), 0.01 * cam.f_px) is not None
+
+
+def test_carpet_texture_and_pile_false_alarms_are_bounded(cfg: dict, setup) -> None:
+    """VIS-0005: カーペットの暗い繊維で「影」（斜め/通常の比が雑音になる）と、毛足の凹凸で線の「出っ張り」が出ていた。
+    暗すぎる画素は影にしない（shadow_min_signal）・線の閾値は床の揺れに合わせる（line_rough_z）。
+    雑音の種を固定して数える（修正前は 20 回中 8 回。残りは線が暗い繊維で消える途切れ → 実写で合わせる、HA-04）。"""
+    cam, plane, lt = setup
+    r = Renderer(cam, plane, lt, sides=True)
+    fa = shadow_fa = 0
+    for sd in range(10):
+        fr = r.render(Scene(seed=sd, floor="carpet", floor_height_sigma_mm=0.8), noise_seed=sd)
+        objs = [c for c in detect(fr, cam, plane, cfg, with_line=True)[0] if c.is_object]
+        fa += bool(objs)
+        shadow_fa += sum(c.shadow for c in objs)
+    assert shadow_fa == 0 and fa <= 3, (fa, shadow_fa)

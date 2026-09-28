@@ -304,12 +304,14 @@ floor_watch:
     shadow_object_rows_ratio: 0.5   # 影だけの候補: 影の幅 × これ を物の行数とみなす（物は影の手前）
     noise_sigma_min: 2.0       # σ の下限（カメラ雑音の目安。合成では noise_sigma と同じ）
     shadow_ratio_max: 0.7      # 斜め/通常 の比（局所正規化後）がこれ以下なら影
+    shadow_min_signal: 15.0    # 通常画像（全消灯を引いた後）がこれ未満の画素は影の判定に使わない（暗すぎて比が雑音になる。VIS-0005）
     shadow_band_min: 0.15      # 塊の奥（上）の帯にこの割合以上の影があれば「影あり」
     shadow_band_rows_ratio: 1.0   # 帯の高さ = 塊の高さ × これ（1 円玉の影 ≈ 18mm ≈ 塊の奥行き。2.0 だと帯が薄まり UXGA で 0.14 に落ちた）
     line_search_px: 120        # 予測した床の線の位置から左右にこの範囲で線を探す
     line_min_intensity: 60     # これ以上なら線が乗っている（全消灯を引いた後）
     line_context_rows: 12      # 物の前後の床上の線（局所基準）に使う行数
     line_min_rows: 3           # 高さを「測れた」とする最低行数
+    line_rough_z: 4.0          # 線だけの候補の閾値 = max(height_object_min_mm, この倍 × 床の線の揺れの頑健な σ)。毛足で誤報しない（VIS-0005）
     line_baseline_rows: 240    # 線だけの候補: 床の高さの基準を ±この行数の中央値で取る（全体の中央値にしない。姿勢のずれで床が坂に見える。VIS-0002）
     min_blob_px: 30
     object_min_diameter_mm: 2.0   # これより小さい塊は物としない（雑音・木目のかけら。飲み込みの危険も小さい）
