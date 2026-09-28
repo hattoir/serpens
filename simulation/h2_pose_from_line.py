@@ -23,10 +23,27 @@ SOURCE = "SYNTHETIC_VISION_SIM"
 
 
 def predicted_u(cam_nom: Camera, plane_nom: LightPlane, dh: float, dp: float, rows: np.ndarray) -> np.ndarray:
-    """姿勢 (名目 + dh, dp) のとき、床の線が行 rows に写る列（光の面は頭に固定）。"""
+    """姿勢 (名目 + dh, dp) のとき、床の線が行 rows に写る列（光の面は頭に固定）。
+
+    光の面と床（z=0）の交わりは 3 次元の直線なので、画像でも直線（レンズの歪みなし）。その上の 2 点を投影して直線で結ぶ
+    （行ごとの二分法より数百倍速い）。"""
     cam = replace(cam_nom, height_mm=cam_nom.height_mm + dh, pitch_deg=cam_nom.pitch_deg + dp)
     pl = plane_for_true_camera(plane_nom, cam_nom, cam)
-    return np.array([pl.line_u_on_floor(cam, float(v)) or np.nan for v in rows])
+    n = pl.normal
+    nh2 = float(n[0] ** 2 + n[1] ** 2)
+    if nh2 < 1e-12:
+        return np.full(len(rows), np.nan)
+    p0 = np.array([n[0], n[1], 0.0]) * pl.d / nh2                 # 交線の上で原点に最も近い点
+    dvec = np.cross(n, [0.0, 0.0, 1.0])
+    dvec = dvec / np.linalg.norm(dvec)
+    if dvec[1] < 0 or (abs(dvec[1]) < 1e-9 and dvec[0] < 0):     # 向きの符号をそろえる（前 / 右向き）。逆だとカメラの後ろの点になる
+        dvec = -dvec
+    ts = (40.0, 140.0) if abs(dvec[1]) > 0.5 else (-40.0, 40.0)     # 前後に走る線は前方の 2 点、左右なら左右の 2 点
+    q = [cam.project(p0 + t * dvec) for t in ts]
+    (u1, v1, z1), (u2, v2, z2) = q
+    if z1 <= 0 or z2 <= 0 or abs(v2 - v1) < 1e-9:
+        return np.full(len(rows), np.nan)
+    return u1 + (np.asarray(rows, float) - v1) * (u2 - u1) / (v2 - v1)
 
 
 def estimate_pose(tr: LineTrace, cam_nom: Camera, plane_nom: LightPlane, n_rows: int = 40,
