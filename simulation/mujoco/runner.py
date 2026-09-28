@@ -95,7 +95,6 @@ def run_gait(cfg: dict[str, Any], belly: str, params: GaitParams, gamma_deg: flo
     qs, vs, torques, heads, errs, energy = [], [], [], [], [], 0.0
     start_xy = None
     start_yaw = 0.0
-    prev_yaw, turned = 0.0, 0.0          # 向きの変化は毎ステップ積算する（±180° を越える旋回で折り返さない）
     for k in range(n_settle + n_run):
         t = max(k - n_settle, 0) * ctrl_dt
         target = home if k < n_settle else {**home, **_target_angles(cfg, params, gamma_deg, t, body_names)}
@@ -108,11 +107,6 @@ def run_gait(cfg: dict[str, Any], belly: str, params: GaitParams, gamma_deg: flo
         if k == n_settle:
             start_xy = np.array(data.xpos[1][:2])     # seg0 の位置
             start_yaw = _yaw(data.xmat[1])
-            prev_yaw = start_yaw
-        if k > n_settle:
-            yaw = _yaw(data.xmat[1])
-            turned += _wrap(yaw - prev_yaw)
-            prev_yaw = yaw
         if k >= n_settle:
             errs.append([math.radians(target[n]) - float(data.qpos[jnt_adr[n]]) for n in all_names])
             qs.append([float(data.qpos[jnt_adr[n]]) for n in all_names])
@@ -141,7 +135,7 @@ def run_gait(cfg: dict[str, Any], belly: str, params: GaitParams, gamma_deg: flo
         amplitude_deg=params.amplitude_deg, spatial_freq_deg=params.spatial_freq_deg,
         temporal_freq_hz=params.temporal_freq_hz, gamma_deg=gamma_deg,
         forward_mm=float(disp @ fwd_dir), lateral_mm=float(disp @ side_dir),
-        turn_deg=math.degrees(turned),
+        turn_deg=math.degrees(_wrap(_yaw(data.xmat[1]) - start_yaw)),
         speed_mm_s=float(disp @ fwd_dir) / seconds if seconds else 0.0,
         joint_speed_rms_dps=float(np.sqrt((v ** 2).mean())),
         joint_accel_rms_dps2=float(np.sqrt((acc ** 2).mean())) if acc.size else 0.0,

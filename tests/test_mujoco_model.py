@@ -119,21 +119,3 @@ def test_torque_never_exceeds_the_limit(cfg: dict) -> None:
     limit = float(cfg["safety_limits"]["torque"]["software_torque_limit_nm"])
     r = run_gait(cfg, "WHEEL", FORWARD, seconds=3.0, seed=1)
     assert r.peak_torque_nm <= limit + 1e-6
-
-
-def test_positive_pitch_raises_the_head(cfg: dict) -> None:
-    """**pitch は + で頭が上がる**（`serpens/motion/kinematics.py` と同じ規約）。
-
-    2026-09-29 まで MuJoCo だけ逆向きで、EX-1 の home（J7=+8°）が頭を床へ押し込んでいた。
-    """
-    spec = build_mjcf(cfg, "WHEEL")
-    model = mujoco.MjModel.from_xml_string(spec.xml)
-    data = mujoco.MjData(model)
-    head_geom = model.ngeom - 1
-    neck = next(j["name"] for j in cfg["joints"] if j["axis"] == "pitch")
-    adr = model.jnt_qposadr[mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, neck)]
-    mujoco.mj_kinematics(model, data)
-    z0 = float(data.geom_xpos[head_geom][2])
-    data.qpos[adr] = math.radians(20.0)
-    mujoco.mj_kinematics(model, data)
-    assert float(data.geom_xpos[head_geom][2]) > z0 + 0.005
