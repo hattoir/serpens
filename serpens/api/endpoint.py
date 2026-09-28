@@ -18,6 +18,7 @@ locomotion / behavior へ繋ぐ）に渡す。ここでは**安全の設定は�
 """
 from __future__ import annotations
 
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -72,7 +73,12 @@ class Endpoint:
     mode: str = "DISARMED"
     last_safety: dict[str, Any] | None = None   # 最後に出した safety_state のフィールド（周期送信・再接続で再送）
     last_safety_pub_ms: int | None = None
-    closed: bool = False                        # close() 後。OFFLINE の後に announce / tick で古い状態を出し直さない
+    closed: bool = False                        # close() 後。OFFLINE の後に古い状態を出し直さない
+    # safety_state の「出すか決める → 送信待ち行列に積む」を 1 つにする（主ループの safety_state / tick / close と、
+    # ネットワークスレッドの announce が交差しても、OFFLINE の後ろに古い状態が並ばない）。
+    # **PUBACK を待つのはこのロックの外**: 中で待つとネットワークスレッドの announce がロック待ちで固まる。
+    # RLock: 同期配信のブローカー（Loopback）では積んだ中から受け手経由で同じスレッドが戻ってくることがある。
+    _safety_lock: threading.RLock = field(default_factory=threading.RLock, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         if self.safety_period_ms is None:
@@ -80,6 +86,7 @@ class Endpoint:
         self.broker.set_will(event_topic("safety_state"), self._offline_payload("UNKNOWN"), retain=True)
         self.broker.subscribe(TOPIC_TASK, self._on_task)
         self.broker.on_connect(self.announce)
+        self.broker.start()                     # will・購読・announce を揃えてから繋ぐ（実ブローカーは接続前にしか will を持てない）
 
     # ---- 送信 -------------------------------------------------------------------
     def _base(self, event: str) -> dict[str, Any]:
@@ -91,11 +98,15 @@ class Endpoint:
         return {**self._base("safety_state"), "mode": "OFFLINE", "stop_reason": stop_reason, "latched": True,
                 "resume_requires": "operator"}
 
-    def emit(self, event: str, **fields: Any) -> dict[str, Any]:
+    def _event(self, event: str, **fields: Any) -> dict[str, Any]:
         msg = {**self._base(event), **fields}
         errs = validate_event(msg)
         if errs:
             raise ValueError(f"送ろうとした Event がスキーマに合わない: {errs}")
+        return msg
+
+    def emit(self, event: str, **fields: Any) -> dict[str, Any]:
+        msg = self._event(event, **fields)
         self.broker.publish(event_topic(event), msg, qos=QOS, retain=event in RETAINED_EVENTS)
         return msg
 
@@ -116,38 +127,52 @@ class Endpoint:
         fields: dict[str, Any] = {"mode": mode, "stop_reason": stop_reason, "latched": latched, "resume_requires": "operator"}
         if telemetry_age_ms is not None:
             fields["telemetry_age_ms"] = telemetry_age_ms
-        self.last_safety = fields
-        self._publish_safety()
+        with self._safety_lock:
+            if self.closed:                                # 正常終了の後は出さない（OFFLINE を上書きしない）
+                return
+            self.last_safety = fields
+            wait = self._enqueue_safety()
+        wait()
 
-    def _publish_safety(self) -> None:
-        if self.last_safety is not None:
-            self.emit("safety_state", **self.last_safety)
-            self.last_safety_pub_ms = self.clock_ms()
+    def _enqueue_safety(self) -> Callable[[], None]:
+        """_safety_lock を持って呼ぶ。last_safety を積み、PUBACK を待つ関数を返す（待つのはロックの外）。"""
+        msg = self._event("safety_state", **(self.last_safety or {}))
+        wait = self.broker.enqueue(event_topic("safety_state"), msg, qos=QOS, retain=True)
+        self.last_safety_pub_ms = self.clock_ms()
+        return wait
 
     def tick(self) -> bool:
         """周期送信: 前回から safety_period_ms 以上経っていれば同じ safety_state を出し直す（変化が無くても）。"""
-        if self.last_safety is None:
-            return False
-        if self.last_safety_pub_ms is None or self.clock_ms() - self.last_safety_pub_ms >= int(self.safety_period_ms or 0):
-            self._publish_safety()
-            return True
-        return False
+        with self._safety_lock:
+            if self.closed or self.last_safety is None:
+                return False
+            since_ms = None if self.last_safety_pub_ms is None else self.clock_ms() - self.last_safety_pub_ms
+            if since_ms is not None and since_ms < int(self.safety_period_ms or 0):
+                return False
+            wait = self._enqueue_safety()
+        wait()
+        return True
 
     def announce(self) -> None:
         """（再）接続直後: retain に残っている古い状態（LWT の OFFLINE など）を今の状態で上書きする。"""
-        if self.closed:                                    # 正常終了の途中で再接続しても OFFLINE を上書きしない
-            return
-        if self.last_safety is None:
-            self.last_safety = {"mode": self.mode, "stop_reason": "BOOT", "latched": self.mode in LOCKING_MODES,
-                                "resume_requires": "operator"}
-        self._publish_safety()
+        with self._safety_lock:
+            if self.closed:                                # 正常終了の途中で再接続しても OFFLINE を上書きしない
+                return
+            if self.last_safety is None:
+                self.last_safety = {"mode": self.mode, "stop_reason": "BOOT", "latched": self.mode in LOCKING_MODES,
+                                    "resume_requires": "operator"}
+            wait = self._enqueue_safety()
+        wait()
 
     def close(self) -> None:
         """正常終了。LWT は異常切断でしか出ないので、自分で OFFLINE を retain で出してから切る。
-        先に状態を捨てる: announce（ネットワークスレッド）や tick（主ループ）が OFFLINE の後に古い状態を出さないように。"""
-        self.closed = True
-        self.last_safety = None
-        self.broker.publish(event_topic("safety_state"), self._offline_payload("OPERATOR"), qos=QOS, retain=True)
+        closed を立てるのと OFFLINE を積むのを同じロックの中で行う: 以後の safety_state / tick / announce は何も積まず、
+        すでに判定を終えた送信は OFFLINE より前に並ぶ。"""
+        with self._safety_lock:
+            self.closed = True
+            self.last_safety = None
+            wait = self.broker.enqueue(event_topic("safety_state"), self._offline_payload("OPERATOR"), qos=QOS, retain=True)
+        wait()
         closer = getattr(self.broker, "close", None)
         if callable(closer):
             closer()

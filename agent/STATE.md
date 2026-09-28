@@ -7,7 +7,7 @@ _last updated: 2026-09-14_
 ## 2026-09-29 MQTT: 生きている機体が OFFLINE と出る不具合を直した（SOFTWARE_VERIFIED、詳細は DECISIONS 同日 / DEC-SERPENS-0001）
 
 `PahoBroker.publish` がネットワークスレッド上で PUBACK を 2 s 待って固まり、keepalive 切れで LWT が出ていた。
-試験側の client_id 衝突（`home-test` ×2）がそれを隠していた。残り: `Endpoint(PahoBroker)` は `set_will` が例外になり組めない（試験は `__new__` で回避）／切断中の publish は paho が RuntimeError を投げる（主ループまで上がる）。
+試験側の client_id 衝突（`home-test` ×2）がそれを隠していた。続けて残り 3 件も直した: `Endpoint(PahoBroker)` を通常どおり組める（`autoconnect=False` → `start()`）／切断中の publish は例外にせず safety_state は溜めない／close と announce・tick の TOCTOU は「判定 → 積む」だけをロック、待つのは外。main にローカルコミット済み・**未 push**（User 判断待ち）。
 
 ## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
 

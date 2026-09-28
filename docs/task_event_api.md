@@ -58,7 +58,7 @@ FAULT / EMERGENCY（`safety_state` の mode）でも待ち行列を破棄し、�
 |---|---|---|
 | `task_status` | task_id, status, (reason, progress) | |
 | `floor_finding` | finding | 下記 |
-| `safety_state` | mode（7 状態 + OFFLINE）, stop_reason, latched, resume_requires="operator" | **停止後は人の操作なしで再開しない**をそのまま外へ出す。retain。**変化が無くても周期的に出す**（`api.safety_state_period_ms` = 2 s < 受け側の失効 5 s、`Endpoint.tick`）。異常切断は LWT が `mode: OFFLINE` を retain で出す（keepalive の 1.5 倍後）。**正常終了は LWT が出ないので自分で OFFLINE（stop_reason OPERATOR）を出す**（`Endpoint.close`）。再接続では今の状態で retain を上書きする（`Endpoint.announce`） |
+| `safety_state` | mode（7 状態 + OFFLINE）, stop_reason, latched, resume_requires="operator" | **停止後は人の操作なしで再開しない**をそのまま外へ出す。retain。**変化が無くても周期的に出す**（`api.safety_state_period_ms` = 2 s < 受け側の失効 5 s、`Endpoint.tick`）。異常切断は LWT が `mode: OFFLINE` を retain で出す（keepalive の 1.5 倍後）。**正常終了は LWT が出ないので自分で OFFLINE（stop_reason OPERATOR）を出す**（`Endpoint.close`）。再接続では今の状態で retain を上書きする（`Endpoint.announce`）。**切れている間の safety_state は溜めない**（溜めると再接続後に announce より後から古い値が届き、retain が巻き戻る。例: EMERGENCY_LATCHED の後に DRIVING）。close の後は何も出さない（OFFLINE を上書きしない） |
 | `battery` | voltage_v, low, (percent_est) | percent は推定 |
 
 すべての Event に `data_source`（HARDWARE / SIMULATION）。模擬の値を実測と混ぜない。
@@ -105,7 +105,7 @@ MVP では `tests/mocks/home_ai_mock.py` が「受け取ってログに出す We
 
 retain・LWT・QoS1 の再送はループバックでは確かめられない。`tests/test_mqtt_live.py` が確かめる:
 retain が後からの購読に届く / **LWT が keepalive の約 1.5 倍で出る**（MQTT 3.1.1 §3.1.2.10。テストは keepalive 2 s で
-2〜5 s を許容。ソケットが閉じた場合（プロセス落ち）は即座に出る）/ 正常終了の OFFLINE が即時に出る / 再接続で retain が今の状態に置き換わる / QoS1 + clean_session=False の再送。
+2〜5 s を許容。ソケットが閉じた場合（プロセス落ち）は即座に出る）/ 正常終了の OFFLINE が即時に出る / 再接続で retain が今の状態に置き換わる / QoS1 + clean_session=False の再送 / `Endpoint(PahoBroker)` を通常どおり組める / 再接続時の announce がネットワークスレッドを固めない / ブローカー停止中も主ループが例外で止まらず、戻ったら今の状態だけが届く。
 **Mosquitto は常駐サービスにしない**: テストが 127.0.0.1 限定・一時ポート・一時設定（匿名・永続化なし）でサブプロセス起動し、
 終わったら止める。paho-mqtt は開発用の任意依存（`pip install paho-mqtt`。requirements には入れない）。
 mosquitto 実行ファイルは PATH / 環境変数 `SERPENS_MOSQUITTO` / `C:\Program Files\mosquitto` / `%LOCALAPPDATA%\Programs\mosquitto` から探し、無ければ skip。
