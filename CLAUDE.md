@@ -321,7 +321,7 @@ CAD.mdの値は確度と検証範囲を確認し、既存の制御設定を自�
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-530 件通って 1 件 skip が正常（2026-09-29 `agent/engineering-vision-sim` で H2 VIS-0006（姿勢の補正・狙い直し）まで入れた時点の実測。skip は YOLO の重みが無い環境の 1 件。MuJoCo 未導入の環境では 16 件 skip、mosquitto 実行ファイルが無い環境では `tests/test_mqtt_live.py` の 4 件 skip）。**1 件でも落ちたら先に直す。**
+535 件通って 1 件 skip が正常（2026-09-29 `agent/engineering-vision-sim` で H2 VIS-0008（点光源の照明・照明の較正画像）まで入れた時点の実測。skip は YOLO の重みが無い環境の 1 件。MuJoCo 未導入の環境では 16 件 skip、mosquitto 実行ファイルが無い環境では `tests/test_mqtt_live.py` の 4 件 skip）。**1 件でも落ちたら先に直す。**
 このリポジトリのテストは安全機構の振る舞いを直接検証しているので、
 落ちたテストを「タイミングの問題」として通す方向に直してはいけない
 （実際に 1 件、テストが正しくて実装が間違っていた例がある。`agent/DECISIONS.md` 参照）。
