@@ -163,10 +163,20 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     tr = trace_line(_sub(frames["line"], dark), cam, plane, det) if with_line and "line" in frames else None
     n, _labels, stats, _cents = cv2.connectedComponentsWithStats(fg, connectivity=8)
     boxes = [tuple(int(a) for a in stats[i][:4]) for i in range(1, n) if stats[i][4] >= int(det["min_blob_px"])]
-    boxes += _shadow_only_boxes(shadow, boxes, det)
-    boxes += _line_only_boxes(tr, boxes, det)
+    # 影・線だけの候補を「もう候補がある」として捨ててよいのは、塊（blob）の候補だけ。線状の塊（継ぎ目・段差と判定されて
+    # 物にならない）が覆っていても捨てない: 床と同じ色の薄い物（10 円玉）は手前の縁の細い帯だけが前景になり、線状と判定されて、
+    # 奥の影から作る候補まで消していた（H2 VIS-0002）
+    blobs = [bx for bx in boxes if not _is_line_shape(bx, det)]
+    boxes += _shadow_only_boxes(shadow, blobs, det)
+    blobs = [bx for bx in boxes if not _is_line_shape(bx, det)]
+    boxes += _line_only_boxes(tr, blobs, det)
     out = [_candidate(b, shadow, tr, cam, det) for b in boxes]
     return out, tr, fg
+
+
+def _is_line_shape(box: tuple[int, int, int, int], det: dict[str, Any]) -> bool:
+    _x, _y, w, h = box
+    return max(w, h) > float(det["line_aspect_min"]) * max(min(w, h), 1)
 
 
 def _covered(box: tuple[int, int, int, int], boxes: list[tuple[int, int, int, int]], margin: int) -> bool:
@@ -279,7 +289,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     else:
         reason = "too_few_rows"
     raised = height is not None and height >= min_h
-    shape = "line" if max(w, h) > float(det["line_aspect_min"]) * max(min(w, h), 1) else "blob"
+    shape = "line" if _is_line_shape(bbox, det) else "blob"
     lo, hi = (float(v) for v in det["metal_disc_diameter_mm"])
     metal_disc = dropout and shape == "blob" and roundish and lo <= diameter <= hi
     big_enough = np.isfinite(diameter) and diameter >= float(det["object_min_diameter_mm"])

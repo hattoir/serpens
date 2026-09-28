@@ -158,11 +158,12 @@ def _write_sweep_md(a: argparse.Namespace, table: list[dict[str, Any]], dt: floa
              "名目: 木目・模様 1.0・凹凸 0・ぼけ 0・環境光 8・線 3mm・斜め照明 6mm・カメラのずれ 0・狙いの誤差 0・側面あり。",
              "critical = ボタン電池・磁石・錠剤。flagged = 鏡面の危険物が metal_disc（危険物側）に回った割合。", "",
              "| 因子 | 水準 | patrol 検出 | inspect 検出 | critical inspect | 鏡面 critical flagged | 誤報 patrol | 誤報 inspect "
-             "| 高さ誤差 中央 mm | 大きさ誤差 中央 |", "|---|---|---|---|---|---|---|---|---|---|"]
+             "| 高さ誤差 中央 mm | 大きさ誤差 中央 | 位置誤差 中央 mm |", "|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in table:
         lines.append(f"| {r['factor']} | {r['level']} | {_fmt(r['patrol_recall'])} | {_fmt(r['inspect_recall'])} | "
                      f"{_fmt(r['critical_inspect_recall'])} | {_fmt(r['specular_critical_flagged'])} | {_fmt(r['false_alarm_patrol'])} | "
-                     f"{_fmt(r['false_alarm_inspect'])} | {_fmt(r['height_abs_err_median_mm'])} | {_fmt(r['diameter_rel_err_median'])} |")
+                     f"{_fmt(r['false_alarm_inspect'])} | {_fmt(r['height_abs_err_median_mm'])} | {_fmt(r['diameter_rel_err_median'])} | "
+                     f"{_fmt(r['loc_err_median_mm'])} |")
     lines += ["", "## 対象ごとの inspect 検出（因子 × 水準）", "",
               "| 因子 | 水準 | " + " | ".join(TARGETS) + " |", "|---|---|" + "---|" * len(TARGETS)]
     for r in table:

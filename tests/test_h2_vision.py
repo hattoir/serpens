@@ -87,3 +87,16 @@ def test_nominal_trial_finds_a_coin_and_flags_nothing_on_an_empty_floor(cfg: dic
     empty = run_trial(cfg, cam, plane, lt, Condition(), None, seed=2, blur_scale=0.5)
     assert coin.stage_hits == {"patrol": True, "inspect": True} and coin.height_est == pytest.approx(1.5, abs=0.3)
     assert empty.false_objects == {"patrol": 0, "inspect": 0}
+
+
+def test_floor_coloured_thin_coin_is_found_from_its_shadow_even_behind_a_rim_strip(cfg: dict, setup) -> None:
+    """10 円玉（23.5 × 1.5mm、反射率 0.45 ≈ 床 0.5）: 上面は床と見分けがつかず、手前の縁だけが細い帯として前景になる。
+    帯は線状（継ぎ目扱い）なので物にならない。以前はその帯が奥の影から作る候補を「覆って」消していた（VIS-0002）。"""
+    cam, plane, lt = setup
+    found = 0
+    for y in (58.0, 70.0, 85.0, 98.0):
+        fr = Renderer(cam, plane, lt, sides=True).render(Scene([Disc(0.0, y, 23.5, 1.5, 0.45, False, "coin")], seed=int(y)))
+        for with_line in (False, True):
+            cands, _tr, _fg = detect(fr, cam, plane, cfg, with_line=with_line)
+            found += any(c.is_object and abs(c.floor_xy_mm[0]) < 15 for c in cands)
+    assert found == 8

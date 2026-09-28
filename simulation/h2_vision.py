@@ -112,6 +112,35 @@ def _objects(cands: list[Candidate]) -> list[Candidate]:
     return [c for c in cands if c.is_object]
 
 
+def true_bbox_px(cam_true: Camera, x: float, y: float, dia: float, h: float) -> tuple[float, float, float, float] | None:
+    """本当のカメラで物（円柱）が写る画像の範囲 (u0, v0, u1, v1)。上下の円周の点を投影する。"""
+    pts = []
+    for z in (0.0, h):
+        for a in np.linspace(0, 2 * np.pi, 33):
+            u, v, zc = cam_true.project(np.array([x + dia / 2 * np.cos(a), y + dia / 2 * np.sin(a), z]))
+            if zc > 0:
+                pts.append((u, v))
+    if not pts:
+        return None
+    p = np.array(pts)
+    return float(p[:, 0].min()), float(p[:, 1].min()), float(p[:, 0].max()), float(p[:, 1].max())
+
+
+def _hit_in_image(cands: list[Candidate], box: tuple[float, float, float, float] | None, pad_px: float) -> Candidate | None:
+    """検出の成否は画像の上で判定する: 候補の枠が、物が本当に写っている範囲（pad_px 広げた）と重なるか。
+    床の位置は検出側の名目カメラで戻すので、カメラの姿勢がずれると位置だけがずれる → それは loc_err_mm に別に記録する。"""
+    if box is None:
+        return None
+    u0, v0, u1, v1 = box[0] - pad_px, box[1] - pad_px, box[2] + pad_px, box[3] + pad_px
+    best, ba = None, 0.0
+    for c in cands:
+        bx, by, bw, bh = c.bbox_px
+        iw, ih = min(u1, bx + bw) - max(u0, bx), min(v1, by + bh) - max(v0, by)
+        if iw > 0 and ih > 0 and iw * ih > ba:
+            best, ba = c, iw * ih
+    return best
+
+
 def _near(cands: list[Candidate], x: float, y: float, dia: float, h: float, cam_h: float) -> Candidate | None:
     """物に当たった候補か。検出は床の高さを前提に床へ戻すので、高い物ほど奥へずれて出る（上面の視差）。
     許す範囲: 横 ±(半径 + 10mm)、前後 [手前の縁 − 5mm, 奥の縁 × h_cam/(h_cam − H) + 5mm]。位置の誤差は別に記録する。"""
@@ -159,8 +188,9 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
         except MotionError:
             cands = []
         found = _objects(cands)
-        hit = _near(found, x, y, TARGETS[target][0], TARGETS[target][1], cam_nom.height_mm) if target else None
-        others = [f for f in found if f is not hit and not (c.clutter and abs(f.floor_xy_mm[0]) > 15.0)]
+        hit = _hit_in_image(found, true_bbox_px(cam_t, x, y, TARGETS[target][0], TARGETS[target][1]),
+                            pad_px=0.01 * cam_nom.f_px) if target else None
+        others = [f for f in found if f is not hit and not (c.clutter and abs(f.floor_xy_mm[0]) > 15.0)]   # 陰性の誤報に使う
         out.stage_hits[stage] = hit is not None
         out.false_objects[stage] = len(others)
         if stage == "inspect" and hit is not None:
@@ -186,7 +216,9 @@ def summarize(trials: list[Trial]) -> dict[str, Any]:
             "false_alarm_patrol": float(np.mean([t.false_objects["patrol"] > 0 for t in neg])) if neg else float("nan"),
             "false_alarm_inspect": float(np.mean([t.false_objects["inspect"] > 0 for t in neg])) if neg else float("nan"),
             "height_abs_err_median_mm": float(np.median(herr)) if herr else float("nan"),
-            "diameter_rel_err_median": float(np.median(derr)) if derr else float("nan")}
+            "diameter_rel_err_median": float(np.median(derr)) if derr else float("nan"),
+            "loc_err_median_mm": float(np.median([t.loc_err_mm for t in pos if t.loc_err_mm is not None]))
+            if any(t.loc_err_mm is not None for t in pos) else float("nan")}
 
 
 def condition_dict(c: Condition) -> dict[str, Any]:
