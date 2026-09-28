@@ -64,6 +64,8 @@ class Condition:
     aim_err_mm: float = 0.0                 # inspect で物の中心が線から横にずれる量（狙いの誤差）
     clutter: bool = False                   # 隣に高い物（おもちゃ 25mm 径・25mm 高）
     sides: bool = True
+    pose_from_line: bool = True             # 検出が床の線から姿勢のずれを推定して位置を直すか（config の detect.pose_from_line を上書き）
+    reaim: bool = False                     # inspect の後、候補へ線を向け直してもう 1 回撮る（mission の狙い直しを模す）
 
 
 def scaled_camera(cam: Camera, scale: float) -> Camera:
@@ -156,9 +158,22 @@ def _near(cands: list[Candidate], x: float, y: float, dia: float, h: float, cam_
     return best
 
 
+def _floor_line_x(plane: LightPlane, y_mm: float) -> float:
+    """床（z=0）の上で、前 y_mm の所を線が通る横位置（頬の線 = 前後に走る線）。"""
+    n = plane.normal
+    return float((plane.d - n[1] * y_mm) / n[0]) if abs(n[0]) > 1e-9 else float("nan")
+
+
+def _with_pose_flag(cfg: dict[str, Any], on: bool) -> dict[str, Any]:
+    fw = dict(cfg["floor_watch"])
+    fw["detect"] = {**fw["detect"], "pose_from_line": on}
+    return {**cfg, "floor_watch": fw}
+
+
 def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_light: Lighting, c: Condition,
               target: str | None, seed: int, blur_scale: float = 1.0, negative: str = "empty") -> Trial:
-    """1 回の撮影を描いて、patrol（線なし）と inspect（線あり）で検出する。"""
+    """1 回の撮影を描いて、patrol（線なし）と inspect（線あり）で検出する。reaim なら、inspect の候補へ線を向け直して撮り直す。"""
+    cfg = _with_pose_flag(cfg, c.pose_from_line)
     rng = np.random.default_rng(seed)
     cam_t = true_camera(cam_nom, c)
     plane_t = plane_for_true_camera(plane_nom, cam_nom, cam_t)
@@ -202,7 +217,33 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
             out.diameter_est = hit.diameter_mm
             out.critical_flag = any(k["kind"] == "metal_disc" for k in hit.kinds)
             out.loc_err_mm = float(np.hypot(hit.floor_xy_mm[0] - x, hit.floor_xy_mm[1] - y))
+            if c.reaim and target is not None:
+                out.critical_flag = _reaim_and_recapture(cfg, cam_nom, plane_nom, cam_t, plane_t, r, c, hit, _tr, target, x, y, seed)
     return out
+
+
+def _reaim_and_recapture(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, cam_t: Camera, plane_t: LightPlane,
+                         r: Renderer, c: Condition, hit: Candidate, tr: Any, target: str, x: float, y: float, seed: int) -> bool:
+    """検出側が知っている姿勢（推定できていればそれ、無ければ名目）で「候補の横位置 − 線の横位置」を出し、その分だけ線を横へ動かして
+    （頭 yaw の小さな回転を横移動で近似）撮り直す。本当の線に対する物のずれ = 最初のずれ − 検出側が見積もった動かす量。"""
+    from serpens.floorwatch.pose import posed_camera
+    if tr is not None and tr.pose is not None:
+        cam_e = posed_camera(cam_nom, tr.pose[0], tr.pose[1])
+        plane_e = plane_nom.fixed_to_head(cam_nom, cam_e)
+    else:
+        plane_e = plane_nom
+    shift = hit.floor_xy_mm[0] - _floor_line_x(plane_e, hit.floor_xy_mm[1])
+    offset = (x - _floor_line_x(plane_t, y)) - shift             # 狙い直した後の、本当の線からの物のずれ
+    dia, h, alb, spec, _crit = TARGETS[target]
+    x2 = _floor_line_x(plane_t, y) + offset
+    frames = r.render(Scene([Disc(x2, y, dia, h, alb, spec, target)], seed=seed + 7, floor=c.floor,
+                            texture_contrast=c.texture_contrast, floor_height_sigma_mm=c.floor_height_sigma_mm), noise_seed=seed + 7)
+    try:
+        cands, _t2, _fg = detect(frames, cam_nom, plane_nom, cfg, with_line=True)
+    except MotionError:
+        return False
+    h2 = _hit_in_image(_objects(cands), true_bbox_px(cam_t, x2, y, dia, h), pad_px=0.01 * cam_nom.f_px)
+    return h2 is not None and any(k["kind"] == "metal_disc" for k in h2.kinds)
 
 
 def summarize(trials: list[Trial]) -> dict[str, Any]:

@@ -198,3 +198,25 @@ def test_carpet_texture_and_pile_false_alarms_are_bounded(cfg: dict, setup) -> N
         fa += bool(objs)
         shadow_fa += sum(c.shadow for c in objs)
     assert shadow_fa == 0 and fa <= 3, (fa, shadow_fa)
+
+
+@pytest.mark.parametrize("dh,dp", [(-5.0, 0.0), (0.0, -2.0), (5.0, 2.0)])
+def test_detect_corrects_floor_position_from_the_line_under_pose_error(cfg: dict, setup, dh: float, dp: float) -> None:
+    """VIS-0006: 頭が沈む・首が垂れても、線があれば検出が姿勢を推定し、候補の床の位置（手前の縁）を直す。
+    名目で探すと近い側で線が探す窓から外れて推定が壊れていた → 直した姿勢で線を探し直す。"""
+    from simulation.h2_vision import _with_pose_flag, lighting_for
+    cam, plane, lt = setup
+    c = Condition(cam_height_err_mm=dh, cam_pitch_err_deg=dp)
+    ct = true_camera(cam, c)
+    fr = Renderer(ct, plane_for_true_camera(plane, cam, ct), lighting_for(lt, c, 0.5), sides=True).render(
+        Scene([Disc(0.0, 75.0, 20.0, 3.2, 0.9, True, "button_cell")], seed=1), noise_seed=1)
+    errs = {}
+    for on in (True, False):
+        cands, tr, _fg = detect(fr, cam, plane, _with_pose_flag(cfg, on))
+        cell = [x for x in cands if x.is_object]
+        assert cell
+        errs[on] = float(np.hypot(cell[0].floor_xy_mm[0] - 0.0, cell[0].floor_xy_mm[1] - 65.0))   # 手前の縁 (0, 65)
+        if on:
+            assert tr.pose is not None and tr.pose[0] == pytest.approx(dh, abs=0.3) and tr.pose[1] == pytest.approx(dp, abs=0.1)
+            assert any(k["kind"] == "metal_disc" for k in cell[0].kinds)
+    assert errs[True] < 1.5 < errs[False], errs

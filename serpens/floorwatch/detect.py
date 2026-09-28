@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 
 from serpens.floorwatch.geometry import Camera, LightPlane
+from serpens.floorwatch.pose import estimate_pose, posed_camera
 
 HEIGHT_REASONS = ("measured", "specular_break", "off_line", "too_few_rows")
 
@@ -37,6 +38,7 @@ class LineTrace:
     u_floor: np.ndarray              # 較正した面が予測する床の線の列
     height_mm: np.ndarray            # 交点の高さ（nan = 線が無い）
     width_px: float                  # 自動推定した線幅
+    pose: tuple[float, float, float] | None = None   # 床の線から推定したカメラのずれ (Δ高さ mm, Δpitch °, 残差 px)。使わなければ None
 
 
 @dataclass
@@ -109,12 +111,24 @@ def _run_extent(mask: np.ndarray, i: int) -> int:
     return max(i - lo, hi - i)
 
 
+def _floor_line_columns(plane: LightPlane, cam: Camera, rows: np.ndarray) -> np.ndarray:
+    """行ごとの、床の上の線が写る列。床の線は画像でも直線なので式で出す（行ごとの二分法より速い。値は 1e-6 px まで一致）。
+    床に届かない行（水平線より上）は nan。"""
+    img = plane.floor_line_image(cam)
+    if img is None or abs(img[1][1]) < 1e-9:
+        return np.array([plane.line_u_on_floor(cam, float(v)) or np.nan for v in rows])
+    (a0, a1), (d0, d1) = img
+    u = a0 + (rows.astype(float) - a1) * d0 / d1
+    ok = np.array([cam.floor_point(float(uu), float(v)) is not None for uu, v in zip(u, rows)])
+    return np.where(ok & (u > -cam.width_px) & (u < 2 * cam.width_px), u, np.nan)
+
+
 def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[str, Any]) -> LineTrace:
     """行ごとに線の位置（半値以上の連続区間の輝度重心）→ 光の面との交点で高さ。"""
     H, W = line_sub.shape
     search, min_i = int(det["line_search_px"]), float(det["line_min_intensity"])
     rows = np.arange(H)
-    u_floor = np.array([plane.line_u_on_floor(cam, float(v)) or np.nan for v in rows])
+    u_floor = _floor_line_columns(plane, cam, rows)
     u_line, height = np.full(H, np.nan), np.full(H, np.nan)
     widths: list[float] = []
     for v in rows:
@@ -161,7 +175,9 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     # 通常画像で暗すぎる画素（黒い繊維・暗い床）は、明るさの落ち込みを見分けられない → 影としない（比が雑音になる。VIS-0005）
     shadow = ((ratio < float(det["shadow_ratio_max"])) & (normal >= float(det["shadow_min_signal"]))).astype(np.uint8)
     shadow = cv2.morphologyEx(shadow, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    tr = trace_line(_sub(frames["line"], dark), cam, plane, det) if with_line and "line" in frames else None
+    line_sub = _sub(frames["line"], dark) if with_line and "line" in frames else None
+    tr = trace_line(line_sub, cam, plane, det) if line_sub is not None else None
+    tr, cam_floor = _pose_corrected(line_sub, tr, cam, plane, det)
     n, _labels, stats, _cents = cv2.connectedComponentsWithStats(fg, connectivity=8)
     boxes = [tuple(int(a) for a in stats[i][:4]) for i in range(1, n) if stats[i][4] >= int(det["min_blob_px"])]
     # 影・線だけの候補を「もう候補がある」として捨ててよいのは、**物と判定された候補**が覆っているときだけ。
@@ -169,14 +185,43 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     #   - 床と同じ色の薄い硬貨（10 円玉）は、手前の縁の細い帯だけが前景になり線状（継ぎ目）と判定される
     #   - 床に近い色の物は、上面が床に紛れ、左右の側面だけが小さな 2 つの塊になる（どちらも上に影が無い）
     #   どちらも、奥の影から作る候補までその塊が消していた
-    out = [_candidate(b, shadow, tr, cam, det) for b in boxes]
+    out = [_candidate(b, shadow, tr, cam_floor, det) for b in boxes]
     objs = [c.bbox_px for c in out if c.is_object]
-    extra = [_candidate(b, shadow, tr, cam, det) for b in _shadow_only_boxes(shadow, objs, det)]
+    extra = [_candidate(b, shadow, tr, cam_floor, det) for b in _shadow_only_boxes(shadow, objs, det)]
     out += extra
     objs += [c.bbox_px for c in extra if c.is_object]
-    out += [_candidate(b, shadow, tr, cam, det) for b in _line_only_boxes(tr, objs, det)]
+    out += [_candidate(b, shadow, tr, cam_floor, det) for b in _line_only_boxes(tr, objs, det)]
     return out, tr, fg
 
+
+def _pose_corrected(line_sub: np.ndarray | None, tr: LineTrace | None, cam: Camera, plane: LightPlane,
+                   det: dict[str, Any]) -> tuple[LineTrace | None, Camera]:
+    """線があるとき、床の線からカメラの高さ・pitch のずれを推定し（H2 VIS-0003/0006）、
+      1. 直した姿勢の床の線を中心に線を探し直す（名目で探すと、ずれの大きい側で探す窓から線が外れていた）
+      2. 候補の床の位置・大きさを、直した姿勢のカメラで出す（名目で床へ戻すと 10〜30mm ずれ、線の狙い直しが外れていた）
+    推定が信用できない（点が少ない・残差が大きい・範囲の端）ときは名目のまま。"""
+    if tr is None or line_sub is None or not det.get("pose_from_line", False):
+        return tr, cam
+    hmax, pmax, rmax = float(det["pose_max_height_err_mm"]), float(det["pose_max_pitch_err_deg"]), float(det["pose_rms_max_px"])
+
+    def points(t: LineTrace) -> np.ndarray:
+        ok = ~np.isnan(t.u_line)
+        return np.stack([t.u_line[ok], t.rows[ok].astype(float)], axis=1)
+
+    def plausible(dh: float, dp: float) -> bool:
+        return bool(np.isfinite(dh) and abs(dh) < 0.95 * hmax and abs(dp) < 0.95 * pmax)
+    dh, dp, _ = estimate_pose(points(tr), cam, plane, hmax, pmax, trim=0.5)
+    if not plausible(dh, dp):
+        return tr, cam
+    cam1 = posed_camera(cam, dh, dp)
+    tr1 = trace_line(line_sub, cam1, plane.fixed_to_head(cam, cam1), det)
+    dh, dp, rms = estimate_pose(points(tr1), cam, plane, hmax, pmax, trim=0.9)
+    if not (plausible(dh, dp) and rms <= rmax):
+        return tr, cam
+    cam2 = posed_camera(cam, dh, dp)
+    tr2 = trace_line(line_sub, cam2, plane.fixed_to_head(cam, cam2), det)
+    tr2.pose = (dh, dp, rms)
+    return tr2, cam2
 
 def _is_line_shape(box: tuple[int, int, int, int], det: dict[str, Any]) -> bool:
     _x, _y, w, h = box

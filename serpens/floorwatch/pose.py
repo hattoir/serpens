@@ -29,8 +29,11 @@ def line_residual_px(points_uv: np.ndarray, cam_nom: Camera, plane_nom: LightPla
 
 
 def estimate_pose(points_uv: np.ndarray, cam_nom: Camera, plane_nom: LightPlane, dh_range: float = 12.0,
-                  dp_range: float = 6.0, n_points: int = 40) -> tuple[float, float, float]:
-    """(dh_mm, dp_deg, rms_px)。点が少なすぎれば nan。物で持ち上がった点は、残差の中央値の 3 倍を超えたら外す。"""
+                  dp_range: float = 6.0, n_points: int = 40, trim: float = 1.0) -> tuple[float, float, float]:
+    """(dh_mm, dp_deg, rms_px)。点が少なすぎれば nan。物で持ち上がった点は、残差の中央値の 3 倍を超えたら外す。
+
+    trim < 1: 残差の小さい方から trim の割合だけで合わせる（最小トリム二乗）。名目の姿勢で線を探すと、姿勢が大きくずれた側
+    （近い半分など）で探す窓から線が外れ、半分近くが外れ値になる → 最初の推定はこれで行い、直した姿勢で線を探し直す。"""
     pts = np.asarray(points_uv, float)
     pts = pts[~np.isnan(pts).any(axis=1)]
     if len(pts) < 8:
@@ -40,8 +43,8 @@ def estimate_pose(points_uv: np.ndarray, cam_nom: Camera, plane_nom: LightPlane,
     best = (0.0, 0.0)
 
     def cost(g: tuple[float, float]) -> float:
-        r = line_residual_px(pts[keep], cam_nom, plane_nom, g[0], g[1])
-        return float(np.mean(r * r))
+        r2 = np.sort(line_residual_px(pts[keep], cam_nom, plane_nom, g[0], g[1]) ** 2)
+        return float(np.mean(r2[:max(8, int(round(trim * r2.size)))]))
     def refine(start: tuple[float, float]) -> tuple[float, float]:
         g0 = start
         for k in range(5):                                      # 粗い格子から 4 倍ずつ細かく（最後の刻み 約 0.004mm / 0.002°）
@@ -52,7 +55,7 @@ def estimate_pose(points_uv: np.ndarray, cam_nom: Camera, plane_nom: LightPlane,
     best = refine(best)
     # 外れ値（物で持ち上がった点）は、収束してから 1 回だけ外して、もう一度合わせる（粗い段で外すと正しい点まで捨てる）
     res = line_residual_px(pts, cam_nom, plane_nom, best[0], best[1])
-    keep = res <= max(3.0 * float(np.median(res)), 2.0)
+    keep = res <= max(3.0 * float(np.quantile(res, min(trim, 1.0) / 2)), 2.0)
     if keep.sum() >= 8 and not keep.all():
         best = refine(best)
     return best[0], best[1], float(np.sqrt(cost(best)))

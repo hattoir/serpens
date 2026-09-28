@@ -294,7 +294,7 @@ floor_watch:
   detect:
     # 画素単位のしきい値は reference_f_px（レビューの設計値）で決めた値。使うモードの f に比例して拡大する（面積は 2 乗）
     reference_f_px: 1000.0
-    scale_with_f: [background_blur_px, blob_close_px, line_search_px, line_context_rows, line_min_rows, dropout_rows_min, line_baseline_rows]
+    scale_with_f: [background_blur_px, blob_close_px, line_search_px, line_context_rows, line_min_rows, dropout_rows_min, line_baseline_rows, pose_rms_max_px]
     scale_with_f2: [min_blob_px]
     motion_max_px: 1.0         # 最初と最後の通常画像がこれ以上動いていたら撮り直し（画素。解像度に依らず「動いたか」）
     background_poly_degree: 2  # 背景 = 通常画像に頑健に当てはめた多項式の面。基準床は使わない（実機では同じ視点の空の床が無い）
@@ -311,6 +311,10 @@ floor_watch:
     line_min_intensity: 60     # これ以上なら線が乗っている（全消灯を引いた後）
     line_context_rows: 12      # 物の前後の床上の線（局所基準）に使う行数
     line_min_rows: 3           # 高さを「測れた」とする最低行数
+    pose_from_line: true       # 線があるとき、床の線からカメラの高さ・pitch のずれを推定して候補の床の位置を直す（VIS-0003/0006。SYNTHETIC で確認）
+    pose_max_height_err_mm: 12.0   # 推定の探索範囲（名目からのずれ）。端に張り付いたら信用しない
+    pose_max_pitch_err_deg: 6.0
+    pose_rms_max_px: 3.0       # 床の線の当てはめの残差がこれ以下なら使う（f=1000 基準、scale_with_f）
     line_rough_z: 4.0          # 線だけの候補の閾値 = max(height_object_min_mm, この倍 × 床の線の揺れの頑健な σ)。毛足で誤報しない（VIS-0005）
     line_baseline_rows: 240    # 線だけの候補: 床の高さの基準を ±この行数の中央値で取る（全体の中央値にしない。姿勢のずれで床が坂に見える。VIS-0002）
     min_blob_px: 30
