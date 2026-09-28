@@ -1,4 +1,4 @@
-# H2 視覚: Monte Carlo（SYNTHETIC_VISION_SIM。条件 300、試行 900、3.2 分、UXGA×0.5）
+# H2 視覚: Monte Carlo（SYNTHETIC_VISION_SIM。条件 300、試行 900、4.5 分、UXGA×0.5）
 
 条件は家の中の見込み（`tools/h2_vision.py` の `_sample_condition`、すべて ASSUMPTION）から同時にずらした。
 
@@ -9,12 +9,12 @@
 | patrol_recall | 0.99 |
 | inspect_recall | 0.99 |
 | critical_inspect_recall | 1.00 |
-| specular_critical_flagged | 0.58 |
-| false_alarm_patrol | 0.10 |
-| false_alarm_inspect | 0.22 |
-| height_abs_err_median_mm | 3.48 |
-| diameter_rel_err_median | 0.17 |
-| loc_err_median_mm | 10.86 |
+| specular_critical_flagged | 0.82 |
+| false_alarm_patrol | 0.09 |
+| false_alarm_inspect | 0.18 |
+| height_abs_err_median_mm | 3.39 |
+| diameter_rel_err_median | 0.13 |
+| loc_err_median_mm | 5.92 |
 
 ## critical の inspect 検出 × 因子（数値因子は 3 分位、カテゴリは値ごと）
 
