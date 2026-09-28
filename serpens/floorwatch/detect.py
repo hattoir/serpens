@@ -191,7 +191,46 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     out += extra
     objs += [c.bbox_px for c in extra if c.is_object]
     out += [_candidate(b, shadow, tr, cam_floor, det) for b in _line_only_boxes(tr, objs, det)]
+    out = _merge_by_shadow(out, shadow, tr, cam_floor, det)
     return out, tr, fg
+
+
+def _merge_by_shadow(cands: list[Candidate], shadow: np.ndarray, tr: LineTrace | None, cam: Camera,
+                     det: dict[str, Any]) -> list[Candidate]:
+    """1 つの物が、左右の側面の 2 つの小片に割れることがある（上面が床に紛れる。H2 VIS-0006: 10×3mm の磁石が 3mm の小片 2 つ）。
+    影は物の奥に物の幅いっぱいに落ちるので、**同じ影の塊が真上にある塊どうしは同じ物**とみなして枠をつなぎ、判定し直す。
+    別々の物が影を共有するほど近ければ、大きい 1 つの物になる（物であることは変わらない = 安全側）。"""
+    if len(cands) < 2:
+        return cands
+    n, labels, _stats, _c = cv2.connectedComponentsWithStats(shadow, connectivity=8)
+    if n <= 1:
+        return cands
+    ratio = float(det["shadow_band_rows_ratio"])
+
+    def shadow_labels(c: Candidate) -> set[int]:
+        x, y, w, h = c.bbox_px
+        band = labels[max(0, y - max(3, int(h * ratio))):y, x:x + w]
+        ids, cnt = np.unique(band[band > 0], return_counts=True)
+        return {int(i) for i, k in zip(ids, cnt) if k >= 3}
+    groups: dict[int, list[int]] = {}
+    for i, c in enumerate(cands):
+        if c.shape != "blob":
+            continue
+        for lab in shadow_labels(c):
+            groups.setdefault(lab, []).append(i)
+    merged: set[int] = set()
+    out: list[Candidate] = []
+    for members in groups.values():
+        members = [m for m in dict.fromkeys(members) if m not in merged]
+        if len(members) < 2 or not any(cands[m].is_object for m in members):
+            continue
+        xs0 = min(cands[m].bbox_px[0] for m in members)
+        ys0 = min(cands[m].bbox_px[1] for m in members)
+        xs1 = max(cands[m].bbox_px[0] + cands[m].bbox_px[2] for m in members)
+        ys1 = max(cands[m].bbox_px[1] + cands[m].bbox_px[3] for m in members)
+        out.append(_candidate((xs0, ys0, xs1 - xs0, ys1 - ys0), shadow, tr, cam, det))
+        merged.update(members)
+    return [c for i, c in enumerate(cands) if i not in merged] + out
 
 
 def _pose_corrected(line_sub: np.ndarray | None, tr: LineTrace | None, cam: Camera, plane: LightPlane,

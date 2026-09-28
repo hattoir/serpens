@@ -220,3 +220,14 @@ def test_detect_corrects_floor_position_from_the_line_under_pose_error(cfg: dict
             assert tr.pose is not None and tr.pose[0] == pytest.approx(dh, abs=0.3) and tr.pose[1] == pytest.approx(dp, abs=0.1)
             assert any(k["kind"] == "metal_disc" for k in cell[0].kinds)
     assert errs[True] < 1.5 < errs[False], errs
+
+
+@pytest.mark.parametrize("y", [60.0, 75.0, 95.0])
+def test_magnet_split_into_side_fragments_is_one_full_size_metal_disc(cfg: dict, setup, y: float) -> None:
+    """VIS-0006: 10×3mm の磁石（鏡面、反射率 0.6 ≈ 床）は上面が床に紛れ、左右の側面の 3mm の小片 2 つになっていた（大きさを 1/3 に誤る）。
+    同じ影の塊が真上にある塊どうしは同じ物としてつなぐ。"""
+    cam, plane, lt = setup
+    fr = Renderer(cam, plane, lt, sides=True).render(Scene([Disc(0.0, y, 10.0, 3.0, 0.6, True, "magnet")], seed=1), noise_seed=1)
+    objs = [c for c in detect(fr, cam, plane, cfg)[0] if c.is_object]
+    assert len(objs) == 1 and objs[0].diameter_mm == pytest.approx(10.0, abs=1.5)
+    assert any(k["kind"] == "metal_disc" for k in objs[0].kinds)

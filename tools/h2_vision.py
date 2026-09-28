@@ -47,6 +47,8 @@ OFAT: dict[str, list[Any]] = {
     "aim_err_mm": [0.0, 2.0, 4.0, 6.0, 8.0],
     "clutter": [False, True],
     "sides": [True, False],
+    "reaim": [False, True],
+    "pose_from_line": [True, False],
 }
 AMBIENT_WITH_AE = {"ambient_lux"}          # 環境光を上げるときは露出を合わせる（合わせないと 255 で飽和して比較にならない）
 
@@ -183,7 +185,8 @@ def _sample_condition(rng: np.random.Generator) -> Condition:
                      line_scatter_mm=float(rng.uniform(0.0, 1.5)) if floor in ("rug", "carpet") else 0.0,
                      cam_height_err_mm=float(rng.normal(0.0, 3.0) - (4.0 if floor == "carpet" else 0.0)),
                      cam_pitch_err_deg=float(rng.normal(0.0, 2.0)), fov_err_deg=float(rng.normal(0.0, 3.0)),
-                     aim_err_mm=float(abs(rng.normal(0.0, 2.0))), clutter=bool(rng.random() < 0.2))
+                     aim_err_mm=float(abs(rng.normal(0.0, 2.0))), clutter=bool(rng.random() < 0.2),
+                     reaim=True)                                   # mission は候補へ線を向け直して撮り直す
 
 
 def cmd_mc(a: argparse.Namespace) -> int:
