@@ -100,12 +100,36 @@ def passes(row: dict[str, Any], mu_forward: float | None = None, torque_scale: f
     }
 
 
+def capability(rows: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
+    """同じ構成・摩擦での**能力**。直進と旋回は別の歩容を使ってよい（実機でも旋回時は振幅を下げて γ を増やせる）。
+
+      直進: トルク・ずれ（その歩容の旋回余力で直せる）を満たす歩容のうち最速
+      旋回: トルクを満たす歩容のうち最小の旋回半径
+    2026-09-29 の初回は「1 つの歩容で直進も旋回も」を要求していて、旋回の基準が過度に厳しかった。
+    """
+    p = [(r, passes(r, **kw)) for r in rows]
+    straight = [r for r, q in p if q["torque"] and q["drift"] and q["converged"]]
+    turning = [r for r, q in p if q["torque"] and q["converged"]]
+    best = max(straight, key=lambda r: r["speed_mm_s"]) if straight else max(rows, key=lambda r: r["speed_mm_s"])
+    radius = min((r["turn_radius_mm"] for r in turning), default=math.inf)
+    ok_speed = bool(straight) and best["speed_mm_s"] >= float(CRIT["min_speed_mm_s"])
+    ok_turn = radius <= float(CRIT["max_turn_radius_mm"])
+    fail = []
+    if not turning:
+        fail.append("torque")                                   # どの歩容もトルク上限を超える
+    elif not ok_speed:
+        fast = [r for r in turning if r["speed_mm_s"] >= float(CRIT["min_speed_mm_s"])]
+        fail.append("drift" if fast else "speed")               # 速い歩容はあるが、ずれを直せない / そもそも遅い
+    if turning and not ok_turn:
+        fail.append("turn")
+    return {"row": best, "speed_mm_s": best["speed_mm_s"], "turn_radius_mm": radius,
+            "ok_speed": ok_speed, "ok_turn": ok_turn, "ok": ok_speed and ok_turn, "fail": fail}
+
+
 def best_passing(rows: list[dict[str, Any]], **kw: Any) -> tuple[dict[str, Any], bool]:
-    """同じ構成・摩擦の歩容のうち、全部の基準を満たす中で最速（無ければ最速）。"""
-    ok = [r for r in rows if all(passes(r, **kw).values())]
-    if ok:
-        return max(ok, key=lambda r: r["speed_mm_s"]), True
-    return max(rows, key=lambda r: r["speed_mm_s"]), False
+    """（互換）能力の判定を (直進の代表歩容, 合格か) で返す。"""
+    c = capability(rows, **kw)
+    return c["row"], c["ok"]
 
 
 def run_cases(cases: list[Case], workers: int) -> list[dict[str, Any]]:
@@ -235,9 +259,12 @@ def s3_decisions(rows: list[dict[str, Any]], torque_scale: float = 1.0) -> list[
     out = []
     for (floor, sample), grp in group_by(rows, ("floor", "sample")).items():
         ok: dict[str, bool] = {}
+        fails: dict[str, str] = {}
         for (belly, cfg), g in group_by(grp, ("belly", "config")).items():
-            _, good = best_passing(g, torque_scale=torque_scale)
-            ok[WHEEL_KEY if belly == "WHEEL" else cfg] = good
+            cap = capability(g, torque_scale=torque_scale)
+            key = WHEEL_KEY if belly == "WHEEL" else cfg
+            ok[key] = cap["ok"]
+            fails[key] = "+".join(cap["fail"]) or "-"
         if ok.get("FW6_HEADYAW"):
             reading = "HEAD_YAW_OK"
         elif ok.get("FW6_YAW5"):
@@ -247,7 +274,8 @@ def s3_decisions(rows: list[dict[str, Any]], torque_scale: float = 1.0) -> list[
         else:
             reading = "NONE"
         law = next(r["sampled_law"] for r in grp if r["belly"] == "SNAKE")
-        out.append({"floor": floor, "sample": sample, "law": law, "reading": reading, **{f"ok_{k}": v for k, v in ok.items()}})
+        out.append({"floor": floor, "sample": sample, "law": law, "reading": reading, "torque_scale": torque_scale,
+                    **{f"ok_{k}": v for k, v in ok.items()}, **{f"fail_{k}": v for k, v in fails.items()}})
     return out
 
 
@@ -338,7 +366,7 @@ def drift_table(s2: list[dict[str, Any]]) -> list[tuple]:
 
 
 def write_decision_md(s1b: dict, s1: list[dict[str, Any]], s3d: list[dict[str, Any]], s2: list[dict[str, Any]],
-                      plots_made: list[str], stamp: str) -> None:
+                      plots_made: list[str], stamp: str, s3_rows: list[dict[str, Any]] | None = None) -> None:
     L = [f"# HG-H0 摩擦 — 判定の境界（自動生成 {stamp}。source = {SOURCE}。**実測ではない**）\n",
          "`run.py` が書き出す。手で直さない（`hardware_test_plan.md` と `README.md` は手で書く）。\n",
          f"基準（ASSUMPTION）: 前進 ≥ {CRIT['min_speed_mm_s']:.0f} mm/s、旋回半径 ≤ {CRIT['max_turn_radius_mm']:.0f} mm"
@@ -383,6 +411,24 @@ def write_decision_md(s1b: dict, s1: list[dict[str, Any]], s3d: list[dict[str, A
                 continue
             frac = {rd: np.mean([d["reading"] == rd for d in g]) for rd in ("HEAD_YAW_OK", "BODY_YAW_NEEDED", "WHEEL_FALLBACK", "NONE")}
             L.append(f"| {floor} | {law} | {len(g)} | " + " | ".join(f"{v:.0%}" for v in frac.values()) + " |")
+    L.append("\n### 不合格の理由（サンプル数。torque = どの歩容も上限超え / speed = 遅い / drift = 速い歩容はあるがずれを直せない / turn = 旋回半径）\n")
+    L.append("| 床 | 構成 | 合格 | torque | speed | drift | turn |\n|---|---|---|---|---|---|---|")
+    for floor in ASSUME["floors"]:
+        for key in list(ASSUME["configs"]) + [WHEEL_KEY]:
+            g = [d for d in s3d if d["floor"] == floor and f"fail_{key}" in d]
+            if not g:
+                continue
+            c = lambda k: sum(k in str(d[f"fail_{key}"]).split("+") for d in g)
+            L.append(f"| {floor} | {key} | {sum(bool(d[f'ok_{key}']) for d in g)}/{len(g)} | {c('torque')} | {c('speed')} | {c('drift')} | {c('turn')} |")
+    if s3_rows is not None:
+        L.append("\n### トルク上限の誤差（HG-H1）への感度: 各床で「6 本目の読み」の割合\n")
+        L.append("| 床 | 上限 × | HEAD_YAW_OK | BODY_YAW_NEEDED | WHEEL_FALLBACK | NONE |\n|---|---|---|---|---|---|")
+        for ts in (0.6, 0.8, 1.0, 1.2, 1.4):
+            dd = s3_decisions(s3_rows, torque_scale=ts)
+            for floor in ASSUME["floors"]:
+                g = [d for d in dd if d["floor"] == floor]
+                L.append(f"| {floor} | {ts:g} | " + " | ".join(f"{np.mean([d['reading'] == rd for d in g]):.0%}"
+                         for rd in ("HEAD_YAW_OK", "BODY_YAW_NEEDED", "WHEEL_FALLBACK", "NONE")) + " |")
     # 感度
     L.append("\n## 4. 感度（r = 基準値のまわり。速さの変化）\n")
     L.append("| 構成 | 法則 | r | パラメータ | 値 → 前進 mm/s |\n|---|---|---|---|---|")
@@ -557,10 +603,34 @@ def ingest(csv_path: Path, workers: int) -> Path:
     return out_md
 
 
+def _read_rows(path: Path) -> list[dict[str, Any]]:
+    """保存した CSV を読み戻す（数値は float、真偽は bool）。"""
+    text = {"config", "law", "floor", "belly", "sampled_law", "reading", "param"}
+    out = []
+    with path.open(encoding="utf-8", newline="") as fp:
+        for r in csv.DictReader(fp):
+            row: dict[str, Any] = {}
+            for k, v in r.items():
+                if v == "":
+                    continue
+                if v in ("True", "False"):
+                    row[k] = v == "True"
+                elif k in text or k.startswith("fail_"):
+                    row[k] = v
+                else:
+                    try:
+                        row[k] = float(v)
+                    except ValueError:
+                        row[k] = v
+            out.append(row)
+    return out
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true", help="小さい掃引で動作確認")
     ap.add_argument("--measured", type=Path, default=None, help="H0 実測 CSV を取り込む")
+    ap.add_argument("--from-results", action="store_true", help="保存済みの results/*.csv から判定書と図だけ作り直す")
     ap.add_argument("--workers", type=int, default=int(SWEEP["workers"]))
     args = ap.parse_args()
     if args.measured:
@@ -568,20 +638,25 @@ def main() -> int:
         return 0
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M")
     res = HERE / "results"
-    s1 = s1_ratio_sweep(args.workers, args.quick)
-    s1b = s1_boundaries(s1)
-    s2 = s2_sensitivity(args.workers, args.quick)
-    s3 = s3_monte_carlo(args.workers, args.quick)
-    s3d = s3_decisions(s3)
     suffix = "_quick" if args.quick else ""
-    write_csv(res / f"s1_ratio_sweep{suffix}.csv", s1)
-    write_csv(res / f"s2_sensitivity{suffix}.csv", s2)
-    write_csv(res / f"s3_monte_carlo{suffix}.csv", s3)
+    if args.from_results:
+        s1 = _read_rows(res / f"s1_ratio_sweep{suffix}.csv")
+        s2 = _read_rows(res / f"s2_sensitivity{suffix}.csv")
+        s3 = _read_rows(res / f"s3_monte_carlo{suffix}.csv")
+    else:
+        s1 = s1_ratio_sweep(args.workers, args.quick)
+        s2 = s2_sensitivity(args.workers, args.quick)
+        s3 = s3_monte_carlo(args.workers, args.quick)
+        write_csv(res / f"s1_ratio_sweep{suffix}.csv", s1)
+        write_csv(res / f"s2_sensitivity{suffix}.csv", s2)
+        write_csv(res / f"s3_monte_carlo{suffix}.csv", s3)
+    s1b = s1_boundaries(s1)
+    s3d = s3_decisions(s3)
     write_csv(res / f"s3_decisions{suffix}.csv", s3d)
     (res / f"s1_boundaries{suffix}.json").write_text(json.dumps(s1b, indent=2), encoding="utf-8")
     if not args.quick:
         made = plots(s1, s3d, s2, HERE / "plots")
-        write_decision_md(s1b, s1, s3d, s2, made, stamp)
+        write_decision_md(s1b, s1, s3d, s2, made, stamp, s3_rows=s3)
     print(json.dumps(s1b, indent=1))
     print(f"S1 {len(s1)} / S2 {len(s2)} / S3 {len(s3)} runs, 収束しなかった run: "
           f"{sum(not r['converged'] for r in s1 + s2 + s3)}")

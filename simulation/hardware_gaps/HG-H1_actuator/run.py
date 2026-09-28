@@ -330,6 +330,7 @@ def ingest(csv_path: Path) -> Path:
     (mdir / f"{csv_path.stem}_{stamp}_fit.json").write_text(json.dumps({"fits": fits, "problems": problems}, indent=2, ensure_ascii=False),
                                                               encoding="utf-8")
     ho = ROOT / "ai-outbox" / "handoffs" / f"{datetime.now():%Y-%m-%d}_HG-H1_measured.md"
+    ho.parent.mkdir(parents=True, exist_ok=True)
     with ho.open("a", encoding="utf-8") as fp:
         fp.write(f"\n## {stamp} H1 実測を取り込んだ\n\n- `simulation/hardware_gaps/HG-H1_actuator/results/measured/{out.name}`\n"
                  f"- 問題 {len(problems)} 件。レジスタ比の変更は User 承認が要る\n")

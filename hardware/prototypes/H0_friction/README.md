@@ -55,7 +55,21 @@
 クーポンに糸を付け、吊りばかりで床と平行に、ゆっくり一定の速さで引く。動き出す瞬間の最大値（静）と、動いている間の値（動）を読む。μ = 力 / 荷重。
 荷重 150 g だと力が 30〜100 g 程度と小さいので、はかりの分解能を CSV に書く。
 
-## 4. 条件（3 床 × 4 クーポン × 3 向き × 3 回 = 108 回）
+### 方法 D（45° の滑り方向。**摩擦法則の形を決める。いちばん情報価値が高い**）
+
+クーポンの矢印を、坂の下向き（または引く向き）から **45°** 回して置き、滑らせる。滑った向きとクーポンの軸（矢印）のなす角を読んで
+`direction = diag45`、`slide_track_deg` に書く（0 = 軸に沿って滑った）。跡はクーポンの角に付けたチョークの粉か、真上からの動画で読む。
+理由と予測値は `simulation/hardware_gaps/HG-H0_friction/hardware_test_plan.md`（T3）。
+
+## 4. 条件（シミュレーションで絞った最小の組。2026-09-29 更新）
+
+| 測定 | 回数 | 備考 |
+|---|---|---|
+| 前向き（forward） | 3 床 × 4 クーポン × 3 回 | 必須 |
+| 横向き（lateral） | 3 床 × 4 クーポン × 3 回 | 必須。左向き / 右向きを交互にして note に書く（左右の差を見る） |
+| 45°（diag45、方法 D） | 3 床 × 最良のクーポン 1 × 3 回 | 必須 |
+| 後ろ向き（backward） | 3 床 × 4 クーポン × **1 回** | 鱗の向きが逆でないかの確認だけ（前進にはほぼ効かないことが分かった） |
+| 引っ張り法（P、動摩擦） | 3 床 × 最良のクーポン 1 × 前 / 横 × 3 回 | 静止と滑りで比が変わるかを見る |
 
 | floor_id | 床 | 記録すること |
 |---|---|---|
@@ -67,19 +81,13 @@
 
 `h0_friction_template.csv` をコピーして 1 行 1 回で書く。空欄は空のまま（推測で埋めない）。
 
-## 6. 解析
+## 6. 解析（主）
 
 ```
-.\.venv\Scripts\python.exe tools\h0_friction.py hardware\prototypes\H0_friction\h0_friction_YYYYMMDD.csv
+.\.venv\Scripts\python.exe simulation\hardware_gaps\HG-H0_friction\run.py --measured hardware\prototypes\H0_friction\h0_friction_YYYYMMDD.csv
 ```
 
-床 × クーポンごとに μ（前 / 後 / 横）の平均・範囲と比を出し、その μ を MuJoCo の 3 構成（FW5 / FW6_YAW5 / FW6_HEADYAW）に入れて前進を予測する。
-判定の案（PROP-ENG-0001 の続き。**正式な Decision ではない**）:
+生データの控え → 検証 → 当てはめ（比の 95% 区間、45° 試験から法則の推定）→ 5 構成で再計算 → 床ごとの読み
+（HEAD_YAW_OK / BODY_YAW_NEEDED / SNAKE_INSUFFICIENT）→ Handoff まで自動。判定は**提案であって正式 Decision ではない**。
 
-| 結果 | 読み方 |
-|---|---|
-| 3 床すべてで、どれかのクーポンが FW5（または FW6_HEADYAW）で ≥ 50 mm/s | 推進は律速ではない → Pure Snake を続け、6 本目は **Head Yaw（照準）寄り**で評価する |
-| FW6_YAW5 でしか ≥ 50 mm/s にならない床がある | 推進が律速 → 6 本目は **Body Yaw 寄り** |
-| どの構成でも ≥ 50 mm/s にならない床がある | その床では Pure Snake は不足 → **Wheel Belly / Hybrid に戻す候補** |
-
-50 mm/s（巡回の目安）は ASSUMPTION。MuJoCo は前と後ろの摩擦の差（鱗の向き）を表せないので、前後の摩擦は「前向きの値（楽観）」と「前後の平均（保守）」の 2 通りで計算する。
+`tools/h0_friction.py`（MuJoCo で前進を予測する旧版）は照合用に残す。MuJoCo は前後の差と法則の形を表せない。

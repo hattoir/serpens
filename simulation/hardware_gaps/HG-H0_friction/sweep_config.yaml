@@ -22,5 +22,5 @@ sensitivity:
 # S3: 床ごとの Monte Carlo
 monte_carlo:
   samples_per_floor: 160
-  amplitude_deg: [30, 40]
+  amplitude_deg: [20, 30, 40]   # 20 は旋回用（γ を 30° まで使える）
   waves: [0.75, 1.0, 1.25]

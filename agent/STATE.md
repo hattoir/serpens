@@ -4,6 +4,14 @@
 
 _last updated: 2026-09-14_
 
+## Current Goal（2026-09-29 RUN-ENG-0003: 実機待ちの Hardware Gap シミュレーション）
+
+User 指示: 実機が要るところで止まらず、近似環境で感度・探索を続け、何を測れば判断が確定するかまで絞る。
+`simulation/hardware_gaps/`（H0 摩擦 / H1 アクチュエータ / H2 頭カメラ）を作った。新しいモデル `simulation/planar_friction.py`
+（平面・準静的の方向別クーロン摩擦）。要点は `ai-outbox/experiments/2026-09-29_EXP-ENG-0002_hardware_gap_sims.md`。
+**EXP-ENG-0001 の「しきい値 1.5〜2.5」は MuJoCo pyramidal cone による楽観値だった**（新しい境界は HG-H0 の decision_boundary.md）。
+次: H0 の実測 CSV（45° の滑り方向試験を追加）→ `run.py --measured` → 6 本目の用途の仮決定（User）。
+
 ## Current Goal（2026-09-29 Engineering Agent RUN-ENG-0001、branch `agent/engineering-floor-watch`）
 
 User 方針は **6 モーター**（CAD・PRODUCT.md は 5 サーボのまま。6 本目の使い方は OQ-0101）。
