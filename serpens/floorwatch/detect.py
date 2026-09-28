@@ -241,7 +241,10 @@ def _merge_by_shadow(cands: list[Candidate], shadow: np.ndarray, tr: LineTrace |
         ys0 = min(cands[m].bbox_px[1] for m in members)
         xs1 = max(cands[m].bbox_px[0] + cands[m].bbox_px[2] for m in members)
         ys1 = max(cands[m].bbox_px[1] + cands[m].bbox_px[3] for m in members)
-        out.append(_candidate((xs0, ys0, xs1 - xs0, ys1 - ys0), shadow, tr, cam, det))
+        union = _candidate((xs0, ys0, xs1 - xs0, ys1 - ys0), shadow, tr, cam, det)
+        if not union.is_object:                               # つないだ結果が物でなくなる（横に長い = 線状 など）なら、元の小片を残す
+            continue                                          # （物を消す方向には倒さない）
+        out.append(union)
         merged.update(members)
     return [c for i, c in enumerate(cands) if i not in merged] + out
 

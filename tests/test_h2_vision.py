@@ -231,3 +231,13 @@ def test_magnet_split_into_side_fragments_is_one_full_size_metal_disc(cfg: dict,
     objs = [c for c in detect(fr, cam, plane, cfg)[0] if c.is_object]
     assert len(objs) == 1 and objs[0].diameter_mm == pytest.approx(10.0, abs=1.5)
     assert any(k["kind"] == "metal_disc" for k in objs[0].kinds)
+
+
+def test_merging_fragments_never_removes_an_object_on_carpet(cfg: dict, setup) -> None:
+    """VIS-0006: 影でつないだ枠が横に長くなり「線状 = 物でない」になると、元は物だった小片まで消えていた（カーペットの巡回 1.00 → 0.73）。
+    つないだ結果が物でなければ元の小片を残す。"""
+    from simulation.h2_vision import TARGETS
+    cam, plane, lt = setup
+    missed = [(tg, s) for tg in TARGETS for s in (100, 101)
+              if not run_trial(cfg, cam, plane, lt, Condition(floor="carpet"), tg, seed=s, blur_scale=0.5).stage_hits["patrol"]]
+    assert missed == []
