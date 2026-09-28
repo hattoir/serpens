@@ -115,7 +115,8 @@ mosquitto 実行ファイルは PATH / 環境変数 `SERPENS_MOSQUITTO` / `C:\Pr
 User 採用（USER-DEC-SERPENS-DESIGN-0001 #1）。実行条件は Serpens 側（`serpens/floorwatch/csar.py`、config `floor_watch.csar`）。
 
 - 子どもが近いか（NEAR / FAR / UNKNOWN）は **Serpens が自分の観測で決める**。人は誰でも「子どもかもしれない」（区別できない）。
-  「近くに人がいない」は最後に確かめてから `far_trust_s`（3 秒）だけ信じ、切れたら UNKNOWN = NEAR 扱い。Home AI の情報は「近い」だけ受け取る
+  「近くに人がいない」は最後に確かめてから `far_trust_s`（3 秒）だけ信じ、切れたら UNKNOWN = NEAR 扱い。Home AI の情報は「近い」だけ受け取る:
+  Task に **`child_near: true`**（任意）を付けると `home_hint_s`（30 秒）NEAR として扱う。`false` は無視（Serpens の判定を「遠い」へ動かせない）
 - `inspect_point`: 撮影（閃光）は FAR のときだけ。NEAR / UNKNOWN なら物を照らさずに待ち、`capture_wait_s` を過ぎたら
   **`failed`（理由に「CSAR … 候補は未確認」）**。Home AI はこれを「未確認の候補がある」として**保護者へ知らせる**（R4）。再試行は Home AI の判断
 - 判定が確定したら `floor_finding` を**すぐ**出し（離れるのを待たない）、それから物から `retreat_mm` 離れて `done`（R3）

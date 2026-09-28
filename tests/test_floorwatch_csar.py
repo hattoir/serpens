@@ -143,7 +143,17 @@ def test_highlight_point_is_refused_while_a_child_may_be_near(cfg: dict, tmp_pat
     ex.csar.hint_near(session.t, 1e6)
     target = ahead(ex, 0.20)
     tid = home.task("highlight_point", target={"x_m": target[0], "y_m": target[1], "yaw_rad": 0.0})
-    assert run(ex, home, tid, max_ticks=10) == "failed" and "CSAR" in home.last_reason(tid)
+    assert run(ex, home, tid, max_ticks=10) == "failed" and "子どもが近い" in home.last_reason(tid)
+
+
+def test_highlight_point_when_far_is_only_unimplemented_not_a_child_refusal(cfg: dict, tmp_path: Path) -> None:
+    scene = FloorScene()
+    session, ex, ep, home = rig(cfg, scene, tmp_path)
+    _ready(ex, home, cfg, scene, tmp_path)
+    assert ex.csar.state(session.t) == FAR
+    target = ahead(ex, 0.20)
+    tid = home.task("highlight_point", target={"x_m": target[0], "y_m": target[1], "yaw_rad": 0.0})
+    assert run(ex, home, tid, max_ticks=10) == "failed" and "子どもが近い" not in home.last_reason(tid)
 
 
 def test_after_a_finding_the_robot_backs_away_from_the_object(cfg: dict, tmp_path: Path) -> None:
@@ -167,3 +177,19 @@ def test_after_a_finding_the_robot_backs_away_from_the_object(cfg: dict, tmp_pat
     before = float(np.linalg.norm(at_report - obj_mm))
     after = float(np.linalg.norm(np.array(session.world.head_tip()[:2]) - obj_mm))
     assert after > before + 0.5 * float(cfg["floor_watch"]["csar"]["retreat_mm"])   # 物から離れた（R3）
+
+
+def test_home_ai_child_near_hint_in_the_task_blocks_highlight_even_when_the_robot_sees_nobody(cfg: dict, tmp_path: Path) -> None:
+    """Task の child_near: true は安全側にだけ効く（Serpens 自身は近くに人を見ていなくても、物を指さない）。false は何も変えない。"""
+    from serpens.api.validate import validate_task
+    scene = FloorScene()
+    session, ex, ep, home = rig(cfg, scene, tmp_path)
+    _ready(ex, home, cfg, scene, tmp_path)
+    target = ahead(ex, 0.20)
+    msg = {"v": 1, "id": "t-child-near-000001", "t_ms": 1, "source": "home_ai", "task": "highlight_point", "frame_id": "home",
+           "map_version": "m", "target": {"x_m": 0.0, "y_m": 0.0, "yaw_rad": 0.0}, "child_near": True}
+    assert validate_task(msg) == []
+    assert ex.csar.state(session.t) == FAR                             # 模擬では人がいない → 遠い
+    tid = home.task("highlight_point", target={"x_m": target[0], "y_m": target[1], "yaw_rad": 0.0}, child_near=True)
+    assert run(ex, home, tid, max_ticks=10) == "failed" and "子どもが近い" in home.last_reason(tid)
+    assert ex.csar.state(session.t) == NEAR

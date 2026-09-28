@@ -84,6 +84,8 @@ class FloorWatchExecutor(Executor):
     def start(self, task: dict[str, Any]) -> None:
         self.task = task
         self._reported = False
+        if task.get("child_near") is True:                   # Home AI の「子どもが近い」は安全側にだけ効く（false は無視）
+            self.csar.hint_near(self.session.t, float(self.cfg["floor_watch"]["csar"]["home_hint_s"]))
         if task["task"] == "highlight_point":                # 物を指す・照らす = 子どもを物へ連れていく（CSAR R1・R2）
             why = ("CSAR: 子どもが近いかもしれない（または確かめられない）ので、物を指し示さない" if not self.csar.allows_attention_to_object(self.session.t)
                    else "highlight_point はこの段階では未実装（CSAR の門は先に通す）")

@@ -356,6 +356,7 @@ floor_watch:
     retreat_mm: 300.0           # 判定の後、物から離れる距離（R3）。来た向きへ後ろ向きに
     retreat_timeout_s: 20.0
     look_at_person_max_deg: 25.0    # 子どもが近いとき、頭を人の方へ向ける上限（R5。近づく動きは入れない）
+    home_hint_s: 30.0           # Task の child_near: true（Home AI の知らせ）を NEAR として信じる時間
 
 # ---------------------------------------------------------------------------
 # 動きの質の評価（simulation/quality.py, tools/motion_quality.py）。**SIMULATED。相対比較に使う**
