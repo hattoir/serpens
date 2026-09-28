@@ -86,6 +86,39 @@ EXP-ENG-0001 では平床の蛇行はトルク上限 0.30 N·m でもほぼ同�
 
 **Trade-offs**: それより前の MUJOCO_SIM の数値は古いモデルの値になった（`ai-outbox/lessons/2026-09-29_LES-ENG-0001_mujoco_pitch_sign.md`）。
 
+## 2026-09-29 — MQTT 残りの 3 件: Endpoint(PahoBroker) の通常構築 / 切断中の publish / close の TOCTOU（DEC-SERPENS-0001 の続き）
+
+**Decision**:
+A. `PahoBroker(autoconnect=False)` → `Endpoint.__post_init__` が will・購読・announce を登録してから `broker.start()`。
+   `set_will` は接続前なら受け付け、接続後は例外（黙って無視しない）。接続は `connect_async`（ブローカーが落ちていても生成で例外にしない）。
+B. 切れている間の publish は例外にしない。**retain 付き（safety_state）は捨てる**、retain 無しは paho の QoS1 待ち行列に残す。
+C. `Broker.enqueue()`（積む）と待つ関数を分けた。`Endpoint` は safety_state の「出すか決める → 積む」を
+   `_safety_lock`（RLock）の中で、**PUBACK を待つのはロックの外**で行う。close は closed を立てて OFFLINE を積むまでを同じロックの中で行う。
+   close の後の `safety_state` は mode と錠は更新するが送らない。
+
+**Why**:
+A. 以前は `Endpoint(PahoBroker)` が `set_will` の例外で組めず、試験は `__new__` で回避していた（本番の組み方が試されていない）。
+B. paho は切断中の publish で `RuntimeError` を投げ、主ループの `tick` まで上がっていた（ブローカーが落ちると機体側のループが止まる）。
+   溜めるだけにすると、再接続時に announce（今の値）の**後から**古い値が届く。変異試験で
+   `EMERGENCY_LATCHED → DRIVING → EMERGENCY_LATCHED` を観測した（Home AI には緊急停止中の機体が一瞬「走行中」に見える）。
+   safety_state は「最後の値」だけが意味を持ち、再接続時の announce が今の値を出すので、溜める理由が無い。
+C. closed の判定と積む操作の間に close が割り込むと、OFFLINE の後ろに古い状態が並んだ。
+
+**Alternatives**: 送信全体（PUBACK 待ちを含む）を 1 つのロックで囲む → 却下。主スレッドが待つ間、ネットワークスレッドの
+announce がロック待ちで固まり、DEC-SERPENS-0001 の不具合（keepalive 切れ → 偽の LWT）が戻る。
+切断中の retain を paho の待ち行列から後で消す → paho の内部に触れる。送る前に接続を確かめる方が小さい。
+
+**Trade-offs**: 「接続を確かめる → 積む」の間に切れた場合は、古い safety_state が 1 件だけ paho に残りうる
+（再接続後に announce の後から届くが、その後の周期送信が今の値で上書きする）。切断中の retain 無しイベントは
+paho の待ち行列に上限なく溜まる（今は周期的な retain 無しイベントが無いので実害なし。battery を周期化するなら上限を置く）。
+
+**Context**: 回帰試験は `test_endpoint_builds_on_paho_normally_and_announces_on_first_connect`（A）、
+`test_publishing_while_the_broker_is_down_does_not_raise_and_reconnect_restores_now`（B）、
+`test_offline_is_last_even_when_close_races_an_announce_on_another_thread` と
+`test_safety_state_after_close_does_not_overwrite_offline`（C）。どれも修正を外すと落ちることを確かめた。
+
+---
+
 ## 2026-09-29 — DEC-SERPENS-0001 MQTT safety_state retain race fix（PahoBroker はネットワークスレッド上では PUBACK を待たない）
 
 **Decision**: `PahoBroker.publish` は paho のネットワークスレッド（on_connect / on_message のコールバック）から
@@ -114,7 +147,7 @@ on_connect を接続後に登録すると、CONNACK が先に処理されたと�
 
 **Trade-offs**: ネットワークスレッドからの publish は、戻った時点でブローカー受理が保証されない。
 送信順は paho の送信待ち行列の順で保たれ、QoS1 の再送もある。
-close と、別スレッドの announce / tick の間の判定と送信の隙間（TOCTOU）は、`closed` だけでは完全には閉じていない（狭い窓が残る）。
+close と、別スレッドの announce / tick の間の判定と送信の隙間（TOCTOU）は、`closed` だけでは完全には閉じていない（狭い窓が残る）。 → 同日の続き（上）で解消。
 
 **Context**: 回帰試験は `test_reconnect_overwrites_lwt_from_the_network_thread_without_stalling_it`（実ブローカー）と
 `test_nothing_overwrites_the_offline_after_a_graceful_close`（Loopback）。どちらも修正前のコードで落ちることを確認した

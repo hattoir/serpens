@@ -50,11 +50,9 @@ def _wait(pred, timeout_s: float = 3.0) -> bool:
     return False
 
 
-@pytest.fixture(scope="module")
-def broker_port(tmp_path_factory) -> int:
+def _start_broker(conf_dir: Path, port: int) -> subprocess.Popen:
     """一時設定で Mosquitto をサブプロセス起動（127.0.0.1 のみ・匿名・永続化なし）。"""
-    port = _free_port()
-    conf = tmp_path_factory.mktemp("mosq") / "mosquitto.conf"
+    conf = conf_dir / f"mosquitto_{port}.conf"
     conf.write_text(f"listener {port} {HOST}\nallow_anonymous true\npersistence false\nlog_dest stderr\n", encoding="utf-8")
     proc = subprocess.Popen([_mosquitto_exe(), "-c", str(conf)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0)
@@ -68,12 +66,23 @@ def broker_port(tmp_path_factory) -> int:
     if not _wait(up, 5.0):
         proc.kill()
         pytest.skip("Mosquitto が起動しなかった")
-    yield port
+    return proc
+
+
+def _stop_broker(proc: subprocess.Popen) -> None:
     proc.terminate()
     try:
         proc.wait(3)
     except subprocess.TimeoutExpired:
         proc.kill()
+
+
+@pytest.fixture(scope="module")
+def broker_port(tmp_path_factory) -> int:
+    port = _free_port()
+    proc = _start_broker(tmp_path_factory.mktemp("mosq"), port)
+    yield port
+    _stop_broker(proc)
 
 
 def _endpoint(port: int, client_id: str):
@@ -83,19 +92,9 @@ def _endpoint(port: int, client_id: str):
     class Ex(Executor):
         def start(self, task): ...
         def stop(self, reason): ...
-    topic = event_topic("safety_state")
-    will = (topic, {"v": 1, "id": "will-000001", "t_ms": int(time.time() * 1000), "source": "serpens",
-                    "event": "safety_state", "data_source": "SIMULATION", "mode": "OFFLINE", "stop_reason": "UNKNOWN",
-                    "latched": True, "resume_requires": "operator"}, True)
-    serpens = PahoBroker(HOST, port, client_id=client_id, will=will, keepalive_s=KEEPALIVE_S)
-    ep = Endpoint.__new__(Endpoint)                            # set_will を通さずに組む（Paho は接続前に will）
-    ep.broker, ep.executor, ep.map_version, ep.data_source = serpens, Ex(), "tags-v0", "SIMULATION"
-    ep.clock_ms, ep.statuses, ep.active_task_id, ep.queue = lambda: int(time.time() * 1000), {}, None, []
-    ep.locked_reason, ep.last_stop_t_ms, ep.mode, ep.safety_period_ms = None, None, "DISARMED", 2000
-    ep.last_safety, ep.last_safety_pub_ms, ep.closed = None, None, False
-    serpens.subscribe("home/serpens/task", ep._on_task)
-    serpens.on_connect(ep.announce)
-    return serpens, ep, topic
+    serpens = PahoBroker(HOST, port, client_id=client_id, keepalive_s=KEEPALIVE_S, autoconnect=False)
+    ep = Endpoint(serpens, Ex(), map_version="tags-v0", data_source="SIMULATION", safety_period_ms=2000)  # 本番と同じ組み方
+    return serpens, ep, event_topic("safety_state")
 
 
 def _home(port: int, topic: str, client_id: str):
@@ -220,3 +219,59 @@ def test_qos1_redelivery_reaches_a_reconnecting_subscriber(broker_port: int) -> 
     assert _wait(lambda: any(m["id"] == "t-durable-1" for m in seen)), seen
     sub.loop_stop()
     sub.disconnect()
+
+
+def test_endpoint_builds_on_paho_normally_and_announces_on_first_connect(broker_port: int) -> None:
+    """Endpoint(PahoBroker) を普通に組める: will（LWT）は Endpoint のもの、購読と announce は接続前に揃う。
+    safety_state を一度も呼ばなくても、繋がった時点で今の状態（DISARMED / BOOT）が retain に載る。"""
+    from serpens.api.bridge import event_topic
+
+    serpens, ep, topic = _endpoint(broker_port, "serpens-build")
+    assert _wait(lambda: serpens.connections >= 1)
+    home, got = _home(broker_port, topic, "home-build")
+    assert _wait(lambda: any(r for _m, r, _t in got)), got
+    first = [m for m, r, _t in got if r][0]
+    assert (first["mode"], first["stop_reason"]) == ("DISARMED", "BOOT"), first
+    with pytest.raises(RuntimeError):                                                # 接続後の will は黙って無視しない
+        serpens.set_will(event_topic("safety_state"), ep._offline_payload("UNKNOWN"))
+    serpens.drop_socket()
+    assert _wait(lambda: any(m["mode"] == "OFFLINE" and m["stop_reason"] == "UNKNOWN" for m, _r, _t in got),
+                 timeout_s=KEEPALIVE_S), got                                          # Endpoint が渡した will が出る
+    home.close()
+
+
+def test_publishing_while_the_broker_is_down_does_not_raise_and_reconnect_restores_now(tmp_path: Path) -> None:
+    """ブローカーが落ちている間も主ループ（safety_state / tick / task_status）は例外で止まらない。
+    切れている間の safety_state は溜めない（溜めると再接続後に古い値が announce の後から届き、retain を巻き戻す）。
+    戻ったら announce が今の状態を retain に載せる。"""
+    port = _free_port()
+    proc = _start_broker(tmp_path, port)
+    serpens, ep, topic = _endpoint(port, "serpens-outage")
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    assert _wait(lambda: serpens.connections >= 1)
+    _stop_broker(proc)
+    assert _wait(lambda: not serpens._c.is_connected(), timeout_s=5.0), "切断に気づかない"
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    ep.safety_state("EMERGENCY_LATCHED", "EMERGENCY", latched=True)                   # 以前はここで RuntimeError
+    ep.task_status("t-outage-1", "aborted", "broker down")
+    time.sleep(ep.safety_period_ms / 1000)
+    assert ep.tick()
+    serpens.freeze()                                                                 # 購読者が揃うまで再接続させない
+    proc = _start_broker(tmp_path, port)
+    try:
+        watch, seen = _home(port, topic, "home-outage-watch")                        # 再接続の瞬間から全部見る
+        assert _wait(lambda: watch.connections >= 1)
+        time.sleep(0.3)                                                              # SUBSCRIBE をブローカーに通す
+        serpens.reconnect()
+        assert _wait(lambda: serpens.connections >= 2), "再接続しない"
+        assert _wait(lambda: len(seen) >= 1), "再接続しても今の状態が出ない"
+        time.sleep(1.0)                                                              # 遅れて届く古い値が無いか見張る
+        assert all(m["mode"] == "EMERGENCY_LATCHED" for m, _r, _t in seen), [m["mode"] for m, _r, _t in seen]
+        late, got = _home(port, topic, "home-outage-late")
+        assert _wait(lambda: any(r for _m, r, _t in got)), got
+        assert [m["mode"] for m, r, _t in got if r] == ["EMERGENCY_LATCHED"] * len([1 for _m, r, _t in got if r])
+        ep.close()
+        watch.close()
+        late.close()
+    finally:
+        _stop_broker(proc)

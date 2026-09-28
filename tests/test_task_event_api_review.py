@@ -63,3 +63,50 @@ def test_nothing_overwrites_the_offline_after_a_graceful_close(rig) -> None:
     assert not ep.tick()
     last = [p for p in broker.log if p.retain][-1].payload
     assert last["mode"] == "OFFLINE" and home.safety["mode"] == "OFFLINE"
+
+
+def test_offline_is_last_even_when_close_races_an_announce_on_another_thread() -> None:
+    """10 補（TOCTOU）: ネットワークスレッドの announce が「closed ではない」と判定して積む直前に止まり、その間に主ループが
+    close した。close は announce が積み終わるまで OFFLINE を積めないので、retain の最後は必ず OFFLINE。
+    （以前は close が先に OFFLINE を出し切り、再開した announce の DRIVING が retain を上書きした。）
+    結果はスレッドの進み具合に依らない: close が announce を追い越せるかどうかだけを見ている。"""
+    import threading
+
+    from serpens.api.bridge import LoopbackBroker
+    from tests.test_task_event_api import Clock, RecordingExecutor
+
+    entered, release = threading.Event(), threading.Event()
+
+    class PausingBroker(LoopbackBroker):
+        def enqueue(self, topic, payload, qos=1, retain=False):
+            if threading.current_thread().name == "announce" and payload.get("mode") != "OFFLINE":
+                entered.set()
+                release.wait(5.0)                                   # 積む直前でネットワークスレッドが止まる
+            return super().enqueue(topic, payload, qos, retain)
+
+    broker = PausingBroker()
+    ep = Endpoint(broker, RecordingExecutor(), map_version=MAP, clock_ms=Clock())
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    t_ann = threading.Thread(target=ep.announce, name="announce")
+    t_close = threading.Thread(target=ep.close, name="main-close")
+    t_ann.start()
+    assert entered.wait(5.0)
+    t_close.start()
+    t_close.join(0.5)                                               # 追い越せるなら、ここで close は終わっている
+    overtook = not t_close.is_alive()
+    release.set()
+    t_ann.join(5.0)
+    t_close.join(5.0)
+    safety = [p.payload["mode"] for p in broker.log if p.topic.endswith("/safety_state")]
+    assert not overtook, "close が announce を追い越した（announce の判定と積むの間に OFFLINE が入れる）"
+    assert safety[-1] == "OFFLINE", safety
+
+
+def test_safety_state_after_close_does_not_overwrite_offline(rig) -> None:
+    """10 補: close の後に主ループが safety_state を出しても（止める処理の途中など）、OFFLINE を上書きしない。"""
+    broker, ep, ex, home, clock = rig
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    ep.close()
+    ep.safety_state("EMERGENCY_LATCHED", "EMERGENCY", latched=True)
+    assert [p for p in broker.log if p.retain][-1].payload["mode"] == "OFFLINE" and home.safety["mode"] == "OFFLINE"
+    assert ep.mode == "EMERGENCY_LATCHED" and ep.locked_reason is not None      # 送らないだけで、受け付けの錠は掛かる
