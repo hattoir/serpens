@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 420 240" width="420" height="240"><style>
+.shell{fill:#dfe9d8;stroke:#3c5a3c;stroke-width:1.2}
+.belly{fill:#f4efe2;stroke:#3c5a3c;stroke-width:1}
+.sensor{fill:#6b7cff;fill-opacity:.55;stroke:#3440a0;stroke-width:.6}
+.fov{fill:#ffb347;fill-opacity:.18;stroke:#d9822b;stroke-width:.8;stroke-dasharray:3 2}
+.eye{fill:#1d2330;stroke:#1d2330}
+.eyeglint{fill:#ffffff}
+.axis{fill:none;stroke:#b3261e;stroke-width:1}
+.label{font:10px sans-serif;fill:#333}
+.title{font:bold 12px sans-serif;fill:#111}
+.floor{stroke:#999;stroke-width:1}
+.body{fill:none;stroke:#8fae8a;stroke-linecap:round;stroke-linejoin:round}
+.spine{fill:none;stroke:#3c5a3c;stroke-width:1.2}
+.obj{fill:#e0b400;stroke:#7a6200}
+.person{fill:#b3261e;fill-opacity:.8}
+.childm{fill:#e46aa0}
+</style><rect x="50" y="87.5" width="350" height="76.5" fill="#b3261e" fill-opacity=".12"/><text class="label" x="54" y="99.5">8〜25 mm = 挟み込み域</text><line class="floor" x1="50" y1="200" x2="400" y2="200"/><line class="floor" x1="50" y1="20" x2="50" y2="200"/><text class="label" x="24" y="204.0">0</text><text class="label" x="24" y="168.0">8</text><text class="label" x="24" y="91.5">25</text><text class="label" x="24" y="24.0">40</text><text class="label" x="44.0" y="214">0°</text><text class="label" x="219.0" y="214">25°</text><text class="label" x="394.0" y="214">50°</text><polyline points="50.0,73.5 85.0,86.2 120.0,98.3 155.0,108.7 190.0,119.0 225.0,128.9 260.0,139.2 295.0,149.6 330.0,160.4 365.0,171.2 400.0,182.0" fill="none" stroke="#b3261e" stroke-width="2"/><polyline points="50.0,182.0 85.0,182.0 120.0,182.0 155.0,182.0 190.0,182.0 225.0,182.0 260.0,182.0 295.0,182.0 330.0,182.0 365.0,182.0 400.0,182.0" fill="none" stroke="#2e7d32" stroke-width="2"/><text class="label" x="250" y="30" fill="#b3261e">— B0 卵殻（現行）</text><text class="label" x="250" y="44" fill="#2e7d32">— B1 同心ナックル（4 mm）</text><text class="label" x="50" y="234">横軸 = 隣り合う節の yaw、縦軸 = 曲げの内側・胴の側面（|y|≥25）の最小すき間 mm（上面視の 2D 近似）</text></svg>

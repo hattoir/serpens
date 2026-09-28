@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 230" width="300" height="230"><style>
+.shell{fill:#dfe9d8;stroke:#3c5a3c;stroke-width:1.2}
+.belly{fill:#f4efe2;stroke:#3c5a3c;stroke-width:1}
+.sensor{fill:#6b7cff;fill-opacity:.55;stroke:#3440a0;stroke-width:.6}
+.fov{fill:#ffb347;fill-opacity:.18;stroke:#d9822b;stroke-width:.8;stroke-dasharray:3 2}
+.eye{fill:#1d2330;stroke:#1d2330}
+.eyeglint{fill:#ffffff}
+.axis{fill:none;stroke:#b3261e;stroke-width:1}
+.label{font:10px sans-serif;fill:#333}
+.title{font:bold 12px sans-serif;fill:#111}
+.floor{stroke:#999;stroke-width:1}
+.body{fill:none;stroke:#8fae8a;stroke-linecap:round;stroke-linejoin:round}
+.spine{fill:none;stroke:#3c5a3c;stroke-width:1.2}
+.obj{fill:#e0b400;stroke:#7a6200}
+.person{fill:#b3261e;fill-opacity:.8}
+.childm{fill:#e46aa0}
+</style><text class="title" x="8" y="14">Sleep / charge（三日月）</text><polyline class="body" points="193.7,167.2 133.7,167.2 105.4,138.9 105.4,99.0 133.7,70.8 194.6,70.8" stroke-width="38.6"/><polyline class="spine" points="193.7,167.2 133.7,167.2 105.4,138.9 105.4,99.0 133.7,70.8 194.6,70.8"/><ellipse class="shell" cx="186.2" cy="167.2" rx="16.8" ry="21.0" transform="rotate(0.0 186.2 167.2)"/><circle class="eye" cx="187.8" cy="184.0" r="4.0"/><circle class="eye" cx="187.8" cy="150.4" r="4.0"/><text class="label" x="8" y="222">J1 0° / J2–J5 [45, 45, 45, 45]（合計 180°）</text></svg>

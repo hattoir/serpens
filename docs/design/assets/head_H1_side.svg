@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 260" width="300" height="260"><style>
+.shell{fill:#dfe9d8;stroke:#3c5a3c;stroke-width:1.2}
+.belly{fill:#f4efe2;stroke:#3c5a3c;stroke-width:1}
+.sensor{fill:#6b7cff;fill-opacity:.55;stroke:#3440a0;stroke-width:.6}
+.fov{fill:#ffb347;fill-opacity:.18;stroke:#d9822b;stroke-width:.8;stroke-dasharray:3 2}
+.eye{fill:#1d2330;stroke:#1d2330}
+.eyeglint{fill:#ffffff}
+.axis{fill:none;stroke:#b3261e;stroke-width:1}
+.label{font:10px sans-serif;fill:#333}
+.title{font:bold 12px sans-serif;fill:#111}
+.floor{stroke:#999;stroke-width:1}
+.body{fill:none;stroke:#8fae8a;stroke-linecap:round;stroke-linejoin:round}
+.spine{fill:none;stroke:#3c5a3c;stroke-width:1.2}
+.obj{fill:#e0b400;stroke:#7a6200}
+.person{fill:#b3261e;fill-opacity:.8}
+.childm{fill:#e46aa0}
+</style><text class="title" x="8" y="14">H1 Bean（推奨候補） — 側面</text><line class="floor" x1="0" y1="220.0" x2="297.0" y2="220.0"/><polygon class="shell" points="85.8,96.8 92.4,88.0 107.8,72.6 132.0,57.2 165.0,50.6 198.0,52.8 231.0,61.6 257.4,74.8 257.4,198.0 231.0,206.8 198.0,211.2 165.0,213.4 132.0,213.4 107.8,213.4 92.4,213.4 85.8,211.2"/><rect class="sensor" x="90.2" y="136.4" width="33.0" height="35.2"/><rect class="sensor" x="90.2" y="99.0" width="4.4" height="28.6"/><rect class="sensor" x="165.0" y="204.6" width="39.6" height="4.4"/><rect class="sensor" x="90.2" y="200.2" width="11.0" height="8.8"/><rect class="sensor" x="90.2" y="200.2" width="11.0" height="8.8"/><rect class="sensor" x="90.2" y="151.8" width="8.8" height="13.2"/><rect class="sensor" x="103.4" y="66.0" width="13.2" height="8.8"/><rect class="sensor" x="165.0" y="59.4" width="22.0" height="6.6"/><rect class="sensor" x="94.6" y="209.0" width="66.0" height="11.0"/><polygon class="fov" points="90.2,154.0 26.5,220.0 -217.8,175.5"/><circle class="eye" cx="138.6" cy="88.0" r="19.1"/><circle class="eyeglint" cx="135.6" cy="84.0" r="2.5"/><circle class="axis" cx="205.0" cy="148.8" r="4"/><text class="label" x="211.0" y="152.8">J1</text><text class="label" x="8" y="236.0">青 = センサー参照箱（Engineering の位置）、橙 = カメラ視錐台（ASSUMED FOV）</text></svg>
