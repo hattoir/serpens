@@ -124,3 +124,10 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - **J1 頭–首の入れ子 VISOR** を 2D で検討: いまの形は頭を上げると外から届くすき間が閉じる（25° から）。VISOR ならどの角度でも届く 8〜25 mm のすき間なし・重なり 0（KINEMATIC_SIM、ENTRY-0013 に追記）。**P0 の案として Engineering 待ち**
 - 描き出しの途中で Fusion がまた応答しなくなった。正面・3/4 の撮り直しは次の Fusion 作業
 - 次: (1) 正面・3/4 の撮り直し (2) VISOR を Recovery copy の別コンポーネントで形にする（元の首・頭は残す）(3) Head Yaw の首の意匠 (4) 目の光り方の絵
+
+## 更新（2026-09-29 深夜）
+
+- Recovery copy に追加（すべて別コンポーネント、元は無変更）: **SD-01E2**（顔の読まれ方の修正）、**MOUTH LINE**（E3 = E2 ＋ 横の口の線）、**VISOR**（NECK-V ＋ HEAD E2-V、J1 0〜45° で交差 0）
+- 人の評価の画像: `docs/design/renders/eval/`（A / E / E2 / E3 × 姿勢 × 画角、同じ画角）
+- **現在の Design の第一候補: SD-01E3（= E2 ＋ 口の線）＋ VISOR の J1 ＋ 同心ナックルの胴**（CAD_CONCEPT。人の評価・Engineering の判定待ち）
+- 次: 芯の色、Head Yaw の首（VISOR の芯の前に頭 yaw サーボ）、ENTRY-0011 の A 案で電装を動かした絵
