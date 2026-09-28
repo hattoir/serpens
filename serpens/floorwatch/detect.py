@@ -163,14 +163,17 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     tr = trace_line(_sub(frames["line"], dark), cam, plane, det) if with_line and "line" in frames else None
     n, _labels, stats, _cents = cv2.connectedComponentsWithStats(fg, connectivity=8)
     boxes = [tuple(int(a) for a in stats[i][:4]) for i in range(1, n) if stats[i][4] >= int(det["min_blob_px"])]
-    # 影・線だけの候補を「もう候補がある」として捨ててよいのは、塊（blob）の候補だけ。線状の塊（継ぎ目・段差と判定されて
-    # 物にならない）が覆っていても捨てない: 床と同じ色の薄い物（10 円玉）は手前の縁の細い帯だけが前景になり、線状と判定されて、
-    # 奥の影から作る候補まで消していた（H2 VIS-0002）
-    blobs = [bx for bx in boxes if not _is_line_shape(bx, det)]
-    boxes += _shadow_only_boxes(shadow, blobs, det)
-    blobs = [bx for bx in boxes if not _is_line_shape(bx, det)]
-    boxes += _line_only_boxes(tr, blobs, det)
+    # 影・線だけの候補を「もう候補がある」として捨ててよいのは、**物と判定された候補**が覆っているときだけ。
+    # 物にならなかった前景（模様・汚れ・継ぎ目と判定された塊）が覆っていても捨てない（H2 VIS-0002）:
+    #   - 床と同じ色の薄い硬貨（10 円玉）は、手前の縁の細い帯だけが前景になり線状（継ぎ目）と判定される
+    #   - 床に近い色の物は、上面が床に紛れ、左右の側面だけが小さな 2 つの塊になる（どちらも上に影が無い）
+    #   どちらも、奥の影から作る候補までその塊が消していた
     out = [_candidate(b, shadow, tr, cam, det) for b in boxes]
+    objs = [c.bbox_px for c in out if c.is_object]
+    extra = [_candidate(b, shadow, tr, cam, det) for b in _shadow_only_boxes(shadow, objs, det)]
+    out += extra
+    objs += [c.bbox_px for c in extra if c.is_object]
+    out += [_candidate(b, shadow, tr, cam, det) for b in _line_only_boxes(tr, objs, det)]
     return out, tr, fg
 
 

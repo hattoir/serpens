@@ -170,3 +170,16 @@ def test_brow_line_traced_by_column_reads_coins_and_tall_parts(cfg: dict, setup)
     assert abs(pill["brow"]["height_mm"] - 3.5) < abs(pill["cheek"]["height_mm"] - 3.5)
     cell = compare_on_object(cfg, cam, cheek, brow, 71.0, lt, Disc(0.0, 71.0, 20.0, 3.2, 0.9, True), 1, det)
     assert cell["brow"]["dropout"] and cell["cheek"]["dropout"]                 # 鏡面は両方で途切れる（metal_disc の証拠）
+
+
+@pytest.mark.parametrize("h", [2.0, 8.0, 12.0])
+def test_floor_toned_object_split_into_side_fragments_is_found_from_its_shadow(cfg: dict, setup, h: float) -> None:
+    """VIS-0005: 床に近い色（0.6 対 0.5）の物は上面が床に紛れ、左右の側面だけが小さな 2 つの塊になる。どちらも上に影が無く
+    模様と判定される。物と判定されなかった塊が、奥の影から作る候補を消していた（巡回で見逃す）。"""
+    from simulation.h2_vision import _hit_in_image, true_bbox_px
+    cam, plane, lt = setup
+    r = Renderer(cam, plane, lt, sides=True)
+    for y in (65.0, 85.0):
+        fr = r.render(Scene([Disc(0.0, y, 15.0, h, 0.6, False, "x")], seed=int(y + h)))
+        cands, _tr, _fg = detect(fr, cam, plane, cfg, with_line=False)
+        assert _hit_in_image([c for c in cands if c.is_object], true_bbox_px(cam, 0.0, y, 15.0, h), 0.01 * cam.f_px) is not None
