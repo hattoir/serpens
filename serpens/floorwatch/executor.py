@@ -18,6 +18,7 @@ import numpy as np
 
 from serpens.api.endpoint import Endpoint, Executor
 from serpens.floorwatch.dataset import imwrite
+from serpens.floorwatch.csar import NEAR, ChildProximity
 from serpens.floorwatch.detect import Candidate, detect
 from serpens.floorwatch.geometry import Camera, LightPlane
 from serpens.floorwatch.mission import IdleHold, InspectMission
@@ -53,6 +54,11 @@ class FloorWatchExecutor(Executor):
         session.mission = self.idle                      # Task が無いあいだは止まっている（展示の行動へ戻らない）
         self.task: dict[str, Any] | None = None
         self.findings: list[dict[str, Any]] = []
+        self.csar = ChildProximity.from_cfg(cfg)             # 子どもが近いか（CSAR）。Serpens 側で決める
+        self._reported = False
+        # start() の中で即座に終える Task は、次の周期で終える。start() の中で task_finished を呼ぶと、Endpoint がその後で
+        # 「accepted」を出し、Home AI には受理のまま残っていた（最後の状態が accepted になる）
+        self._pending_finish: tuple[str, str] | None = None
         self._last_phase: float | None = None
         self._last_safety: tuple[str, bool] | None = None
 
@@ -77,8 +83,14 @@ class FloorWatchExecutor(Executor):
 
     def start(self, task: dict[str, Any]) -> None:
         self.task = task
+        self._reported = False
+        if task["task"] == "highlight_point":                # 物を指す・照らす = 子どもを物へ連れていく（CSAR R1・R2）
+            why = ("CSAR: 子どもが近いかもしれない（または確かめられない）ので、物を指し示さない" if not self.csar.allows_attention_to_object(self.session.t)
+                   else "highlight_point はこの段階では未実装（CSAR の門は先に通す）")
+            self._pending_finish = ("failed", why)
+            return
         if task["task"] != "inspect_point":
-            self._finish("failed", f"{task['task']} はこの段階では未実装（模擬の縦一本は inspect_point だけ）")
+            self._pending_finish = ("failed", f"{task['task']} はこの段階では未実装（模擬の縦一本は inspect_point だけ）")
             return
         tgt = self.frame.to_world(np.array([float(task["target"]["x_m"]), float(task["target"]["y_m"])]))
         # 目標 = カメラの視野中心をその地点に置く。機体（首マーカ）はその手前 = 首→頭先端 + 視野中心の距離だけ手前に止まる
@@ -89,7 +101,8 @@ class FloorWatchExecutor(Executor):
         pts = self.session.world.world_points()
         self.mission = InspectMission(self.cfg, self.session.brain.loco, tgt - direction * offset, self._capture, self._judge,
                                       self.session.t, aim=self._aim, measure=lambda: self._offset_to(tgt),
-                                      head_link_mm=float(np.linalg.norm(pts[-1][:2] - pts[-2][:2])))
+                                      head_link_mm=float(np.linalg.norm(pts[-1][:2] - pts[-2][:2])),
+                                      attention_ok=self.csar.allows_attention_to_object)
         self.session.mission = self.mission
 
     def stop(self, reason: str) -> None:
@@ -106,18 +119,53 @@ class FloorWatchExecutor(Executor):
         self.session.step()
         t = self.session.t
         self._localize(t)
-        if self.mission is not None and not self.mission.active and self.task is not None:
-            m = self.mission
-            if m.phase == "DONE":
+        self._observe_people(t)
+        if self._pending_finish is not None and self.task is not None:
+            status, why = self._pending_finish
+            self._pending_finish = None
+            self._finish(status, why)
+        m = self.mission
+        if m is not None and self.task is not None:
+            if m.phase in ("RETREAT", "DONE") and not self._reported and m.result is not None:
+                self._reported = True                               # 判定が確定したらすぐ知らせる（離れるのを待たない。CSAR R4）
                 for c in m.result:
                     self._report(c, t)
+            if m.phase in ("WAIT_CHILD", "RETREAT") and self.csar.state(t) == NEAR:
+                self._look_at_person(t)                             # 子どもが来たら、物ではなく子どもの方を見る（CSAR R5）
+        if m is not None and not m.active and self.task is not None:
+            if m.phase == "DONE":
                 self._finish("done", f"候補 {len(m.result)} 件")
-            elif m.phase == "FAILED":
+            elif m.phase in ("FAILED", "DEFERRED"):
                 self._finish("failed", m.reason)
             self.session.mission, self.mission = self.idle, None
         self._publish_safety()
         if self.endpoint is not None:
             self.endpoint.tick()
+
+    def _observe_people(self, t: float) -> None:
+        """人の観測 → 子どもが近いか。子どもと大人は区別できないので、人は誰でも「子どもかもしれない」。
+        **模擬**: 人の追跡は展示のカメラ（上から見る）なので、いつでも見られる（sensing=True）。実機の頭カメラは床を向いている間
+        人を見られない → sensing=False にして、撮影の前後に頭を上げて周りを見る（Discovery Loop の 3）。"""
+        person = getattr(self.session, "target", None)
+        if person is None:
+            self.csar.observe(t, None, sensing=True)
+            return
+        tip = self.session.world.head_tip()[:2]
+        self.csar.observe(t, float(np.linalg.norm(np.asarray(person.floor_mm, float) - tip)) / 1000.0, sensing=True)
+
+    def _look_at_person(self, t: float) -> None:
+        """頭（J8 相当）を人の方へ。上限つき。近づく動きは入れない（R5 の範囲は見るだけ）。"""
+        person = getattr(self.session, "target", None)
+        if person is None:
+            return
+        pts = self.session.world.world_points()
+        tip, prev = pts[-1][:2], pts[-2][:2]
+        heading = math.atan2(float(tip[1] - prev[1]), float(tip[0] - prev[0]))
+        to_p = np.asarray(person.floor_mm, float) - tip
+        rel = math.degrees(wrap(math.atan2(float(to_p[1]), float(to_p[0])) - heading))   # 今の頭の向きからの角度
+        current = float(self.session.anim.base.get(HEAD_YAW, 0.0))
+        lim = float(self.cfg["floor_watch"]["csar"]["look_at_person_max_deg"])
+        self.session.brain.expr.look_at(t, max(-lim, min(lim, current + rel)), force=True)
 
     def _finish(self, status: str, reason: str) -> None:
         self.task = None

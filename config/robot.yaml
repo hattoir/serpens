@@ -348,6 +348,14 @@ floor_watch:
     critical_min_confidence: 0.05
     child_near_m: 2.0                   # 子どもがこれより近ければ距離係数 1（不明も 1 = 安全側）
     unreachable_factor: 0.5             # 子どもが届かない場所なら score をこの倍率に
+  csar:                         # Child-Safe Attention Rules の実行条件（serpens/floorwatch/csar.py。User 採用 2026-09-29、数値は Engineering の案）
+    far_trust_s: 3.0            # 「近くに人がいない」を最後に確かめてから信じる時間（撮影 capture_s 1.5 + 静止のゆとり）。切れたら UNKNOWN = NEAR 扱い
+    near_hold_s: 5.0            # 近くで人が見えたら、見えなくなってもこの間は NEAR
+    defer_capture_when_near: true   # 子どもが近い・不明のときは撮影（閃光で物を照らす）を後回し（R2）
+    capture_wait_s: 20.0        # 後回しにして待つ上限。過ぎたら「未確認」として Task を終え、保護者へ知らせるのは Home AI（R4）
+    retreat_mm: 300.0           # 判定の後、物から離れる距離（R3）。来た向きへ後ろ向きに
+    retreat_timeout_s: 20.0
+    look_at_person_max_deg: 25.0    # 子どもが近いとき、頭を人の方へ向ける上限（R5。近づく動きは入れない）
 
 # ---------------------------------------------------------------------------
 # 動きの質の評価（simulation/quality.py, tools/motion_quality.py）。**SIMULATED。相対比較に使う**

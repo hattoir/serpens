@@ -17,7 +17,8 @@ import numpy as np
 from serpens.behavior.controller import DriveCommand
 from serpens.perception.snake_pose import SnakePose
 
-PHASES = ("GOTO", "SETTLE", "ADJUST", "CREEP", "CAPTURE", "JUDGE", "DONE", "FAILED", "ABORTED")
+PHASES = ("GOTO", "SETTLE", "ADJUST", "CREEP", "WAIT_CHILD", "CAPTURE", "JUDGE", "RETREAT", "DONE", "DEFERRED", "FAILED",
+          "ABORTED")
 
 
 @dataclass
@@ -45,6 +46,7 @@ class InspectMission:
     aim: Callable[[float, float], None] | None = None   # (t, 頭ヨーの増分 deg)。None なら狙い直さない
     measure: Callable[[], tuple[float, float]] | None = None   # 頭先端から地点まで (前方, 左) [mm]。None なら位置合わせしない
     head_link_mm: float = 0.0                           # 頭ヨーの関節からカメラまでの長さ（狙いの計算に使う）
+    attention_ok: Callable[[float], bool] | None = None  # CSAR: 物を照らしてよいか（子どもが遠いと確かめられた）。None なら常に可
     phase: str = "GOTO"
     reason: str = ""
     result: Any = None
@@ -55,6 +57,8 @@ class InspectMission:
     _adjusts: int = 0
     _pre_aims: int = 0
     _burst_until: float = 0.0
+    _wait_t: float | None = None
+    _retreat_from: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.m = self.cfg["floor_watch"]["mission"]
@@ -64,7 +68,7 @@ class InspectMission:
 
     @property
     def active(self) -> bool:
-        return self.phase in ("GOTO", "SETTLE", "ADJUST", "CREEP", "CAPTURE", "JUDGE")
+        return self.phase in ("GOTO", "SETTLE", "ADJUST", "CREEP", "WAIT_CHILD", "CAPTURE", "JUDGE", "RETREAT")
 
     def _enter(self, phase: str, t: float, note: str = "") -> None:
         self.phase, self._phase_t = phase, t
@@ -94,7 +98,10 @@ class InspectMission:
         elif self.phase == "SETTLE":
             self.loco.stop("inspect: 静止中")
             if t - self._phase_t >= float(self.m["settle_s"]):
-                self._enter("ADJUST" if self.measure is not None else "CAPTURE", t)
+                if self.measure is not None:
+                    self._enter("ADJUST", t)
+                else:
+                    self._to_capture(t)
         elif self.phase == "ADJUST":
             # 停止位置は歩容の位相で 10cm 近く散り、蛇行で頭は横にもずれる。頭から地点までの (前方, 左) を測り、
             # 前後は短い微調整、横は頭ヨーで地点を線の上に置く
@@ -110,7 +117,7 @@ class InspectMission:
                 self._enter("SETTLE", t, f"地点を線の上に（頭ヨー {delta:+.1f}°、横 {lat:+.0f}mm）")
                 return
             else:
-                self._enter("CAPTURE", t, f"地点まで 前方 {fwd:.0f}mm 横 {lat:+.0f}mm")
+                self._to_capture(t, f"地点まで 前方 {fwd:.0f}mm 横 {lat:+.0f}mm")
                 return
             self._adjusts += 1
             creep = float(self.m["creep_speed_mm_s"])
@@ -122,8 +129,18 @@ class InspectMission:
                 self.loco.anim.gait.stop(immediate=True)                 # 惰行させない（振幅を即 0）
                 self.loco.stop("inspect: 微調整の後の静止")
                 self._enter("SETTLE", t)
+        elif self.phase == "WAIT_CHILD":
+            self.loco.stop("inspect: 子どもが近いかもしれない。物を照らさずに待つ（CSAR R2）")
+            if self._attention_ok(t):
+                self._enter("CAPTURE", t, "近くに人がいないと確かめた → 撮影")
+            elif t - float(self._wait_t or t) >= float(self.cfg["floor_watch"]["csar"]["capture_wait_s"]):
+                self.phase, self.reason = "DEFERRED", ("CSAR: 子どもが近いかもしれない（または確かめられない）ので撮影を後回しにした。"
+                                                       "候補は未確認（保護者への通知は Home AI）")
         elif self.phase == "CAPTURE":
             self.loco.stop("inspect: 撮影中（通常→斜め→線光→全消灯→通常）")
+            if not self._attention_ok(t):                               # 撮影中に子どもが来た: 照らすのをやめて待つ
+                self._to_capture(t, "撮影中に人が近づいた → 中断")
+                return
             if t - self._phase_t >= float(self.m["capture_s"]):
                 self.frames = self.capture()
                 self._enter("JUDGE", t)
@@ -143,8 +160,37 @@ class InspectMission:
                 self.aim(t, delta)
                 self._enter("SETTLE", t, f"線を候補へ向ける（頭ヨー {delta:+.1f}°）")
                 return
+            retreat = float(self.cfg["floor_watch"]["csar"]["retreat_mm"])
+            if retreat > 0:                                              # 見つけたら物から離れる（CSAR R3）。来た向きへ後ろ向きに
+                self._retreat_from = np.array([snake.x, snake.y])
+                self._enter("RETREAT", t, f"物から {retreat:.0f}mm 離れる（CSAR R3）")
+                return
             self._enter("DONE", t)
             self.loco.set_drive(DriveCommand(False, reason="inspect: 完了"), snake, person_xy)
+        elif self.phase == "RETREAT":
+            moved = float(np.linalg.norm(np.array([snake.x, snake.y]) - self._retreat_from)) if self._retreat_from is not None else 0.0
+            c = self.cfg["floor_watch"]["csar"]
+            if moved >= float(c["retreat_mm"]) or t - self._phase_t >= float(c["retreat_timeout_s"]):
+                self.loco.stop("inspect: 離れた")
+                self._enter("DONE", t, f"{moved:.0f}mm 離れた")
+                self.loco.set_drive(DriveCommand(False, reason="inspect: 完了"), snake, person_xy)
+                return
+            self.loco.set_drive(self.loco.ctrl.creep(float(self.m["creep_speed_mm_s"]), backward=True,
+                                                     reason="inspect: 物から離れる（CSAR R3）"), snake, person_xy)
+
+    def _attention_ok(self, t: float) -> bool:
+        if self.attention_ok is None or not bool(self.cfg["floor_watch"]["csar"]["defer_capture_when_near"]):
+            return True
+        return bool(self.attention_ok(t))
+
+    def _to_capture(self, t: float, note: str = "") -> None:
+        """撮影へ。CSAR: 子どもが遠いと確かめられていなければ、物を照らさずに待つ（WAIT_CHILD）。"""
+        if self._attention_ok(t):
+            self._enter("CAPTURE", t, note)
+            return
+        if self._wait_t is None:
+            self._wait_t = t
+        self._enter("WAIT_CHILD", t, (note + " / " if note else "") + "子どもが近いかもしれない → 撮影を待つ")
 
     def _aim_delta_deg(self) -> float | None:
         """線を候補へ向け直すための頭ヨーの増分（カメラ x 右 → 右は負）。
