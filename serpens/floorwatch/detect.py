@@ -180,8 +180,14 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     normal = _sub(frames["normal"], dark)
     raking = _sub(frames["raking"], dark)
     usable = None
+    # 線を先に追う（姿勢が分かれば、照明の較正画像を今の姿勢に合わせ直せる。VIS-0008）
+    line_sub = _sub(frames["line"], dark) if with_line and "line" in frames else None
+    tr = trace_line(line_sub, cam, plane, det) if line_sub is not None else None
+    tr, cam_floor = _pose_corrected(line_sub, tr, cam, plane, det)
     if "flat_normal" in frames and "flat_raking" in frames:
         fn, fr_ = np.float32(frames["flat_normal"]), np.float32(frames["flat_raking"])
+        if det.get("flat_repose", False):
+            fn, fr_ = _reposed_flat(fn, fr_, normal, tr, cam, cfg, det)
         lo = float(det["flat_min_signal"])
         usable = (fn >= lo) & (fr_ >= lo)
         ref_n, ref_r = float(np.median(fn[usable])) if usable.any() else 1.0, float(np.median(fr_[usable])) if usable.any() else 1.0
@@ -207,9 +213,6 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     if usable is not None:
         shadow &= usable.astype(np.uint8)
     shadow = cv2.morphologyEx(shadow, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    line_sub = _sub(frames["line"], dark) if with_line and "line" in frames else None
-    tr = trace_line(line_sub, cam, plane, det) if line_sub is not None else None
-    tr, cam_floor = _pose_corrected(line_sub, tr, cam, plane, det)
     n, _labels, stats, _cents = cv2.connectedComponentsWithStats(fg, connectivity=8)
     boxes = [tuple(int(a) for a in stats[i][:4]) for i in range(1, n) if stats[i][4] >= int(det["min_blob_px"])]
     # 影・線だけの候補を「もう候補がある」として捨ててよいのは、**物と判定された候補**が覆っているときだけ。
@@ -278,6 +281,23 @@ def _merge_by_shadow(cands: list[Candidate], shadow: np.ndarray, tr: LineTrace |
         out.append(union)
         merged.update(members)
     return [c for i, c in enumerate(cands) if i not in merged] + out
+
+
+def _reposed_flat(fn: np.ndarray, fr_: np.ndarray, normal: np.ndarray, tr: LineTrace | None, cam: Camera,
+                  cfg: dict[str, Any], det: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
+    """照明の較正画像（名目の姿勢）を今の姿勢に合わせ直す。姿勢は、線があれば床の線から（高さ・pitch）、無ければ明るさの傾き
+    から pitch だけ（高さは明るさの傾きではほとんど分からない: 露出が全体の明るさを吸収する）。VIS-0008。"""
+    from serpens.floorwatch.illumination import led_positions, pose_from_shading, repose_ratio
+    leds = led_positions(cfg)
+    if tr is not None and tr.pose is not None:
+        dh, dp = float(tr.pose[0]), float(tr.pose[1])
+    else:
+        dh, dp = pose_from_shading(normal, fn, cam, leds["normal"], 0.0, float(det["pose_max_pitch_err_deg"]))
+    if abs(dh) < 1e-6 and abs(dp) < 1e-6:
+        return fn, fr_
+    rn = np.nan_to_num(repose_ratio(cam, dh, dp, leds["normal"]), nan=0.0)
+    rr = np.nan_to_num(repose_ratio(cam, dh, dp, leds["raking"]), nan=0.0)
+    return (fn * rn).astype(np.float32), (fr_ * rr).astype(np.float32)
 
 
 def _pose_corrected(line_sub: np.ndarray | None, tr: LineTrace | None, cam: Camera, plane: LightPlane,

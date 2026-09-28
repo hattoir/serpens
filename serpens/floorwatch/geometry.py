@@ -77,6 +77,12 @@ class Camera:
         return float(np.linalg.norm(q - p)) if q is not None else float("inf")
 
 
+def head_point(p_world: np.ndarray, cam_from: Camera, cam_to: Camera) -> np.ndarray:
+    """頭に固定の点（LED など）を、別の姿勢のカメラの世界座標へ移す（カメラ座標では同じ点）。"""
+    Rf, Rt = np.stack(cam_from._axes), np.stack(cam_to._axes)
+    return Rt.T @ (Rf @ (np.asarray(p_world, float) - cam_from.center)) + cam_to.center
+
+
 @dataclass(frozen=True)
 class LightPlane:
     """光の面 n·p = d（世界座標）。"""

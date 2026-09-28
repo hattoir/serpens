@@ -94,7 +94,20 @@ def plane_for_true_camera(plane: LightPlane, cam_nom: Camera, cam_true: Camera) 
     return LightPlane(n_t, d_c + float(n_t @ cam_true.center))
 
 
-def lighting_for(base: Lighting, c: Condition, blur_scale: float) -> Lighting:
+def rigid_point(p: np.ndarray, cam_nom: Camera, cam_true: Camera) -> np.ndarray:
+    """頭に固定の点（LED）: 名目の世界座標 → カメラ座標 → 本当のカメラの世界座標。"""
+    Rn, Rt = np.stack(cam_nom._axes), np.stack(cam_true._axes)
+    return Rt.T @ (Rn @ (np.asarray(p, float) - cam_nom.center)) + cam_true.center
+
+
+def lighting_for(base: Lighting, c: Condition, blur_scale: float, cam_nom: Camera | None = None,
+                 cam_true: Camera | None = None) -> Lighting:
+    """条件の照明。cam_nom / cam_true を渡すと、LED を頭に固定として本当の姿勢へ動かす（頭が沈めばあごの LED も床に近づく）。"""
+    if cam_nom is not None and cam_true is not None:
+        n = rigid_point(np.array([0.0, base.normal_led_y_mm, base.normal_led_height_mm]), cam_nom, cam_true)
+        r = rigid_point(np.array([0.0, base.raking_led_y_mm, c.raking_led_height_mm]), cam_nom, cam_true)
+        base = replace(base, normal_led_y_mm=float(n[1]), normal_led_height_mm=float(n[2]), raking_led_y_mm=float(r[1]))
+        c = replace(c, raking_led_height_mm=float(r[2]))
     return replace(base, blur_sigma_px=c.blur_sigma_px * blur_scale, ambient_lux=c.ambient_lux, ambient_drift=c.ambient_drift,
                    auto_exposure=c.auto_exposure, shot_noise_k=c.shot_noise_k, line_width_mm=c.line_width_mm,
                    line_scatter_mm=c.line_scatter_mm, raking_led_height_mm=c.raking_led_height_mm,
@@ -180,7 +193,7 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
     rng = np.random.default_rng(seed)
     cam_t = true_camera(cam_nom, c)
     plane_t = plane_for_true_camera(plane_nom, cam_nom, cam_t)
-    r = Renderer(cam_t, plane_t, lighting_for(base_light, c, blur_scale), sides=c.sides)
+    r = Renderer(cam_t, plane_t, lighting_for(base_light, c, blur_scale, cam_nom, cam_t), sides=c.sides)
     objs: list[Disc] = []
     stains: list[Stain] = []
     seams: list[Seam] = []

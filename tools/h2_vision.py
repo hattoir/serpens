@@ -40,7 +40,7 @@ OFAT: dict[str, list[Any]] = {
     "shot_noise_k": [0.0, 0.5, 1.0, 2.0],
     "line_width_mm": [3.0, 1.5, 5.0],
     "line_scatter_mm": [0.0, 0.5, 1.0, 2.0],
-    "raking_led_height_mm": [6.0, 3.0, 10.0, 15.0],
+    "raking_led_height_mm": [6.0, 3.0, 2.0, 1.0, 10.0, 15.0],     # 頭が沈むと、あごの LED は床に近づく（6mm の頭が 4mm 沈めば 2mm）
     "cam_height_err_mm": [0.0, -10.0, -5.0, 5.0],
     "cam_pitch_err_deg": [0.0, -5.0, -2.0, 2.0, 5.0],
     "fov_err_deg": [0.0, -10.0, -5.0, 5.0, 10.0],
@@ -124,8 +124,19 @@ def _per_target(rows: list[dict[str, Any]]) -> dict[str, float]:
     return out
 
 
+def _parse_base(text: str) -> dict[str, Any]:
+    """--base "physical_falloff=1,flat_field=1,auto_exposure=1" → Condition の上書き（真偽は 1/0、数は float、他は文字列）。"""
+    out: dict[str, Any] = {}
+    types = {k: type(v) for k, v in asdict(Condition()).items()}
+    for kv in filter(None, (t.strip() for t in text.split(","))):
+        k, v = kv.split("=", 1)
+        t = types[k]
+        out[k] = (v not in ("0", "false", "False")) if t is bool else (float(v) if t is float else v)
+    return out
+
+
 def cmd_sweep(a: argparse.Namespace) -> int:
-    base = Condition()
+    base = Condition(**_parse_base(a.base))
     plan: list[tuple[str, Any, Condition]] = []
     only = set(a.factors.split(",")) if a.factors else None
     for factor, levels in OFAT.items():
@@ -165,7 +176,7 @@ def _fmt(v: Any) -> str:
 
 
 def _write_sweep_md(a: argparse.Namespace, table: list[dict[str, Any]], dt: float, n: int) -> None:
-    lines = [f"# H2 視覚: 1 因子ずつ（{SOURCE}。{n} 試行、{dt / 60:.1f} 分、解像度 UXGA×{a.scale}、1 水準 = 対象 {len(TARGETS)} × "
+    lines = [f"# H2 視覚: 1 因子ずつ（{SOURCE}。base={a.base or '既定'}。{n} 試行、{dt / 60:.1f} 分、解像度 UXGA×{a.scale}、1 水準 = 対象 {len(TARGETS)} × "
              f"{a.reps} 回 + 陰性 {len(NEGATIVES)} × {a.reps} 回）", "",
              "名目: 木目・模様 1.0・凹凸 0・ぼけ 0・環境光 8・線 3mm・斜め照明 6mm・カメラのずれ 0・狙いの誤差 0・側面あり。",
              "critical = ボタン電池・磁石・錠剤。flagged = 鏡面の危険物が metal_disc（危険物側）に回った割合。", "",
@@ -196,7 +207,8 @@ def _sample_condition(rng: np.random.Generator) -> Condition:
                      cam_height_err_mm=float(rng.normal(0.0, 3.0) - (4.0 if floor == "carpet" else 0.0)),
                      cam_pitch_err_deg=float(rng.normal(0.0, 2.0)), fov_err_deg=float(rng.normal(0.0, 3.0)),
                      aim_err_mm=float(abs(rng.normal(0.0, 2.0))), clutter=bool(rng.random() < 0.2),
-                     reaim=True)                                   # mission は候補へ線を向け直して撮り直す
+                     reaim=True,                                   # mission は候補へ線を向け直して撮り直す
+                     physical_falloff=True, flat_field=True)       # 照明は点光源、頭ごとに照明の較正画像あり（VIS-0007）
 
 
 def cmd_mc(a: argparse.Namespace) -> int:
@@ -250,6 +262,7 @@ def main() -> int:
             p.add_argument("--reps", type=int, default=3)
             p.add_argument("--factors", default="", help="カンマ区切りで因子を絞る（空 = 全部）")
             p.add_argument("--tag", default="", help="結果のファイル名に付ける（絞ったときに全体の結果を上書きしない）")
+            p.add_argument("--base", default="", help='名目の条件の上書き（例 "physical_falloff=1,flat_field=1,auto_exposure=1"）')
         else:
             p.add_argument("--n", type=int, default=300)
     a = ap.parse_args()

@@ -88,6 +88,7 @@ class Lighting:
     auto_exposure: bool = False            # 5 枚に共通の露出を、通常画像の 99% 点が 230 になるよう合わせる
     physical_falloff: bool = False         # 照明を点光源（cos / r²）にする。通常照明はレンズの脇、斜め照明はあご。視野の中心の床で 1 に正規化
     normal_led_height_mm: float = 30.0     # 通常照明（レンズの脇）の高さ
+    normal_led_y_mm: float = 0.0           # 通常照明の前後位置
     irradiance_max: float = 20.0           # 光源のすぐ近くで発散しないよう上限（正規化した値）
 
 
@@ -236,12 +237,14 @@ class Renderer:
         self._normals = np.zeros(floor.shape)
         self._normals[..., 2] = 1.0
         if lt.physical_falloff:
-            e_n = self._irradiance(floor, np.array([0.0, 0.0, lt.normal_led_height_mm]))
+            e_n = self._irradiance(floor, np.array([0.0, lt.normal_led_y_mm, lt.normal_led_height_mm]))
             e_r = self._irradiance(floor, np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm]))
         else:
             e_n = e_r = np.ones(floor.shape[:2])
-        return {"flat_normal": np.clip(lt.normal_lux * e_n * gain, 0, 255).astype(np.float32),
-                "flat_raking": np.clip(lt.raking_lux * e_r * gain, 0, 255).astype(np.float32)}
+        # 白いカードは床より明るいので、較正は飽和しない低い露出で撮り、露出の比を掛けて戻す（255 で切らない）。
+        # 切ると近い側が飽和したまま較正され、そこだけ割り算が合わなかった（VIS-0008）
+        return {"flat_normal": (lt.normal_lux * e_n * gain).astype(np.float32),
+                "flat_raking": (lt.raking_lux * e_r * gain).astype(np.float32)}
 
     def _irradiance(self, surf: np.ndarray, light: np.ndarray) -> np.ndarray:
         """点光源の照度 cos / r²（表面の法線と光源の向き）。視野の中心あたりの床（前 71mm）で 1 に正規化する。"""
@@ -290,7 +293,7 @@ class Renderer:
         rng = np.random.default_rng(noise_seed)
         e_n = e_r = np.ones_like(base)
         if lt.physical_falloff:
-            e_n = self._irradiance(surf, np.array([0.0, 0.0, lt.normal_led_height_mm]))
+            e_n = self._irradiance(surf, np.array([0.0, lt.normal_led_y_mm, lt.normal_led_height_mm]))
             e_r = self._irradiance(surf, np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm]))
         signals = {"normal": (lt.normal_lux, e_n),
                    "raking": (lt.raking_lux, e_r * np.where(shadow, lt.shadow_factor, 1.0)),
@@ -325,6 +328,8 @@ def _irradiance_at(p: np.ndarray, n: np.ndarray, light: np.ndarray) -> np.ndarra
 
 def default_lighting(cfg: dict[str, Any]) -> Lighting:
     r, ll, syn = cfg["floor_watch"]["raking"], cfg["floor_watch"]["line_light"], cfg["floor_watch"]["synthetic"]
+    nl = cfg["floor_watch"].get("normal_light", {"led_height_mm": 30.0, "led_forward_mm": 0.0})
     return Lighting(raking_led_height_mm=float(r["led_height_mm"]), raking_led_y_mm=float(r["led_forward_mm"]),
+                    normal_led_height_mm=float(nl["led_height_mm"]), normal_led_y_mm=float(nl["led_forward_mm"]),
                     shadow_max_mm=float(r["shadow_max_mm"]), line_width_mm=float(ll["width_mm_initial"]),
                     noise_sigma=float(syn["noise_sigma"]), shadow_factor=float(syn["shadow_factor"]))
