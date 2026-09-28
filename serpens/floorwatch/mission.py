@@ -147,14 +147,27 @@ class InspectMission:
             self.loco.set_drive(DriveCommand(False, reason="inspect: 完了"), snake, person_xy)
 
     def _aim_delta_deg(self) -> float | None:
-        """線から外れた一番大きい候補へ線を向けるための頭ヨーの増分（カメラ x 右 → 右は負）。"""
+        """線を候補へ向け直すための頭ヨーの増分（カメラ x 右 → 右は負）。
+
+        ずれ = 候補の横位置 − その前後位置で床の線が通る横位置（`line_x_mm`。検出が床の線から姿勢のずれを直した値。無ければ 0）。
+        向け直すのは (a) 線が候補に当たっていない、または (b) 当たっているが中心から `line_aim_tol_mm` 以上ずれていて、まだ決め手
+        （metal_disc か、測れた高さ）が無い候補。線が中心から 2mm ずれると鏡面の危険物の metal_disc が 3 分の 2 に、4mm で半分に落ちる
+        （H2 VIS-0002、合成）。線を当てただけで満足しない。"""
         half_w = float(self.cfg["floor_watch"]["line_light"]["width_mm_initial"]) / 2
-        off = [c for c in (self.result or []) if not getattr(c, "on_line", True)
-               and abs(float(c.floor_xy_mm[0])) > half_w and float(c.floor_xy_mm[1]) > 0]
+        tol = float(self.m.get("line_aim_tol_mm", half_w))
+
+        def offset(c: Any) -> float:
+            lx = getattr(c, "line_x_mm", None)
+            return float(c.floor_xy_mm[0]) - (float(lx) if lx is not None and math.isfinite(lx) else 0.0)
+
+        def decided(c: Any) -> bool:
+            return getattr(c, "height_mm", None) is not None or any(k.get("kind") == "metal_disc" for k in getattr(c, "kinds", []))
+        off = [c for c in (self.result or []) if float(c.floor_xy_mm[1]) > 0
+               and ((not getattr(c, "on_line", True) and abs(offset(c)) > half_w) or (abs(offset(c)) > tol and not decided(c)))]
         if not off:
             return None
         c = max(off, key=lambda k: float(k.diameter_mm))
-        x, y = float(c.floor_xy_mm[0]), float(c.floor_xy_mm[1])
+        x, y = offset(c), float(c.floor_xy_mm[1])
         delta = -math.degrees(math.asin(max(-1.0, min(1.0, x / (self.head_link_mm + y)))))
         lim = float(self.m["aim_max_deg"])
         return max(-lim, min(lim, delta))

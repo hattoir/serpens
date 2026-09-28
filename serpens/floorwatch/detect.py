@@ -58,6 +58,7 @@ class Candidate:
     shape: str                        # blob / line
     kinds: list[dict[str, Any]]       # [{kind, confidence}]（分類器ができるまでは形と証拠だけ）
     rationale: list[str] = field(default_factory=list)
+    line_x_mm: float | None = None    # 候補の前後位置で、床の線が通る横位置（姿勢を直した後）。狙い直しの量 = floor_xy_mm[0] − これ
 
 
 def motion_px(a: np.ndarray, b: np.ndarray) -> float:
@@ -192,7 +193,19 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     objs += [c.bbox_px for c in extra if c.is_object]
     out += [_candidate(b, shadow, tr, cam_floor, det) for b in _line_only_boxes(tr, objs, det)]
     out = _merge_by_shadow(out, shadow, tr, cam_floor, det)
+    if tr is not None:                                        # 線を候補へ向け直す量のために、候補の前後位置での線の横位置
+        plane_floor = plane if cam_floor is cam else plane.fixed_to_head(cam, cam_floor)
+        for c in out:
+            c.line_x_mm = _floor_line_x(plane_floor, float(c.floor_xy_mm[1]))
     return out, tr, fg
+
+
+def _floor_line_x(plane: LightPlane, y_mm: float) -> float | None:
+    """床（z=0）の上で、前 y_mm の所を線が通る横位置。線が前後に走らない（眉の線）なら None。"""
+    n = plane.normal
+    if abs(n[0]) < 1e-9 or not np.isfinite(y_mm):
+        return None
+    return float((plane.d - n[1] * y_mm) / n[0])
 
 
 def _merge_by_shadow(cands: list[Candidate], shadow: np.ndarray, tr: LineTrace | None, cam: Camera,
