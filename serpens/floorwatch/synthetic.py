@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+import cv2
 import numpy as np
 
 from serpens.floorwatch.geometry import Camera, LightPlane
@@ -52,6 +53,9 @@ class Seam:
     width_mm: float = 1.5
 
 
+FLOOR_KINDS = ("wood", "tile", "rug", "carpet", "pattern")
+
+
 @dataclass
 class Scene:
     objects: list[Disc] = field(default_factory=list)
@@ -59,6 +63,9 @@ class Scene:
     seams: list[Seam] = field(default_factory=list)
     floor_albedo: float = 0.5
     seed: int = 0
+    floor: str = "wood"                    # FLOOR_KINDS（H2 の Hardware Gap 用。既定は従来の木目）
+    texture_contrast: float = 1.0          # 模様の濃さの倍率
+    floor_height_sigma_mm: float = 0.0     # 床の凹凸（カーペットの毛足など。約 2mm 周期のなめらかな乱数場）
 
 
 @dataclass(frozen=True)
@@ -73,14 +80,51 @@ class Lighting:
     ambient_lux: float = 8.0
     shadow_factor: float = 0.35
     noise_sigma: float = 2.0
+    # 以下は H2 の Hardware Gap 用（既定は従来どおり = 変化なし）
+    blur_sigma_px: float = 0.0             # ピンぼけ・手ぶれ（全画像に同じガウスぼけ）
+    ambient_drift: float = 0.0             # 環境光が撮影の間に変わる割合（窓の光・照明のちらつき。1σ）
+    line_scatter_mm: float = 0.0           # 床で線がにじむ幅（毛足の散乱。0 なら幅どおりの矩形）
+    shot_noise_k: float = 0.0              # 明るさに比例する雑音（σ² = noise_sigma² + k·信号）
+    auto_exposure: bool = False            # 5 枚に共通の露出を、通常画像の 99% 点が 230 になるよう合わせる
 
 
-def _floor_texture(xy: np.ndarray, seed: int) -> np.ndarray:
-    """木目風の模様（前後方向の縞 + 低周波のむら）。"""
+def _random_field(seed: int, scale_mm: float, extent_mm: float = 320.0, res_mm: float = 0.25) -> tuple[np.ndarray, float]:
+    """床の座標に固定された乱数場（平均 0・標準偏差 1）。撮影ごとに変わらない（床そのものの模様・凹凸）。"""
+    n = int(extent_mm / res_mm)
+    g = np.random.default_rng(seed).normal(0.0, 1.0, (n, n)).astype(np.float32)
+    k = max(1, int(round(scale_mm / res_mm)))
+    g = cv2.GaussianBlur(g, (0, 0), k)
+    g = (g - g.mean()) / max(float(g.std()), 1e-6)
+    return g, res_mm
+
+
+def _sample(field_: tuple[np.ndarray, float], xy: np.ndarray) -> np.ndarray:
+    """床の座標 (x: −160〜160, y: −10〜310 mm) の乱数場を画素へ写す（範囲外は 0）。"""
+    g, res = field_
+    mx = ((xy[..., 0] + 160.0) / res).astype(np.float32)
+    my = ((xy[..., 1] + 10.0) / res).astype(np.float32)
+    return cv2.remap(g, mx, my, cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=0.0)
+
+
+def _floor_texture(xy: np.ndarray, seed: int, floor: str = "wood", contrast: float = 1.0) -> np.ndarray:
+    """床の模様（反射率の倍率）。wood は従来の木目（前後方向の縞 + 低周波のむら）。**すべて模擬の模様。**"""
     x, y = xy[..., 0], xy[..., 1]
-    grain = 0.08 * np.sin(x / 9.0 + 0.7 * np.sin(y / 40.0 + seed)) + 0.05 * np.sin(x / 2.3 + seed)
-    blotch = 0.06 * np.sin(x / 55.0 + y / 70.0 + seed * 1.3)
-    return 1.0 + grain + blotch
+    if floor == "wood":
+        grain = 0.08 * np.sin(x / 9.0 + 0.7 * np.sin(y / 40.0 + seed)) + 0.05 * np.sin(x / 2.3 + seed)
+        blotch = 0.06 * np.sin(x / 55.0 + y / 70.0 + seed * 1.3)
+        return 1.0 + contrast * (grain + blotch)
+    if floor == "tile":                                        # ほぼ無地 + 目地（300mm 角。視野に 1 本入るかどうか）
+        speck = 0.03 * _sample(_random_field(seed, 1.0), xy)
+        grout = np.where((np.abs((x + 150.0 + 37.0 * seed) % 300.0 - 150.0) > 148.5) |
+                         (np.abs((y + 11.0 * seed) % 300.0 - 150.0) > 148.5), -0.35, 0.0)
+        return 1.0 + contrast * (speck + grout)
+    if floor == "rug":                                         # 繊維（約 0.7mm）+ 織りのむら
+        return 1.0 + contrast * (0.18 * _sample(_random_field(seed, 0.7), xy) + 0.06 * _sample(_random_field(seed + 1, 6.0), xy))
+    if floor == "carpet":                                      # 毛足の房（約 1.5mm）が強い
+        return 1.0 + contrast * (0.28 * _sample(_random_field(seed, 1.5), xy) + 0.08 * _sample(_random_field(seed + 1, 8.0), xy))
+    if floor == "pattern":                                     # 濃い柄の敷物（10〜20mm の模様）
+        return 1.0 + contrast * (0.35 * np.tanh(2.0 * _sample(_random_field(seed, 6.0), xy)))
+    raise ValueError(f"floor は {FLOOR_KINDS} のどれか: {floor}")
 
 
 def _seam_height(fx: np.ndarray, fy: np.ndarray, seams: list[Seam]) -> np.ndarray:
@@ -97,8 +141,9 @@ def _seam_height(fx: np.ndarray, fy: np.ndarray, seams: list[Seam]) -> np.ndarra
 class Renderer:
     """幾何から画像を描く。"""
 
-    def __init__(self, cam: Camera, plane: LightPlane, lighting: Lighting) -> None:
-        self.cam, self.plane, self.lt = cam, plane, lighting
+    def __init__(self, cam: Camera, plane: LightPlane, lighting: Lighting, sides: bool = False) -> None:
+        """sides=True: 円柱の側面も描く（高い物ほど側面が大きく写る。H2 の評価用）。既定は従来の上面だけ。"""
+        self.cam, self.plane, self.lt, self.sides = cam, plane, lighting, sides
         vs, us = np.mgrid[0:cam.height_px, 0:cam.width_px].astype(float)
         xa, ya, za = cam._axes
         d = ((us - cam.cx) / cam.f_px)[..., None] * xa + ((vs - cam.cy) / cam.f_px)[..., None] * ya + za
@@ -111,10 +156,12 @@ class Renderer:
         self.floor_xy[ok] = p[ok][:, :2]
 
     def _surface(self, scene: Scene) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        """各画素の表面: 高さ、反射率、鏡面、物体 index（-1 = 床）。"""
+        """各画素の表面: 3 次元の点、反射率、鏡面、物体 index（-1 = 床）。視線で最も手前の面が写る。"""
         H, W = self.cam.height_px, self.cam.width_px
         fx, fy = np.nan_to_num(self.floor_xy[..., 0]), np.nan_to_num(self.floor_xy[..., 1])
         height = _seam_height(fx, fy, scene.seams)                      # 継ぎ目は視差を無視して床の高さ場に
+        if scene.floor_height_sigma_mm > 0:                              # 毛足の凹凸（床の座標に固定）
+            height = height + scene.floor_height_sigma_mm * _sample(_random_field(scene.seed + 101, 2.0), self.floor_xy)
         albedo = np.full((H, W), scene.floor_albedo)
         for s in scene.seams:                                            # 溝の中は暗い、段差の縁は細い線
             c = fx if s.along == "y" else fy
@@ -129,12 +176,41 @@ class Renderer:
             albedo[m] = st.albedo
         dz = self.dir[..., 2]
         ok = dz < -1e-9
+        cz = self.cam.height_mm
+        s_best = np.where(ok, (height - cz) / np.where(ok, dz, 1.0), np.inf)   # 床（継ぎ目・凹凸の高さの水平面）
+        dx, dy = self.dir[..., 0], self.dir[..., 1]
+        a = dx * dx + dy * dy
         for i, ob in enumerate(scene.objects):
-            s = np.where(ok, (ob.height_mm - self.cam.height_mm) / np.where(ok, dz, 1.0), np.nan)
-            p = self.cam.center + s[..., None] * self.dir
-            top = ok & (np.hypot(p[..., 0] - ob.x_mm, p[..., 1] - ob.y_mm) <= ob.diameter_mm / 2)
-            height[top], albedo[top], specular[top], owner[top] = ob.height_mm, ob.albedo, ob.specular, i
-        return height, albedo, specular, owner
+            r = ob.diameter_mm / 2
+            s_top = np.where(ok, (ob.height_mm - cz) / np.where(ok, dz, 1.0), np.inf)
+            p = self.cam.center + np.where(np.isfinite(s_top), s_top, 0.0)[..., None] * self.dir
+            top = ok & (np.hypot(p[..., 0] - ob.x_mm, p[..., 1] - ob.y_mm) <= r)
+            s_obj = np.where(top, s_top, np.inf)
+            shade = np.ones((H, W))
+            if self.sides:                                              # 鉛直な円柱の側面（入る側の交点）
+                ox, oy = -ob.x_mm, -ob.y_mm                             # カメラ中心 (0, 0) − 物の中心
+                b = 2 * (ox * dx + oy * dy)
+                c = ox * ox + oy * oy - r * r
+                disc = b * b - 4 * a * c
+                hit = (disc >= 0) & (a > 1e-12)
+                s_side = np.where(hit, (-b - np.sqrt(np.where(hit, disc, 0.0))) / (2 * np.where(hit, a, 1.0)), np.inf)
+                z_side = cz + s_side * dz
+                side = hit & (s_side > 0) & (z_side >= 0) & (z_side <= ob.height_mm) & (s_side < s_obj)
+                s_obj = np.where(side, s_side, s_obj)
+                # 側面は上からの照明に対して暗い（法線が水平）。見る向きとの角度で 0.45〜0.75 倍（模擬）
+                s_fin = np.where(side, s_side, 0.0)
+                px_ = dx * s_fin - ob.x_mm
+                py_ = dy * s_fin - ob.y_mm
+                nlen = np.maximum(np.hypot(px_, py_), 1e-9)
+                facing = np.clip(-(px_ * dx + py_ * dy) / (nlen * np.sqrt(np.maximum(a, 1e-12))), 0.0, 1.0)
+                shade = np.where(side, 0.45 + 0.3 * facing, shade)
+            win = s_obj < s_best
+            s_best = np.where(win, s_obj, s_best)
+            albedo = np.where(win, ob.albedo * shade, albedo)
+            specular = np.where(win, ob.specular, specular)
+            owner = np.where(win, i, owner)
+        xyz = self.cam.center + np.where(np.isfinite(s_best), s_best, 0.0)[..., None] * self.dir
+        return xyz, albedo, specular, owner
 
     def _shadow(self, scene: Scene, owner: np.ndarray) -> np.ndarray:
         """あごの LED（高さ h_led、前後 y_led、真下）からの影: 物の奥（+y）へ H·d/(h_led − H) 伸びる。"""
@@ -159,30 +235,42 @@ class Renderer:
 
     def render(self, scene: Scene) -> dict[str, np.ndarray]:
         cam, lt = self.cam, self.lt
-        height, albedo, specular, owner = self._surface(scene)
-        tex = np.where(owner >= 0, 1.0, _floor_texture(np.nan_to_num(self.floor_xy), scene.seed))
+        surf, albedo, specular, owner = self._surface(scene)
+        tex = np.where(owner >= 0, 1.0, _floor_texture(np.nan_to_num(self.floor_xy), scene.seed, scene.floor,
+                                                       scene.texture_contrast))
         base = albedo * tex
         shadow = self._shadow(scene, owner)
-        # 線光: 表面（高さ height の水平面）と光の面の交線。x 方向の距離で幅を切る
-        dz = self.dir[..., 2]
-        ok = dz < -1e-9
-        s = np.where(ok, (height - cam.height_mm) / np.where(ok, dz, 1.0), np.nan)
-        surf = cam.center + s[..., None] * self.dir
-        dist = np.abs(surf @ self.plane.normal - self.plane.d) / max(abs(self.plane.normal[0]), 1e-9)
+        # 線光: 表面の点と光の面の距離。幅は床の上（水平）で測る → 面の法線の水平成分で割る
+        ok = self.dir[..., 2] < -1e-9
+        n_h = max(float(np.hypot(self.plane.normal[0], self.plane.normal[1])), 1e-9)
+        dist = np.abs(surf @ self.plane.normal - self.plane.d) / n_h
         lit = ok & (dist <= lt.line_width_mm / 2) & ~specular
         line = np.where(lit, 1.0, 0.0)
+        if lt.line_scatter_mm > 0:                                       # 毛足で線がにじむ（床の上だけ）
+            halo = 0.5 * np.exp(-0.5 * (np.maximum(dist - lt.line_width_mm / 2, 0.0) / lt.line_scatter_mm) ** 2)
+            line = np.where(ok & (owner < 0) & ~lit, halo, line)
+        rng = np.random.default_rng()
+        signals = {"normal": (lt.normal_lux, np.ones_like(base)),
+                   "raking": (lt.raking_lux, np.where(shadow, lt.shadow_factor, 1.0)),
+                   "line": (lt.line_lux, line + 0.03),
+                   "dark": (0.0, np.ones_like(base)),
+                   "normal2": (lt.normal_lux, np.ones_like(base))}        # 撮影順 通常→斜め→線光→全消灯→通常
+        raw = {}
+        for k, (lux, mult) in signals.items():
+            amb = lt.ambient_lux * (1.0 + (rng.normal(0.0, lt.ambient_drift) if lt.ambient_drift > 0 else 0.0))
+            v = amb * base + lux * base * mult if lt.ambient_drift > 0 or lt.auto_exposure else lt.ambient_lux + lux * base * mult
+            if lt.blur_sigma_px > 0:
+                v = cv2.GaussianBlur(v.astype(np.float32), (0, 0), lt.blur_sigma_px)
+            raw[k] = v
+        gain = 1.0
+        if lt.auto_exposure:                                              # 5 枚に共通の露出（別々に合わせると差が壊れる）
+            gain = 230.0 / max(float(np.percentile(raw["normal"], 99)), 1e-6)
 
-        def img(lux: float, mult: np.ndarray) -> np.ndarray:
-            v = lt.ambient_lux + lux * base * mult
-            noise = np.random.default_rng().normal(0, lt.noise_sigma, v.shape)   # 撮影ごとに違う雑音
-            return np.clip(v + noise, 0, 255).astype(np.uint8)
-
-        one = np.ones_like(base)
-        return {"normal": img(lt.normal_lux, one),
-                "raking": img(lt.raking_lux, np.where(shadow, lt.shadow_factor, 1.0)),
-                "line": img(lt.line_lux, line + 0.03),
-                "dark": img(0.0, one),
-                "normal2": img(lt.normal_lux, one)}          # 撮影順 通常→斜め→線光→全消灯→通常
+        def img(v: np.ndarray) -> np.ndarray:
+            v = v * gain
+            sigma = np.sqrt(lt.noise_sigma ** 2 + lt.shot_noise_k * np.maximum(v, 0.0)) if lt.shot_noise_k > 0 else lt.noise_sigma
+            return np.clip(v + rng.normal(0.0, 1.0, v.shape) * sigma, 0, 255).astype(np.uint8)   # 撮影ごとに違う雑音
+        return {k: img(v) for k, v in raw.items()}
 
 
 def default_lighting(cfg: dict[str, Any]) -> Lighting:
