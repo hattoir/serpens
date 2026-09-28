@@ -8,7 +8,7 @@
      明るさの差が無い物（床と同じ色）は影だけ、線の異常だけからも候補を作る（patrol は影だけ、inspect は線も）
   4. 線光: 行ごとに線の位置。基準は較正した光の面が予測する床の線と、物の前後の床上の線（局所の中央値）。
      横ずれ → 光の面との交点で高さ。線が途切れたら「測れない」（**height=None + 理由**。0 とは書かない）
-  5. 候補: 大きさ・高さ（None なら理由）・影・途切れ・形。「線の途切れ + 円形 + 直径 5〜25mm」は metal_disc
+  5. 候補: 大きさ・高さ（None なら理由）・影・途切れ・形。「線の途切れ + 円形 + 直径（metal_disc_diameter_mm）」は metal_disc
      （ボタン電池の可能性）として危険物側へ回す。汚れ・模様（影なし・高さなし）と線状の継ぎ目は物ではない
 
 数値はすべて config の floor_watch.detect（DESIGN 値。実写で調整）。
@@ -211,9 +211,11 @@ def _line_only_boxes(tr: LineTrace | None, boxes: list[tuple[int, int, int, int]
         return []
     valid = ~np.isnan(tr.u_floor)
     present = ~np.isnan(tr.u_line)
-    base = float(np.nanmedian(tr.height_mm)) if present.any() else 0.0
-    raised = present & (np.abs(np.nan_to_num(tr.height_mm) - base) >= float(det["height_object_min_mm"]))
+    base = _running_baseline(tr.height_mm, int(det["line_baseline_rows"]))
+    raised = present & (np.abs(np.nan_to_num(tr.height_mm - base)) >= float(det["height_object_min_mm"]))
     anomaly = valid & (~present | raised)
+    rows_present = np.flatnonzero(present)
+    ctx = int(det["line_context_rows"])
     out, start = [], None
     margin = int(tr.width_px * 1.5)
     for v in range(len(anomaly) + 1):
@@ -221,12 +223,33 @@ def _line_only_boxes(tr: LineTrace | None, boxes: list[tuple[int, int, int, int]
         if on and start is None:
             start = v
         elif not on and start is not None:
-            if v - start >= int(det["dropout_rows_min"]):
+            # 物が線を途切れさせる・持ち上げるなら、その前後には床の線が見えている。線の端（遠くで細って消える・
+            # 画像の縁）で始まる／終わる異常は、物の証拠にしない（H2 VIS-0002: ぼけ・画角のずれで遠くの端が消えて誤報）
+            flanked = bool(((rows_present < start) & (rows_present >= start - ctx)).any()
+                           and ((rows_present >= v) & (rows_present < v + ctx)).any())
+            if v - start >= int(det["dropout_rows_min"]) and flanked:
                 u = float(np.nanmedian(tr.u_floor[start:v]))
                 box = (max(0, int(u - margin)), start, 2 * margin, v - start)
                 if not _covered(box, boxes, int(det["blob_close_px"])):
                     out.append(box)
             start = None
+    return out
+
+
+def _running_baseline(height: np.ndarray, half_rows: int) -> np.ndarray:
+    """線の上の床の高さの基準を、行の近くの中央値で取る（全体の中央値 1 つにしない）。カメラの高さ・pitch が少しずれると、
+    床の高さは線に沿って傾いた坂（遠くほど大きく外れる）になり、全体の中央値との差で近い側が「出っ張り」に見えていた
+    （VIS-0002: pitch −2° で近い側が +1.3mm）。窓は物より十分広い（物は窓の数分の 1 なので中央値に効かない）。"""
+    h = np.asarray(height, float)
+    out = np.full(h.shape, np.nan)
+    idx = np.flatnonzero(~np.isnan(h))
+    if idx.size == 0:
+        return out
+    vals = h[idx]
+    lo = np.searchsorted(idx, idx - half_rows)
+    hi = np.searchsorted(idx, idx + half_rows, side="right")
+    for k, (a, b) in enumerate(zip(lo, hi)):
+        out[idx[k]] = float(np.median(vals[a:b]))
     return out
 
 
@@ -302,7 +325,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     if dropout:
         rationale.append(f"線が {missing} 行途切れ（鏡面の疑い）。高さは測れない（None）")
     if metal_disc:
-        rationale.append("途切れ + 円形 + 直径 5〜25mm → metal_disc（ボタン電池の可能性）")
+        rationale.append(f"途切れ + 円形 + 直径 {lo:g}〜{hi:g}mm → metal_disc（ボタン電池・磁石の可能性）")
     if shape == "line":
         rationale.append("線状 → 床の継ぎ目・段差の可能性（物ではない）")
     if shape == "blob" and not big_enough:

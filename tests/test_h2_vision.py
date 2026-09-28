@@ -100,3 +100,36 @@ def test_floor_coloured_thin_coin_is_found_from_its_shadow_even_behind_a_rim_str
             cands, _tr, _fg = detect(fr, cam, plane, cfg, with_line=with_line)
             found += any(c.is_object and abs(c.floor_xy_mm[0]) < 15 for c in cands)
     assert found == 8
+
+
+@pytest.mark.parametrize("cond", [Condition(cam_pitch_err_deg=-2.0), Condition(cam_height_err_mm=-5.0),
+                                  Condition(blur_sigma_px=4.0), Condition(fov_err_deg=5.0)],
+                         ids=["pitch-2", "height-5", "blur4", "fov+5"])
+def test_empty_floor_under_small_pose_error_or_blur_gives_no_line_only_object(cfg: dict, setup, cond: Condition) -> None:
+    """VIS-0002: 何も無い床で、線だけの候補が出ていた。(A) 遠く・近くの端で線が細って消えるのを「途切れ」とした
+    (B) 姿勢のずれで床の高さが線に沿って坂になり、全体の中央値との差で「出っ張り」に見えた。"""
+    cam, plane, lt = setup
+    for seed in (7, 8):
+        t = run_trial(cfg, cam, plane, lt, cond, None, seed=seed, blur_scale=0.5)
+        assert t.false_objects["inspect"] == 0, (cond, seed)
+
+
+def test_clear_object_is_still_found_from_the_line_alone(cfg: dict, setup) -> None:
+    """線だけの経路を残す: 床と同じ反射率で鏡面（透明な物の代わり）は、線の途切れ（前後に床の線がある）で見つかる。"""
+    cam, plane, lt = setup
+    found = 0
+    for seed in range(3):
+        fr = Renderer(cam, plane, lt, sides=True).render(Scene([Disc(0.0, 80.0, 15.0, 3.0, 0.5, True, "unknown")], seed=seed))
+        cands, _tr, _fg = detect(fr, cam, plane, cfg, with_line=True)
+        found += any(c.is_object and abs(c.floor_xy_mm[0]) < 15 and 60 < c.floor_xy_mm[1] < 100 for c in cands)
+    assert found == 3
+
+
+def test_five_mm_magnet_ball_is_a_metal_disc(cfg: dict, setup) -> None:
+    """5mm の磁石球（鏡面）: 大きさが約 10% 小さく出る。下限 5.0mm だと危険物側に回らなかった（VIS-0002）。"""
+    cam, plane, lt = setup
+    flagged = 0
+    for seed in range(4):
+        t = run_trial(cfg, cam, plane, lt, Condition(), "magnet_ball_5", seed=seed, blur_scale=0.5)
+        flagged += t.critical_flag
+    assert flagged >= 3
