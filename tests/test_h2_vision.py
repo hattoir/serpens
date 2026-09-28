@@ -243,3 +243,23 @@ def test_merging_fragments_never_removes_an_object_on_carpet(cfg: dict, setup) -
     missed = [(tg, s) for tg, s in cases
               if not run_trial(cfg, cam, plane, lt, Condition(floor="carpet"), tg, seed=s, blur_scale=0.5).stage_hits["patrol"]]
     assert missed == []
+
+
+@pytest.mark.parametrize("target,seed", [("bead_10_dark", 1005), ("coin_10yen", 1001)])
+def test_point_light_falloff_needs_the_flat_field_calibration(cfg: dict, setup, target: str, seed: int) -> None:
+    """VIS-0007: 点光源（レンズの脇・あご）の照明は視野の近い側と遠い側で 25 倍前後明るさが違い、1 回の露出では遠い半分が沈む。
+    照明の較正画像（白いカード、機器の較正）で割ると巡回で見つかる。掃引で見逃した試行そのもの。"""
+    cam, plane, lt = setup
+    point = Condition(physical_falloff=True, auto_exposure=True)
+    flat = Condition(physical_falloff=True, auto_exposure=True, flat_field=True)
+    assert not run_trial(cfg, cam, plane, lt, point, target, seed=seed, blur_scale=0.5).stage_hits["patrol"]
+    assert run_trial(cfg, cam, plane, lt, flat, target, seed=seed, blur_scale=0.5).stage_hits["patrol"]
+
+
+@pytest.mark.parametrize("seed", [2012, 2026, 2040])
+def test_dim_line_on_a_dark_stain_at_low_exposure_is_not_a_specular_break(cfg: dict, setup, seed: int) -> None:
+    """VIS-0007: 露出が低い（点光源で近い床が明るい）と、暗い汚れの上の線が絶対値の閾値を下回り「途切れ = 鏡面」になっていた。
+    線がある閾値を、この撮影の線の明るさに対する割合でも見る。"""
+    cam, plane, lt = setup
+    c = Condition(physical_falloff=True, auto_exposure=True, flat_field=True)
+    assert run_trial(cfg, cam, plane, lt, c, None, seed=seed, blur_scale=0.5, negative="stain").false_objects["inspect"] == 0

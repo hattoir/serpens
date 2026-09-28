@@ -49,8 +49,12 @@ OFAT: dict[str, list[Any]] = {
     "sides": [True, False],
     "reaim": [False, True],
     "pose_from_line": [True, False],
+    "lighting_model": ["uniform", "point", "point+flat"],
 }
-AMBIENT_WITH_AE = {"ambient_lux"}          # 環境光を上げるときは露出を合わせる（合わせないと 255 で飽和して比較にならない）
+# 露出を合わせて比べる因子（合わせないと 255 で飽和して比較にならない）。点光源は近い床が明るく、名目の露出では飽和する
+AMBIENT_WITH_AE = {"ambient_lux", "lighting_model"}
+# 照明の模型: uniform = 一様（従来）/ point = 点光源 cos/r² / point+flat = 点光源 + 照明の較正画像で割る（VIS-0007）
+LIGHTING_MODELS = {"uniform": {}, "point": {"physical_falloff": True}, "point+flat": {"physical_falloff": True, "flat_field": True}}
 
 _CTX: dict[str, Any] = {}
 
@@ -123,10 +127,16 @@ def _per_target(rows: list[dict[str, Any]]) -> dict[str, float]:
 def cmd_sweep(a: argparse.Namespace) -> int:
     base = Condition()
     plan: list[tuple[str, Any, Condition]] = []
+    only = set(a.factors.split(",")) if a.factors else None
     for factor, levels in OFAT.items():
+        if only is not None and factor not in only:
+            continue
         for lv in levels:
             extra = {"auto_exposure": True} if factor in AMBIENT_WITH_AE else {}
-            plan.append((factor, lv, replace(base, **{factor: lv}, **extra)))
+            if factor == "lighting_model":
+                plan.append((factor, lv, replace(base, **LIGHTING_MODELS[lv], **extra)))
+            else:
+                plan.append((factor, lv, replace(base, **{factor: lv}, **extra)))
     jobs, index = [], []
     for i, (_f, _lv, c) in enumerate(plan):
         js = _jobs_for(c, a.reps, 1000 * i)
@@ -135,14 +145,14 @@ def cmd_sweep(a: argparse.Namespace) -> int:
     t0 = time.time()
     rows = _run(jobs, a.workers, a.scale)
     a.out.mkdir(parents=True, exist_ok=True)
-    _write_trials(a.out / "h2_vision_sweep_trials.csv", rows)
+    _write_trials(a.out / f"h2_vision_sweep{a.tag}_trials.csv", rows)
     table = []
     for i, (factor, lv, _c) in enumerate(plan):
         rs = [r for r, j in zip(rows, index) if j == i]
         s = summarize([_as_trial(r) for r in rs])
         table.append({"factor": factor, "level": lv, **s, **{f"insp_{k}": v for k, v in _per_target(rs).items()}})
     keys = list(table[0])
-    with (a.out / "h2_vision_sweep.csv").open("w", newline="", encoding="utf-8") as fp:
+    with (a.out / f"h2_vision_sweep{a.tag}.csv").open("w", newline="", encoding="utf-8") as fp:
         w = csv.DictWriter(fp, fieldnames=keys)
         w.writeheader()
         w.writerows(table)
@@ -170,7 +180,7 @@ def _write_sweep_md(a: argparse.Namespace, table: list[dict[str, Any]], dt: floa
               "| 因子 | 水準 | " + " | ".join(TARGETS) + " |", "|---|---|" + "---|" * len(TARGETS)]
     for r in table:
         lines.append(f"| {r['factor']} | {r['level']} | " + " | ".join(_fmt(r[f'insp_{t}']) for t in TARGETS) + " |")
-    (a.out / "h2_vision_sweep.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (a.out / f"h2_vision_sweep{a.tag}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def _sample_condition(rng: np.random.Generator) -> Condition:
@@ -238,6 +248,8 @@ def main() -> int:
         p.add_argument("--seed", type=int, default=0)
         if name == "sweep":
             p.add_argument("--reps", type=int, default=3)
+            p.add_argument("--factors", default="", help="カンマ区切りで因子を絞る（空 = 全部）")
+            p.add_argument("--tag", default="", help="結果のファイル名に付ける（絞ったときに全体の結果を上書きしない）")
         else:
             p.add_argument("--n", type=int, default=300)
     a = ap.parse_args()

@@ -66,6 +66,8 @@ class Condition:
     sides: bool = True
     pose_from_line: bool = True             # 検出が床の線から姿勢のずれを推定して位置を直すか（config の detect.pose_from_line を上書き）
     reaim: bool = False                     # inspect の後、候補へ線を向け直してもう 1 回撮る（mission の狙い直しを模す）
+    physical_falloff: bool = False          # 照明を点光源（cos / r²）にする（通常 = レンズの脇、斜め = あご）
+    flat_field: bool = False                # 照明の較正画像（白いカード、名目の姿勢で 1 回）を検出に渡す
 
 
 def scaled_camera(cam: Camera, scale: float) -> Camera:
@@ -95,7 +97,8 @@ def plane_for_true_camera(plane: LightPlane, cam_nom: Camera, cam_true: Camera) 
 def lighting_for(base: Lighting, c: Condition, blur_scale: float) -> Lighting:
     return replace(base, blur_sigma_px=c.blur_sigma_px * blur_scale, ambient_lux=c.ambient_lux, ambient_drift=c.ambient_drift,
                    auto_exposure=c.auto_exposure, shot_noise_k=c.shot_noise_k, line_width_mm=c.line_width_mm,
-                   line_scatter_mm=c.line_scatter_mm, raking_led_height_mm=c.raking_led_height_mm)
+                   line_scatter_mm=c.line_scatter_mm, raking_led_height_mm=c.raking_led_height_mm,
+                   physical_falloff=c.physical_falloff)
 
 
 @dataclass
@@ -199,6 +202,9 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
         toy_box = true_bbox_px(cam_t, toy.x_mm, toy.y_mm, toy.diameter_mm, toy.height_mm)
     frames = r.render(Scene(objs, stains, seams, seed=seed, floor=c.floor, texture_contrast=c.texture_contrast,
                             floor_height_sigma_mm=c.floor_height_sigma_mm), noise_seed=seed)   # 試行ごとに再現できる雑音
+    if c.flat_field:                                   # 較正は名目の姿勢で 1 回（本当の姿勢がずれていれば較正も少しずれる）
+        cal = Renderer(cam_nom, plane_nom, lighting_for(base_light, c, blur_scale))
+        frames = {**frames, **cal.flat_field(getattr(r, "last_gain", 1.0))}
     out = Trial(target)
     for stage, with_line in (("patrol", False), ("inspect", True)):
         try:

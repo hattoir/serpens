@@ -86,6 +86,9 @@ class Lighting:
     line_scatter_mm: float = 0.0           # 床で線がにじむ幅（毛足の散乱。0 なら幅どおりの矩形）
     shot_noise_k: float = 0.0              # 明るさに比例する雑音（σ² = noise_sigma² + k·信号）
     auto_exposure: bool = False            # 5 枚に共通の露出を、通常画像の 99% 点が 230 になるよう合わせる
+    physical_falloff: bool = False         # 照明を点光源（cos / r²）にする。通常照明はレンズの脇、斜め照明はあご。視野の中心の床で 1 に正規化
+    normal_led_height_mm: float = 30.0     # 通常照明（レンズの脇）の高さ
+    irradiance_max: float = 20.0           # 光源のすぐ近くで発散しないよう上限（正規化した値）
 
 
 def _random_field(seed: int, scale_mm: float, extent_mm: float = 320.0, res_mm: float = 0.25) -> tuple[np.ndarray, float]:
@@ -178,6 +181,8 @@ class Renderer:
         ok = dz < -1e-9
         cz = self.cam.height_mm
         s_best = np.where(ok, (height - cz) / np.where(ok, dz, 1.0), np.inf)   # 床（継ぎ目・凹凸の高さの水平面）
+        nrm = np.zeros((H, W, 3))
+        nrm[..., 2] = 1.0                                               # 床・上面は上向き
         dx, dy = self.dir[..., 0], self.dir[..., 1]
         a = dx * dx + dy * dy
         for i, ob in enumerate(scene.objects):
@@ -187,6 +192,7 @@ class Renderer:
             top = ok & (np.hypot(p[..., 0] - ob.x_mm, p[..., 1] - ob.y_mm) <= r)
             s_obj = np.where(top, s_top, np.inf)
             shade = np.ones((H, W))
+            n_side = None
             if self.sides:                                              # 鉛直な円柱の側面（入る側の交点）
                 ox, oy = -ob.x_mm, -ob.y_mm                             # カメラ中心 (0, 0) − 物の中心
                 b = 2 * (ox * dx + oy * dy)
@@ -203,14 +209,45 @@ class Renderer:
                 py_ = dy * s_fin - ob.y_mm
                 nlen = np.maximum(np.hypot(px_, py_), 1e-9)
                 facing = np.clip(-(px_ * dx + py_ * dy) / (nlen * np.sqrt(np.maximum(a, 1e-12))), 0.0, 1.0)
-                shade = np.where(side, 0.45 + 0.3 * facing, shade)
+                if not self.lt.physical_falloff:              # 点光源にするときは照明の向きで決まる（ここでは暗くしない）
+                    shade = np.where(side, 0.45 + 0.3 * facing, shade)
+                n_side = (side, px_ / nlen, py_ / nlen)
             win = s_obj < s_best
             s_best = np.where(win, s_obj, s_best)
             albedo = np.where(win, ob.albedo * shade, albedo)
             specular = np.where(win, ob.specular, specular)
             owner = np.where(win, i, owner)
+            nrm = np.where(win[..., None], np.array([0.0, 0.0, 1.0]), nrm)
+            if n_side is not None:
+                sd, nx_, ny_ = n_side
+                m = win & sd
+                nrm = np.where(m[..., None], np.stack([nx_, ny_, np.zeros_like(nx_)], axis=-1), nrm)
         xyz = self.cam.center + np.where(np.isfinite(s_best), s_best, 0.0)[..., None] * self.dir
+        self._normals = nrm                                             # 照明（点光源）の計算に使う
         return xyz, albedo, specular, owner
+
+    def flat_field(self, gain: float) -> dict[str, np.ndarray]:
+        """照明の較正画像（白いカード = 反射率 1 の平らな床を各照明で撮り、全消灯を引いたもの）。雑音なし、gain は撮影の露出。
+        点光源（physical_falloff）でなければ一様。"""
+        lt = self.lt
+        ok = self.dir[..., 2] < -1e-9
+        s = np.where(ok, -self.cam.height_mm / np.where(ok, self.dir[..., 2], 1.0), 0.0)
+        floor = self.cam.center + s[..., None] * self.dir
+        self._normals = np.zeros(floor.shape)
+        self._normals[..., 2] = 1.0
+        if lt.physical_falloff:
+            e_n = self._irradiance(floor, np.array([0.0, 0.0, lt.normal_led_height_mm]))
+            e_r = self._irradiance(floor, np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm]))
+        else:
+            e_n = e_r = np.ones(floor.shape[:2])
+        return {"flat_normal": np.clip(lt.normal_lux * e_n * gain, 0, 255).astype(np.float32),
+                "flat_raking": np.clip(lt.raking_lux * e_r * gain, 0, 255).astype(np.float32)}
+
+    def _irradiance(self, surf: np.ndarray, light: np.ndarray) -> np.ndarray:
+        """点光源の照度 cos / r²（表面の法線と光源の向き）。視野の中心あたりの床（前 71mm）で 1 に正規化する。"""
+        ref = _irradiance_at(np.array([0.0, 71.0, 0.0]), np.array([0.0, 0.0, 1.0]), light)
+        e = _irradiance_at(surf, self._normals, light) / max(float(ref), 1e-12)
+        return np.minimum(e, self.lt.irradiance_max)
 
     def _shadow(self, scene: Scene, owner: np.ndarray) -> np.ndarray:
         """あごの LED（高さ h_led、前後 y_led、真下）からの影: 物の奥（+y）へ H·d/(h_led − H) 伸びる。"""
@@ -251,11 +288,15 @@ class Renderer:
             halo = 0.5 * np.exp(-0.5 * (np.maximum(dist - lt.line_width_mm / 2, 0.0) / lt.line_scatter_mm) ** 2)
             line = np.where(ok & (owner < 0) & ~lit, halo, line)
         rng = np.random.default_rng(noise_seed)
-        signals = {"normal": (lt.normal_lux, np.ones_like(base)),
-                   "raking": (lt.raking_lux, np.where(shadow, lt.shadow_factor, 1.0)),
+        e_n = e_r = np.ones_like(base)
+        if lt.physical_falloff:
+            e_n = self._irradiance(surf, np.array([0.0, 0.0, lt.normal_led_height_mm]))
+            e_r = self._irradiance(surf, np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm]))
+        signals = {"normal": (lt.normal_lux, e_n),
+                   "raking": (lt.raking_lux, e_r * np.where(shadow, lt.shadow_factor, 1.0)),
                    "line": (lt.line_lux, line + 0.03),
                    "dark": (0.0, np.ones_like(base)),
-                   "normal2": (lt.normal_lux, np.ones_like(base))}        # 撮影順 通常→斜め→線光→全消灯→通常
+                   "normal2": (lt.normal_lux, e_n)}                        # 撮影順 通常→斜め→線光→全消灯→通常
         raw = {}
         for k, (lux, mult) in signals.items():
             amb = lt.ambient_lux * (1.0 + (rng.normal(0.0, lt.ambient_drift) if lt.ambient_drift > 0 else 0.0))
@@ -266,12 +307,20 @@ class Renderer:
         gain = 1.0
         if lt.auto_exposure:                                              # 5 枚に共通の露出（別々に合わせると差が壊れる）
             gain = 230.0 / max(float(np.percentile(raw["normal"], 99)), 1e-6)
+        self.last_gain = gain                                             # 較正画像（flat_field）を同じ露出で作るため
 
         def img(v: np.ndarray) -> np.ndarray:
             v = v * gain
             sigma = np.sqrt(lt.noise_sigma ** 2 + lt.shot_noise_k * np.maximum(v, 0.0)) if lt.shot_noise_k > 0 else lt.noise_sigma
             return np.clip(v + rng.normal(0.0, 1.0, v.shape) * sigma, 0, 255).astype(np.uint8)   # 撮影ごとに違う雑音
         return {k: img(v) for k, v in raw.items()}
+
+
+def _irradiance_at(p: np.ndarray, n: np.ndarray, light: np.ndarray) -> np.ndarray:
+    v = light - p
+    r2 = np.maximum(np.sum(v * v, axis=-1), 1e-6)
+    cos = np.sum(n * v, axis=-1) / np.sqrt(r2)
+    return np.clip(cos, 0.0, None) / r2
 
 
 def default_lighting(cfg: dict[str, Any]) -> Lighting:

@@ -132,10 +132,21 @@ def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[s
     u_floor = _floor_line_columns(plane, cam, rows)
     u_line, height = np.full(H, np.nan), np.full(H, np.nan)
     widths: list[float] = []
+    # 線が「ある」とする明るさは、この撮影の線の明るさ（行ごとの山の中央値）に対する割合でも見る（小さい方）。露出が低いと
+    # 暗い汚れの上の線が絶対値の閾値を下回り、「途切れ = 鏡面」と読んでいた（VIS-0007: 点光源の照明で露出が下がる）。
+    # 鏡面の上ではほぼ線が無いので、割合の閾値でも途切れのまま
+    windows = {}
+    peaks = []
     for v in rows:
         if np.isnan(u_floor[v]):
             continue
         lo, hi = int(max(0, u_floor[v] - search)), int(min(W, u_floor[v] + search))
+        if hi > lo:
+            windows[v] = (lo, hi)
+            peaks.append(float(line_sub[v, lo:hi].max()))
+    if peaks:
+        min_i = max(min(min_i, float(det["line_rel_min"]) * float(np.median(peaks))), float(det["line_abs_floor"]))
+    for v, (lo, hi) in windows.items():
         prof = line_sub[v, lo:hi]
         if prof.size == 0 or prof.max() < min_i:
             continue
@@ -154,7 +165,12 @@ def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[s
 
 def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: dict[str, Any],
            with_line: bool = True) -> tuple[list[Candidate], LineTrace | None, np.ndarray]:
-    """frames: normal / raking / line / dark / normal2。with_line=False は巡回中の発見（線なし）。"""
+    """frames: normal / raking / line / dark / normal2。with_line=False は巡回中の発見（線なし）。
+
+    任意で flat_normal / flat_raking（照明の較正画像。白いカードを平らに置いて各照明で撮り、全消灯を引いたもの。**機器の較正で、
+    その場所の基準床ではない**）を渡すと、通常・斜め照明の画像をそれで割ってから判定する。点光源の照明は視野の近い側と遠い側で
+    明るさが 25 倍前後違い（cos / r²）、1 回の露出では遠い半分が暗く沈む（H2 VIS-0007）。較正画像で予想される明るさが
+    `flat_min_signal` に届かない画素は、暗すぎて判定できないので前景・影に使わない。"""
     det = scaled_thresholds(cfg, cam)
     if "normal2" in frames:
         m = motion_px(frames["normal"], frames["normal2"])
@@ -163,11 +179,24 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     dark = np.float32(frames["dark"])
     normal = _sub(frames["normal"], dark)
     raking = _sub(frames["raking"], dark)
+    usable = None
+    if "flat_normal" in frames and "flat_raking" in frames:
+        fn, fr_ = np.float32(frames["flat_normal"]), np.float32(frames["flat_raking"])
+        lo = float(det["flat_min_signal"])
+        usable = (fn >= lo) & (fr_ >= lo)
+        ref_n, ref_r = float(np.median(fn[usable])) if usable.any() else 1.0, float(np.median(fr_[usable])) if usable.any() else 1.0
+        normal = (normal / np.maximum(fn, 1.0) * ref_n).astype(np.float32)          # 明るさを視野の中ほどにそろえる
+        raking = (raking / np.maximum(fr_, 1.0) * ref_r).astype(np.float32)
+        if usable.any() and not usable.all():                                        # 暗すぎる所は背景の当てはめを乱さない値で埋める
+            normal = np.where(usable, normal, float(np.median(normal[usable]))).astype(np.float32)
+            raking = np.where(usable, raking, float(np.median(raking[usable]))).astype(np.float32)
     blur = int(det["background_blur_px"]) | 1
     smooth = cv2.GaussianBlur(normal, (blur, blur), 0)                  # 木目の細かい縞を落とす
     diff = smooth - robust_background(smooth, int(det["background_poly_degree"]), float(det["diff_z"]))
     sigma = max(float(np.median(np.abs(diff - np.median(diff))) / 0.6745), float(det["noise_sigma_min"]))
     fg = (np.abs(diff) > float(det["diff_z"]) * sigma).astype(np.uint8)
+    if usable is not None:
+        fg &= usable.astype(np.uint8)
     close = int(det["blob_close_px"]) | 1
     fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, np.ones((close, close), np.uint8))
     fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
@@ -175,6 +204,8 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     ratio = ratio / max(float(np.median(ratio)), 1e-3)                  # 全体で正規化（露出差）
     # 通常画像で暗すぎる画素（黒い繊維・暗い床）は、明るさの落ち込みを見分けられない → 影としない（比が雑音になる。VIS-0005）
     shadow = ((ratio < float(det["shadow_ratio_max"])) & (normal >= float(det["shadow_min_signal"]))).astype(np.uint8)
+    if usable is not None:
+        shadow &= usable.astype(np.uint8)
     shadow = cv2.morphologyEx(shadow, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     line_sub = _sub(frames["line"], dark) if with_line and "line" in frames else None
     tr = trace_line(line_sub, cam, plane, det) if line_sub is not None else None
