@@ -239,6 +239,19 @@ def _line_evidence(bbox: tuple[int, int, int, int], tr: LineTrace | None,
     return True, hs, missing
 
 
+def _roundish(dx_mm: float, foot: np.ndarray | None, top: np.ndarray | None, cam: Camera, max_h_mm: float) -> bool:
+    """横幅 dx と前後の長さが円に見合うか。**前後の長さは物の高さで変わる**: 上面が高さ H にあると、塊の上辺の視線が
+    床ではなく z=H で交わるので、床へ投影した奥の縁は (1 − H/h_cam) 倍に縮む。H ∈ [0, max_h_mm] のどれかで
+    0.5 ≤ dx/dy ≤ 2 になれば円形とする（高さを線で測れない鏡面の物でも使える）。横に長い塊（段差・継ぎ目）は通さない。"""
+    if foot is None or top is None or not np.isfinite(dx_mm):
+        return False
+    near, far0 = float(foot[1]), float(top[1])
+    far_min = far0 * (1.0 - min(max_h_mm, cam.height_mm * 0.95) / cam.height_mm)
+    dy_hi, dy_lo = far0 - near, far_min - near                    # H = 0 / H = max_h_mm のときの前後の長さ
+    lo, hi = dx_mm / 2.0, dx_mm * 2.0                              # 円形とみなす dy の範囲
+    return dy_hi > 0 and max(dy_lo, 1e-3) <= hi and dy_hi >= lo
+
+
 def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrace | None, cam: Camera,
                det: dict[str, Any]) -> Candidate:
     x, y, w, h = bbox
@@ -248,7 +261,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     diameter = float(max(w, h)) * scale if np.isfinite(scale) else float("nan")
     dx_mm = w * scale if np.isfinite(scale) else float("nan")
     dy_mm = float(top[1] - foot[1]) if foot is not None and top is not None else float("inf")   # 床上の前後の長さ
-    roundish = np.isfinite(dx_mm) and np.isfinite(dy_mm) and 0.5 <= dx_mm / max(dy_mm, 1e-3) <= 2.0
+    roundish = _roundish(dx_mm, foot, top, cam, float(det.get("metal_disc_max_height_mm", 0.0)))
     band = shadow[max(0, y - int(h * float(det["shadow_band_rows_ratio"]))):y, x:x + w]   # 影は物の奥 = 塊の上辺から上へ
     has_shadow = band.size > 0 and band.mean() > float(det["shadow_band_min"])
     on_line, hs, missing = _line_evidence((x, y, w, h), tr, det)

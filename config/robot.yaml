@@ -317,6 +317,8 @@ floor_watch:
     line_aspect_min: 4.0       # 縦横比がこれ以上なら線状（継ぎ目・段差）
     metal_disc_diameter_mm: [5.0, 25.0]   # 途切れ + 円形 + この直径 → metal_disc（ボタン電池の可能性、危険物側）
     metal_disc_confidence: 0.6
+    metal_disc_max_height_mm: 11.0   # 円形の判定で「0〜この高さのどこかにある円盤」と見なしてよい上限（LR44 2 個重ね 10.8mm まで）。
+                                    # 高い物は上面が視差で奥へ写り、床へ投影すると前後に伸びる → 床の高さのまま判定すると円形でなくなる（H2 VIS-0002）
   synthetic:
     noise_sigma: 2.0
     shadow_factor: 0.35

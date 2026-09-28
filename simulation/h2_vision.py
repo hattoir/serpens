@@ -105,18 +105,25 @@ class Trial:
     height_reason: str | None = None
     diameter_est: float | None = None
     critical_flag: bool = False              # metal_disc として危険物側に回ったか
+    loc_err_mm: float | None = None          # inspect で見つかった候補の床の位置と、物の中心の距離
 
 
 def _objects(cands: list[Candidate]) -> list[Candidate]:
     return [c for c in cands if c.is_object]
 
 
-def _near(cands: list[Candidate], x: float, y: float, tol: float) -> Candidate | None:
-    best, bd = None, tol
+def _near(cands: list[Candidate], x: float, y: float, dia: float, h: float, cam_h: float) -> Candidate | None:
+    """物に当たった候補か。検出は床の高さを前提に床へ戻すので、高い物ほど奥へずれて出る（上面の視差）。
+    許す範囲: 横 ±(半径 + 10mm)、前後 [手前の縁 − 5mm, 奥の縁 × h_cam/(h_cam − H) + 5mm]。位置の誤差は別に記録する。"""
+    r = dia / 2
+    far = (y + r) * cam_h / max(cam_h - h, 1.0) + 5.0
+    best, bd = None, float("inf")
     for c in cands:
-        d = float(np.hypot(c.floor_xy_mm[0] - x, c.floor_xy_mm[1] - y))
-        if d < bd:
-            best, bd = c, d
+        fx, fy = c.floor_xy_mm
+        if abs(fx - x) <= r + 10.0 and y - r - 5.0 <= fy <= far:
+            d = float(np.hypot(fx - x, fy - y))
+            if d < bd:
+                best, bd = c, d
     return best
 
 
@@ -152,9 +159,7 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
         except MotionError:
             cands = []
         found = _objects(cands)
-        # 物の位置は検出側の名目カメラで床へ戻すので、カメラがずれると位置もずれる → 許容は大きめ（直径と 15mm の大きい方）
-        tol = max(15.0, TARGETS[target][0]) if target else 0.0
-        hit = _near(found, x, y, tol) if target else None
+        hit = _near(found, x, y, TARGETS[target][0], TARGETS[target][1], cam_nom.height_mm) if target else None
         others = [f for f in found if f is not hit and not (c.clutter and abs(f.floor_xy_mm[0]) > 15.0)]
         out.stage_hits[stage] = hit is not None
         out.false_objects[stage] = len(others)
@@ -162,6 +167,7 @@ def run_trial(cfg: dict[str, Any], cam_nom: Camera, plane_nom: LightPlane, base_
             out.height_est, out.height_reason = hit.height_mm, hit.height_reason
             out.diameter_est = hit.diameter_mm
             out.critical_flag = any(k["kind"] == "metal_disc" for k in hit.kinds)
+            out.loc_err_mm = float(np.hypot(hit.floor_xy_mm[0] - x, hit.floor_xy_mm[1] - y))
     return out
 
 
