@@ -109,3 +109,11 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 4. ENTRY-0011 は Engineering の回答待ち（段付きナックル r ≈ 32 は案として保持、確定しない）
 5. 将来の実験候補: 「遮蔽としてのとぐろ」の遮蔽効果と誘導リスク（MVP 外）
 6. 腹板インサートの形を H0 クーポンに入れる相談
+
+## 更新（2026-09-29 後半、Continuous Design Mode）
+
+- Fusion 復旧: 元ファイルは v6 のまま保持。Recovery copy `Serpens_DESIGN_SD01_BEAN_KNUCKLE_RECOVERY_20260929` で、背板を胴と同じ高さにし、J3〜J5 の背板を r45 に変更（r48 は隣と 1 mm 重なっていた）。NECK の外形トリムも掛け直し、J1 の頭と首を同心にした。3D 干渉は全関節の全範囲で 0（CAD_CONCEPT）。J1 の頭の後ろに閉じる溝が残る（ENTRY-0013）
+- 派生案: SD-01A〜E を比較（`docs/design/results/parametric_2026-09-29.md`）。**CAD へ持ち込む上位は SD-01E（A と C の中間）と SD-01A**
+- CSAR の振り付け: `docs/design/csar_choreography_2026-09-29.md`（状態 × 子どもの状況、UNKNOWN = NEAR 扱い、禁止候補、Engineering への数値の問い、OPEN-010）
+- Head Yaw の評価、ENTRY-0011 の代替案 A〜G（Design の推し順は A → C → G＋E）、人の評価のフォーマット、backlog: `docs/design/sd01_variants_and_fallbacks_2026-09-29.md`
+- 次: SD-01E の頭を Recovery copy に別コンポーネントで作る → 人の評価用の描き出し（`tools/fusion_render_set.md`）→ Head Yaw の首の意匠
