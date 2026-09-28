@@ -18,3 +18,5 @@ output/
 recordings/
 config/floor_homography.json
 models/
+# H0 摩擦クーポンの STL（tools/h0_coupons.py で再生成できる。1 個 7.7MB）
+hardware/prototypes/H0_friction/stl/

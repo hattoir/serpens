@@ -1,0 +1,1 @@
+date,operator,servo_serial,supply_v,current_limit_a,test_id,condition,arm_mm,load_g,torque_nm_calc,current_a,load_reg,position_deg,speed_dps,temp_c,voltage_reg_v,duration_s,instrument,note

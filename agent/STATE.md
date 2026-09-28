@@ -13,6 +13,8 @@ Floor Watch 用の MuJoCo overlay（`config/robot_fw5.yaml` / `robot_fw6_yaw5.ya
 結論（PHYSICS_SIM）: 推進は腹面の横/前後 摩擦比で決まり、しきい値は約 1.5〜2.5。トルク上限 0.45 N·m は平床の蛇行を縛らない。
 次は実物で測る: **H0 摩擦クーポン（購入不要）** → H1 1 関節 / H2 頭の撮影試験（購入は User 承認後）。
 状態の正本は `ai-shared/engineering-state.md`、提案は `ai-outbox/decisions/2026-09-29_PROP-ENG-0001_hardware_gate.md`。
+User 決定（DEC-USER-0001）: **H0 → locomotion 再評価 → 6 本目の用途を仮決定 → H1（C044）→ H2**。H0 の道具（`tools/h0_coupons.py`・`tools/h0_friction.py`・`hardware/prototypes/H0_friction/`）は用意済みで、User の測定待ち。
+既知の失敗: `tests/test_mqtt_live.py` の retain テストが、負荷のかかった全件実行で落ちることがある（OQ-0107。別タスクで調査中）。
 
 ## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
 
