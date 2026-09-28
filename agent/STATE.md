@@ -4,6 +4,16 @@
 
 _last updated: 2026-09-14_
 
+## Current Goal（2026-09-29 Engineering Agent RUN-ENG-0001、branch `agent/engineering-floor-watch`）
+
+User 方針は **6 モーター**（CAD・PRODUCT.md は 5 サーボのまま。6 本目の使い方は OQ-0101）。
+Floor Watch 用の MuJoCo overlay（`config/robot_fw5.yaml` / `robot_fw6_yaw5.yaml` / `robot_fw6_headyaw.yaml`）と
+感度調査（`tools/fw_body_study.py` → `simulation/results/fw_body_study.md`）を追加した。
+**MuJoCo の pitch 軸の符号を直した**（+ で頭が上がる。それまで EX-1 の home J7=+8° は頭を床へ押していた）。
+結論（PHYSICS_SIM）: 推進は腹面の横/前後 摩擦比で決まり、しきい値は約 1.5〜2.5。トルク上限 0.45 N·m は平床の蛇行を縛らない。
+次は実物で測る: **H0 摩擦クーポン（購入不要）** → H1 1 関節 / H2 頭の撮影試験（購入は User 承認後）。
+状態の正本は `ai-shared/engineering-state.md`、提案は `ai-outbox/decisions/2026-09-29_PROP-ENG-0001_hardware_gate.md`。
+
 ## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
 
 レビュー 1〜7 と 8〜11 を実装した。画像処理は**基準床を使わない**（実機では同じ視点の空の床が無い）形に変え、

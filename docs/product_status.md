@@ -17,7 +17,7 @@
 | Electronics | 設計案 | ブロック図・ゲート 8 項目の測り方・BOM の骨格（[electronics.md](electronics.md)）。ESP32 に依存しない遮断器 + 常閉 E-STOP の構成 | 回路図・PCB・品番は無い。**C044 の電流値が UNKNOWN** なので容量・ヒューズ・閾値を決められない。KiCad 未着手 |
 | Power | **未着手** | 12V テザー給電の注意書きのみ（README §2.4） | バッテリ・BMS・電流監視・突入電流・電圧降下の設計が無い |
 | Embedded | 部分 | 駆動リンク v2、Virtual ESP32（7状態）+ 仮想サーボバス、故障注入、値の一致検査、**ファームのコンパイル成功**（フラッシュ7%/RAM5%） | **未書き込み**。サーボ読み書き（writeServos/readServos）と配線が未確定 |
-| Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**MuJoCo の 3D モデル**（任意依存）、Belly 3種、歩容掃引（Pareto 候補） | 摩擦もサーボ応答もすべて未実測。**サーボゲインで前進量が ±45% 変わる**ので、実機での同定が最優先 |
+| Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**MuJoCo の 3D モデル**（任意依存）、Belly 3種、歩容掃引（Pareto 候補） | 摩擦もサーボ応答もすべて未実測。**サーボゲインで前進量が変わる**（kp 1/2 と 2 倍で約 1.16 倍。2026-09-29 に MuJoCo の pitch 符号を直す前は ±45% としていた）ので、実機での同定が最優先 |
 | Sensors | 部分 | 頭部 I/O の行プロトコル（ToF・タッチ×2・LED×2）とモック（[head_io.py](../serpens/hw/head_io.py)）、サーボの位置/負荷/温度/電圧の読み出し（[state_poller.py](../serpens/hw/state_poller.py)） | **IMU が無い。** 搭載カメラも無い。電流センサも無い |
 | Vision | 実装済み（外部カメラ前提） | ArUco・床ホモグラフィ・YOLO。**模擬画像の Vision で閉ループ**（[phase4_vision_bridge.md](phase4_vision_bridge.md)）。実画像経路 `CameraObserver`（カメラ / 録画 → 自己位置・人）を `--camera` に接続。見失い後は人が K で位置を確認 | 実カメラでは未測定。上方の外部カメラ前提。所有者の個人識別は無い |
 | Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |

@@ -94,7 +94,9 @@
 | MuJoCo モデル（9軸・質量・可動域・トルク上限が config と一致） | `SOFTWARE_VERIFIED` | `tests/test_mujoco_model.py`（10） |
 | MuJoCo での推進・旋回・転倒しないこと | `SIMULATED` | `tests/test_mujoco_belly.py`（6）。**摩擦も質量も未実測** |
 | 等方摩擦では進まない / 異方性で進む | `SIMULATED` | 簡易シミュレータと **別モデルで独立に一致** |
-| サーボゲイン（未同定）で前進量が ±45% 変わる | `SIMULATED` | 実機が来たら最初に同定する（下記） |
+| サーボゲイン（未同定）で前進量が変わる（kp ×0.5 / ×2 で約 1.16 倍） | `PHYSICS_SIM` | 実機が来たら最初に同定する（下記）。2026-09-29 まで MuJoCo の pitch 軸が逆向きで（+ で頭が床へ潜る）、±45% はその誤りを含む値だった（`ai-outbox/lessons/2026-09-29_LES-ENG-0001_mujoco_pitch_sign.md`） |
+| Floor Watch 腹面: 推進は横/前後 摩擦比で決まり、しきい値は約 1.5〜2.5 | `PHYSICS_SIM` | `simulation/results/fw_body_study.md`（E2）。摩擦の実測（H0 クーポン）で確かめる |
+| Floor Watch: 平床の蛇行でトルク上限 0.45 N·m は律速でない | `PHYSICS_SIM` | 同上（E3）。摩擦・質量・kp は未実測 |
 | World State の出どころ分離（真値 ≠ Vision） | `SOFTWARE_VERIFIED` | `tests/test_closed_loop.py` |
 | 閉ループ（行動 → 機体 → 世界）と故障注入で安全が勝つこと | `SIMULATED` | `tests/test_closed_loop.py`（13） |
 | run の記録から同じ run を作れること | `SOFTWARE_VERIFIED` | 同上（seed / config hash / model digest） |
