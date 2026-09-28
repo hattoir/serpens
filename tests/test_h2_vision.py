@@ -236,8 +236,10 @@ def test_magnet_split_into_side_fragments_is_one_full_size_metal_disc(cfg: dict,
 def test_merging_fragments_never_removes_an_object_on_carpet(cfg: dict, setup) -> None:
     """VIS-0006: 影でつないだ枠が横に長くなり「線状 = 物でない」になると、元は物だった小片まで消えていた（カーペットの巡回 1.00 → 0.73）。
     つないだ結果が物でなければ元の小片を残す。"""
-    from simulation.h2_vision import TARGETS
     cam, plane, lt = setup
-    missed = [(tg, s) for tg in TARGETS for s in (100, 101)
+    # 掃引（2026-09-29）で見逃していた試行そのもの（対象, 種）。修正を外すとこれらが落ちる
+    cases = [("coin_10yen", 3001), ("bead_10_dark", 3005), ("magnet_disc_10x3", 3006), ("button_cr2032", 3016),
+             ("plastic_part_8", 3023), ("floor_colored_12", 3024)]
+    missed = [(tg, s) for tg, s in cases
               if not run_trial(cfg, cam, plane, lt, Condition(floor="carpet"), tg, seed=s, blur_scale=0.5).stage_hits["patrol"]]
     assert missed == []
