@@ -24,6 +24,11 @@ Floor Watch 用の MuJoCo overlay（`config/robot_fw5.yaml` / `robot_fw6_yaw5.ya
 User 決定（DEC-USER-0001）: **H0 → locomotion 再評価 → 6 本目の用途を仮決定 → H1（C044）→ H2**。H0 の道具（`tools/h0_coupons.py`・`tools/h0_friction.py`・`hardware/prototypes/H0_friction/`）は用意済みで、User の測定待ち。
 既知の失敗: `tests/test_mqtt_live.py` の retain テストが、負荷のかかった全件実行で落ちることがある（OQ-0107。別タスクで調査中）。
 
+## 2026-09-29 MQTT: 生きている機体が OFFLINE と出る不具合を直した（SOFTWARE_VERIFIED、詳細は DECISIONS 同日 / DEC-SERPENS-0001）
+
+`PahoBroker.publish` がネットワークスレッド上で PUBACK を 2 s 待って固まり、keepalive 切れで LWT が出ていた。
+試験側の client_id 衝突（`home-test` ×2）がそれを隠していた。残り: `Endpoint(PahoBroker)` は `set_will` が例外になり組めない（試験は `__new__` で回避）／切断中の publish は paho が RuntimeError を投げる（主ループまで上がる）。
+
 ## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
 
 レビュー 1〜7 と 8〜11 を実装した。画像処理は**基準床を使わない**（実機では同じ視点の空の床が無い）形に変え、

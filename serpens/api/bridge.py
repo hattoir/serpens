@@ -13,6 +13,7 @@ retain と LWT と再接続を模す）。`PahoBroker` は paho-mqtt（開発用
 from __future__ import annotations
 
 import json
+import threading
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Callable
@@ -128,6 +129,8 @@ class PahoBroker(Broker):
         self._c = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id=client_id)
         self._handlers: dict[str, list[Handler]] = defaultdict(list)
         self._on_connect: list[Callable[[], None]] = []
+        self._lock = threading.Lock()                          # connections と _on_connect の対応を崩さない
+        self._loop_thread: threading.Thread | None = None      # paho のネットワークスレッド（コールバックが走る所）
         self.connections = 0
         self._c.on_message = self._on_message
         self._c.on_connect = self._connected
@@ -138,13 +141,17 @@ class PahoBroker(Broker):
         self._c.loop_start()
 
     def _connected(self, *_args: Any) -> None:
-        self.connections += 1
+        self._loop_thread = threading.current_thread()
+        with self._lock:
+            self.connections += 1
+            cbs = list(self._on_connect)
         for pattern in list(self._handlers):
             self._c.subscribe(pattern, qos=QOS)                 # 再接続でも購読を張り直す
-        for cb in list(self._on_connect):
+        for cb in cbs:
             cb()
 
     def _on_message(self, _client: Any, _userdata: Any, msg: Any) -> None:
+        self._loop_thread = threading.current_thread()
         try:
             payload = json.loads(msg.payload.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
@@ -155,7 +162,13 @@ class PahoBroker(Broker):
                     h(msg.topic, payload, bool(msg.retain))
 
     def publish(self, topic: str, payload: dict[str, Any], qos: int = QOS, retain: bool = False) -> None:
-        self._c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain).wait_for_publish(2.0)
+        """送信順は paho の送信待ち行列の順（= publish を呼んだ順）。
+        **ネットワークスレッド上（on_connect の announce、on_message の task_status）では PUBACK を待たない。**
+        PUBACK を読むのはそのスレッド自身なので、待つと必ずタイムアウトまで固まり、その間は何も送れず PINGREQ も
+        出ない → keepalive の 1.5 倍で生きているのに LWT の OFFLINE が出る・stop Task の処理が遅れる。"""
+        info = self._c.publish(topic, json.dumps(payload, ensure_ascii=False), qos=qos, retain=retain)
+        if threading.current_thread() is not self._loop_thread:
+            info.wait_for_publish(2.0)
 
     def subscribe(self, topic: str, handler: Handler) -> None:
         self._handlers[topic].append(handler)
@@ -165,7 +178,13 @@ class PahoBroker(Broker):
         raise RuntimeError("PahoBroker の will は生成時に渡す（接続前にしか設定できない）")
 
     def on_connect(self, callback: Callable[[], None]) -> None:
-        self._on_connect.append(callback)
+        """接続は生成時に始まるので、登録より先に CONNACK を処理し終えていることがある。
+        そのときは今の接続の分をここで 1 回呼ぶ（呼ばないと再接続時の retain 上書きが初回だけ抜ける）。"""
+        with self._lock:
+            self._on_connect.append(callback)
+            missed = self.connections > 0 and self._c.is_connected()   # 切れている間なら次の再接続で呼ばれる
+        if missed:
+            callback()
 
     def freeze(self) -> None:
         """テスト用: ネットワークループを止めて黙る（PC のハング・ケーブル抜け。ソケットは閉じない = FIN も RST も出ない）。

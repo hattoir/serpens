@@ -86,6 +86,41 @@ EXP-ENG-0001 では平床の蛇行はトルク上限 0.30 N·m でもほぼ同�
 
 **Trade-offs**: それより前の MUJOCO_SIM の数値は古いモデルの値になった（`ai-outbox/lessons/2026-09-29_LES-ENG-0001_mujoco_pitch_sign.md`）。
 
+## 2026-09-29 — DEC-SERPENS-0001 MQTT safety_state retain race fix（PahoBroker はネットワークスレッド上では PUBACK を待たない）
+
+**Decision**: `PahoBroker.publish` は paho のネットワークスレッド（on_connect / on_message のコールバック）から
+呼ばれたときだけ `wait_for_publish` を飛ばす。`on_connect` を接続後に登録した場合は、その場で 1 回呼ぶ。
+`Endpoint.close()` は OFFLINE を出す**前**に `closed` を立てて状態を捨て、以後 `announce` / `tick` は何も出さない。
+`tests/test_mqtt_live.py` の購読者は client_id を別々にした。
+
+**Why**: 全体実行で `test_graceful_close_publishes_offline_immediately_and_reconnect_overwrites` が 1 回落ちた
+（遅れて購読した側に OFFLINE が届いた）。原因は 2 つ重なっていた。
+(1) **実装のバグ**: 再接続時の `announce` と Task 受信時の `task_status` はネットワークスレッド上で publish する。
+そこで PUBACK を待つと、PUBACK を読むのがそのスレッド自身なので必ず 2 s のタイムアウトまで固まる。
+その間は送信も PINGREQ も止まる。実ブローカーでは、生きている機体が `exceeded timeout` で切られて LWT の OFFLINE が出た。
+再接続すると announce でまた固まり、DISARMED が一度も届かないまま OFFLINE → 再接続 → OFFLINE を繰り返した
+（CPU 負荷なしでも再現）。stop Task を受けたときも、中止通知 1 件ごとに 2 s ずつ処理が遅れる。
+on_connect を接続後に登録すると、CONNACK が先に処理されたときは初回の announce が抜ける。
+そのため、この固まりはスケジューリング次第で出たり出なかったりした。
+(2) **試験のバグ**: `_home` が 2 つとも client_id `home-test` だった。ブローカーが古い方を蹴り、paho の
+自動再接続で互いを蹴り合っていた（mosquitto のログに `session taken over` が約 1 s ごと）。そのため再接続のたびに retain が届き直し、
+「DISARMED を retain で受けた」(153 行) が、最初の購読で OFFLINE を受けた後の再購読で成立していた。
+2 つ目を直すと、1 つ目が起きたときは 153 行で正しく落ちる（アサーションは緩めていない）。
+
+**Alternatives**:
+(1) テストに待ちを足す / 1 回落ちを flaky 扱いにする → 却下。生きている機体が OFFLINE と報告され続ける実在の不具合。
+(2) announce を別スレッドへ逃がす → publish 側で直す方が、on_message の task_status も同時に直る。
+(3) Endpoint の safety 送信全体をロックで囲む → 主スレッドが PUBACK を待つ間ネットワークスレッドが止まり、同じ問題が再発する。
+
+**Trade-offs**: ネットワークスレッドからの publish は、戻った時点でブローカー受理が保証されない。
+送信順は paho の送信待ち行列の順で保たれ、QoS1 の再送もある。
+close と、別スレッドの announce / tick の間の判定と送信の隙間（TOCTOU）は、`closed` だけでは完全には閉じていない（狭い窓が残る）。
+
+**Context**: 回帰試験は `test_reconnect_overwrites_lwt_from_the_network_thread_without_stalling_it`（実ブローカー）と
+`test_nothing_overwrites_the_offline_after_a_graceful_close`（Loopback）。どちらも修正前のコードで落ちることを確認した
+（announce が 2.03 s 固まる／close 後の再接続で BOOT が OFFLINE を上書き）。
+修正後: CPU 32 並列の負荷下で `tests/test_mqtt_live.py` を 15 回連続 → 15/15 通過。全体 466 passed。
+
 ---
 
 ## 2026-09-26 — Floor Watch の inspect は展示の行動を通さず、Task が無ければ止まっている

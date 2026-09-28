@@ -50,3 +50,16 @@ def test_graceful_close_publishes_offline_and_reconnect_overwrites_it(rig) -> No
     assert home.safety["mode"] == "OFFLINE"
     broker.simulate_reconnect()                                                     # 戻った瞬間に今の状態で上書き
     assert home.safety["mode"] == "DISARMED" and [p for p in broker.log if p.retain][-1].payload["mode"] == "DISARMED"
+
+
+def test_nothing_overwrites_the_offline_after_a_graceful_close(rig) -> None:
+    """10 補: close の途中・後に再接続（announce）や周期送信（tick）が走っても、OFFLINE の後に古い状態を出さない。
+    announce は last_safety が空だと BOOT を作って出すので、close が状態を捨てるだけでは防げない。"""
+    broker, ep, ex, home, clock = rig
+    ep.safety_state("DRIVING", "NONE", latched=False)
+    ep.close()
+    broker.simulate_reconnect()
+    clock.t += ep.safety_period_ms * 3
+    assert not ep.tick()
+    last = [p for p in broker.log if p.retain][-1].payload
+    assert last["mode"] == "OFFLINE" and home.safety["mode"] == "OFFLINE"
