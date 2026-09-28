@@ -133,3 +133,24 @@ def test_five_mm_magnet_ball_is_a_metal_disc(cfg: dict, setup) -> None:
         t = run_trial(cfg, cam, plane, lt, Condition(), "magnet_ball_5", seed=seed, blur_scale=0.5)
         flagged += t.critical_flag
     assert flagged >= 3
+
+
+def test_the_floor_line_recovers_camera_height_and_pitch_errors(cfg: dict, setup) -> None:
+    """VIS-0003: 光の面は頭に固定なので、床の線の写り方から Δ高さ・Δpitch が分かる（線を姿勢センサにも使う）。"""
+    from dataclasses import replace
+
+    from simulation.h2_pose_from_line import estimate_pose
+    from simulation.h2_vision import lighting_for
+    cam, plane, lt = setup
+    c = Condition(cam_height_err_mm=-6.5, cam_pitch_err_deg=-0.5)
+    ct = true_camera(cam, c)
+    fr = Renderer(ct, plane_for_true_camera(plane, cam, ct), lighting_for(lt, c, 0.5), sides=True).render(
+        Scene([Disc(0.0, 75.0, 20.0, 1.5, 0.85)], seed=2))
+    cands, tr, _fg = detect(fr, cam, plane, cfg)
+    dh, dp, _rms = estimate_pose(tr, cam, plane)
+    assert dh == pytest.approx(-6.5, abs=1.5) and dp == pytest.approx(-0.5, abs=0.5)
+    coin = next(x for x in cands if x.is_object and abs(x.floor_xy_mm[0]) < 15)
+    bx, by, bw, bh = coin.bbox_px
+    fixed = replace(cam, height_mm=cam.height_mm + dh, pitch_deg=cam.pitch_deg + dp).floor_point(bx + bw / 2, by + bh)
+    raw = cam.floor_point(bx + bw / 2, by + bh)
+    assert abs(fixed[1] - 65.0) < 3.0 < abs(raw[1] - 65.0)      # 手前の縁 65mm: 名目では大きくずれ、補正で戻る
