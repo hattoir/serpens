@@ -17,6 +17,38 @@
 
 ---
 
+## 2026-09-29 — C044 のトルク参照値を現行資料へ更新し、トルク制限レジスタ比を 0.287 → 0.167 に下げた（User 承認）
+
+**Decision**: `safety_limits.torque` の参照値を、現行の Seeed / Feetech 資料の C044（7.4V / 1:191）の値
+（定格 9 / ストール 27.4 kgf·cm = 0.883 / 2.687 N·m）にした。旧値 5.2 / 16 kgf·cm は **stale / source-unverified** として
+`stale_*` に残した（元出典を確かめるまで削除しない）。レジスタ比 = 0.450 / 2.687 = **0.167**。N·m の上限 0.450 は変えていない。
+
+**Why**: レジスタ比はストール基準。旧比 0.287 はストール 16 の前提で、実際のストールが 27.4 なら約 0.77 N·m 出てしまう
+（意図した上限の約 1.7 倍）。資料が食い違うあいだは、大きい方のストールで比を計算すれば、どちらが正しくても 0.45 N·m を超えない。
+
+**Alternatives**: (1) 0.287 のまま H1 の直前に決める (2) 16 の値を消す。
+(1) は最初の通電で上限を超える恐れがある。(2) は出典の確認前に証拠を消すことになる。
+
+**Trade-offs**: 実際のストールが 16 に近ければ、上限は約 0.26 N·m まで下がる（保守側）。
+EXP-ENG-0001 では平床の蛇行はトルク上限 0.30 N·m でもほぼ同じ速さだった（PHYSICS_SIM）。H1 の実測で作り直す。
+
+**Context**: DEC-USER-0001（`ai-outbox/decisions/2026-09-29_DEC-USER-0001_gate_order.md`）、OQ-0103、OQ-0108。
+
+---
+
+## 2026-09-29 — MuJoCo の pitch 軸の符号を直した（+ で頭が上がる）
+
+**Decision**: `simulation/mujoco/model.py` の pitch 軸を `0 -1 0` にし、`serpens/motion/kinematics.py` と規約をそろえた。テストで固定した。
+
+**Why**: それまでは + で頭が床へ潜っていた。EX-1 の home（J7=+8°）が頭を床へ押しつけ、旋回の向きまで逆になっていた。
+「サーボゲインで前進量が ±45% 変わる」という結論も、この誤りを含んでいた（修正後は約 1.16 倍）。
+
+**Alternatives**: config の direction で打ち消す（規約が 2 か所に分かれるので採らない）。
+
+**Trade-offs**: それより前の MUJOCO_SIM の数値は古いモデルの値になった（`ai-outbox/lessons/2026-09-29_LES-ENG-0001_mujoco_pitch_sign.md`）。
+
+---
+
 ## 2026-09-26 — Floor Watch の inspect は展示の行動を通さず、Task が無ければ止まっている
 
 **Decision**: `FloorWatchExecutor` は Endpoint の Executor として SimSession に `mission` を差し込み、active のあいだ brain.tick を
