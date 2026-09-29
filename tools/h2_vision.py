@@ -50,6 +50,7 @@ OFAT: dict[str, list[Any]] = {
     "reaim": [False, True],
     "pose_from_line": [True, False],
     "lighting_model": ["uniform", "point", "point+flat"],
+    "led_layout": ["legacy", "center3d", "design_2x2"],
 }
 # 露出を合わせて比べる因子（合わせないと 255 で飽和して比較にならない）。点光源は近い床が明るく、名目の露出では飽和する
 AMBIENT_WITH_AE = {"ambient_lux", "lighting_model"}

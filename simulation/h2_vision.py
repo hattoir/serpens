@@ -68,6 +68,7 @@ class Condition:
     reaim: bool = False                     # inspect の後、候補へ線を向け直してもう 1 回撮る（mission の狙い直しを模す）
     physical_falloff: bool = False          # 照明を点光源（cos / r²）にする（通常 = レンズの脇、斜め = あご）
     flat_field: bool = False                # 照明の較正画像（白いカード、名目の姿勢で 1 回）を検出に渡す
+    led_layout: str = "legacy"              # LED の置き方（LED_LAYOUTS）。legacy = 従来の 1 灯・影は 2 次元の近似
 
 
 def scaled_camera(cam: Camera, scale: float) -> Camera:
@@ -94,6 +95,15 @@ def plane_for_true_camera(plane: LightPlane, cam_nom: Camera, cam_true: Camera) 
     return LightPlane(n_t, d_c + float(n_t @ cam_true.center))
 
 
+# LED の置き方（名目の世界座標 mm: x 右 / y 前 / z 上、カメラは (0, 0, 30)）。Design ENTRY-0022 の案は Design の座標
+# （X 前が負、レンズ X −232）から: 斜め = 頬の下 X −212・y ±40・Z7 → (±40, −20, 7)、通常 = 口の線 X −220・y ±44.7・Z21 → (±44.7, −12, 21)
+LED_LAYOUTS: dict[str, dict[str, tuple[tuple[float, float, float], ...]] | None] = {
+    "legacy": None,
+    "center3d": {"raking": ((0.0, 0.0, 6.0),), "normal": ((0.0, 0.0, 30.0),)},
+    "design_2x2": {"raking": ((40.0, -20.0, 7.0), (-40.0, -20.0, 7.0)), "normal": ((44.7, -12.0, 21.0), (-44.7, -12.0, 21.0))},
+}
+
+
 def rigid_point(p: np.ndarray, cam_nom: Camera, cam_true: Camera) -> np.ndarray:
     """頭に固定の点（LED）: 名目の世界座標 → カメラ座標 → 本当のカメラの世界座標。"""
     Rn, Rt = np.stack(cam_nom._axes), np.stack(cam_true._axes)
@@ -103,6 +113,10 @@ def rigid_point(p: np.ndarray, cam_nom: Camera, cam_true: Camera) -> np.ndarray:
 def lighting_for(base: Lighting, c: Condition, blur_scale: float, cam_nom: Camera | None = None,
                  cam_true: Camera | None = None) -> Lighting:
     """条件の照明。cam_nom / cam_true を渡すと、LED を頭に固定として本当の姿勢へ動かす（頭が沈めばあごの LED も床に近づく）。"""
+    layout = LED_LAYOUTS[c.led_layout]
+    if layout is not None:
+        mv = (lambda q: tuple(float(v) for v in rigid_point(np.array(q), cam_nom, cam_true))) if cam_nom is not None and cam_true is not None             else (lambda q: tuple(float(v) for v in q))
+        base = replace(base, raking_leds=tuple(mv(q) for q in layout["raking"]), normal_leds=tuple(mv(q) for q in layout["normal"]))
     if cam_nom is not None and cam_true is not None:
         n = rigid_point(np.array([0.0, base.normal_led_y_mm, base.normal_led_height_mm]), cam_nom, cam_true)
         r = rigid_point(np.array([0.0, base.raking_led_y_mm, c.raking_led_height_mm]), cam_nom, cam_true)

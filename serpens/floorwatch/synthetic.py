@@ -90,6 +90,10 @@ class Lighting:
     normal_led_height_mm: float = 30.0     # 通常照明（レンズの脇）の高さ
     normal_led_y_mm: float = 0.0           # 通常照明の前後位置
     irradiance_max: float = 20.0           # 光源のすぐ近くで発散しないよう上限（正規化した値）
+    # 複数の LED（世界座標 (x, y, z) mm の組）。指定すると影を 3 次元で描く（LED から床の点への線が物に遮られるか）。
+    # None なら従来の 1 灯（カメラ直下、影は物の奥へ）。Design の案: 頬の下に斜め 2 灯・口の線に通常 2 灯（integration-log ENTRY-0022）
+    raking_leds: tuple[tuple[float, float, float], ...] | None = None
+    normal_leds: tuple[tuple[float, float, float], ...] | None = None
 
 
 def _random_field(seed: int, scale_mm: float, extent_mm: float = 320.0, res_mm: float = 0.25) -> tuple[np.ndarray, float]:
@@ -237,14 +241,50 @@ class Renderer:
         self._normals = np.zeros(floor.shape)
         self._normals[..., 2] = 1.0
         if lt.physical_falloff:
-            e_n = self._irradiance(floor, np.array([0.0, lt.normal_led_y_mm, lt.normal_led_height_mm]))
-            e_r = self._irradiance(floor, np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm]))
+            e_n = np.mean([self._irradiance(floor, L) for L in self._leds("normal")], axis=0)
+            e_r = np.mean([self._irradiance(floor, L) for L in self._leds("raking")], axis=0)
         else:
             e_n = e_r = np.ones(floor.shape[:2])
         # 白いカードは床より明るいので、較正は飽和しない低い露出で撮り、露出の比を掛けて戻す（255 で切らない）。
         # 切ると近い側が飽和したまま較正され、そこだけ割り算が合わなかった（VIS-0008）
         return {"flat_normal": (lt.normal_lux * e_n * gain).astype(np.float32),
                 "flat_raking": (lt.raking_lux * e_r * gain).astype(np.float32)}
+
+    def _leds(self, kind: str) -> list[np.ndarray]:
+        lt = self.lt
+        many = lt.raking_leds if kind == "raking" else lt.normal_leds
+        if many:
+            return [np.asarray(p, float) for p in many]
+        if kind == "raking":
+            return [np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm])]
+        return [np.array([0.0, lt.normal_led_y_mm, lt.normal_led_height_mm])]
+
+    def _shadow3d(self, scene: Scene, owner: np.ndarray, surf: np.ndarray, led: np.ndarray) -> np.ndarray:
+        """床の点から LED への線分が、物（鉛直な円柱の側面・上面）に遮られるか。床の画素だけ（物の上は影にしない）。"""
+        p = surf
+        v = led - p                                              # 床の点 → LED
+        shadow = np.zeros(p.shape[:2], bool)
+        floor = owner < 0
+        for ob in scene.objects:
+            r = ob.diameter_mm / 2
+            ox, oy = p[..., 0] - ob.x_mm, p[..., 1] - ob.y_mm
+            a = v[..., 0] ** 2 + v[..., 1] ** 2
+            b = 2 * (ox * v[..., 0] + oy * v[..., 1])
+            c = ox * ox + oy * oy - r * r
+            disc = b * b - 4 * a * c
+            ok = (disc >= 0) & (a > 1e-12)
+            sq = np.sqrt(np.where(ok, disc, 0.0))
+            hit = np.zeros_like(shadow)
+            for sgn in (-1.0, 1.0):
+                t = np.where(ok, (-b + sgn * sq) / (2 * np.where(ok, a, 1.0)), -1.0)
+                z = p[..., 2] + t * v[..., 2]
+                hit |= ok & (t > 1e-6) & (t < 1.0) & (z >= 0.0) & (z <= ob.height_mm)
+            vz = v[..., 2]
+            t_top = np.where(np.abs(vz) > 1e-9, (ob.height_mm - p[..., 2]) / np.where(np.abs(vz) > 1e-9, vz, 1.0), -1.0)
+            q = p + t_top[..., None] * v
+            hit |= (t_top > 1e-6) & (t_top < 1.0) & (np.hypot(q[..., 0] - ob.x_mm, q[..., 1] - ob.y_mm) <= r)
+            shadow |= hit & floor
+        return shadow
 
     def _irradiance(self, surf: np.ndarray, light: np.ndarray) -> np.ndarray:
         """点光源の照度 cos / r²（表面の法線と光源の向き）。視野の中心あたりの床（前 71mm）で 1 に正規化する。"""
@@ -292,11 +332,18 @@ class Renderer:
             line = np.where(ok & (owner < 0) & ~lit, halo, line)
         rng = np.random.default_rng(noise_seed)
         e_n = e_r = np.ones_like(base)
-        if lt.physical_falloff:
+        raking_mult = None
+        if lt.raking_leds or lt.normal_leds:                               # 複数の LED: 影は LED ごと（片方だけ遮られると半影）
+            rk = self._leds("raking")
+            er = [self._irradiance(surf, L) if lt.physical_falloff else np.ones_like(base) for L in rk]
+            raking_mult = sum(e * np.where(self._shadow3d(scene, owner, surf, L), lt.shadow_factor, 1.0) for e, L in zip(er, rk)) / len(rk)
+            if lt.physical_falloff:
+                e_n = np.mean([self._irradiance(surf, L) for L in self._leds("normal")], axis=0)
+        elif lt.physical_falloff:
             e_n = self._irradiance(surf, np.array([0.0, lt.normal_led_y_mm, lt.normal_led_height_mm]))
             e_r = self._irradiance(surf, np.array([0.0, lt.raking_led_y_mm, lt.raking_led_height_mm]))
         signals = {"normal": (lt.normal_lux, e_n),
-                   "raking": (lt.raking_lux, e_r * np.where(shadow, lt.shadow_factor, 1.0)),
+                   "raking": (lt.raking_lux, raking_mult if raking_mult is not None else e_r * np.where(shadow, lt.shadow_factor, 1.0)),
                    "line": (lt.line_lux, line + 0.03),
                    "dark": (0.0, np.ones_like(base)),
                    "normal2": (lt.normal_lux, e_n)}                        # 撮影順 通常→斜め→線光→全消灯→通常

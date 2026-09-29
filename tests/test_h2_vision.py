@@ -263,3 +263,27 @@ def test_dim_line_on_a_dark_stain_at_low_exposure_is_not_a_specular_break(cfg: d
     cam, plane, lt = setup
     c = Condition(physical_falloff=True, auto_exposure=True, flat_field=True)
     assert run_trial(cfg, cam, plane, lt, c, None, seed=seed, blur_scale=0.5, negative="stain").false_objects["inspect"] == 0
+
+
+def test_multi_led_3d_shadows_fall_sideways_and_default_is_unchanged(cfg: dict, setup) -> None:
+    """Design の 2 灯（頬の下、左右）: 影は横へずれる（物から離れる向き）。LED を指定しなければ従来どおり（画素単位で同じ）。"""
+    cam, plane, lt = setup
+    r = Renderer(cam, plane, lt, sides=True)
+    sc = Scene([Disc(0.0, 75.0, 10.0, 3.0, 0.85)], seed=1)
+    surf, _alb, _spec, own = r._surface(sc)
+    left = r._shadow3d(sc, own, surf, np.array([-40.0, -20.0, 7.0]))
+    right = r._shadow3d(sc, own, surf, np.array([40.0, -20.0, 7.0]))
+    xl = float(np.nanmean(r.floor_xy[left][:, 0]))
+    xr = float(np.nanmean(r.floor_xy[right][:, 0]))
+    assert xl > 5.0 and xr < -5.0                                # 左の LED の影は右へ、右の LED の影は左へ
+    quiet = Lighting(**{**lt.__dict__, "noise_sigma": 0.0})
+    a = Renderer(cam, plane, quiet, sides=True).render(sc, noise_seed=1)
+    b = Renderer(cam, plane, Lighting(**{**quiet.__dict__, "raking_leds": None, "normal_leds": None}), sides=True).render(sc, noise_seed=1)
+    assert all(np.array_equal(a[k], b[k]) for k in a)
+
+
+def test_design_two_by_two_leds_still_find_a_coin_on_patrol(cfg: dict, setup) -> None:
+    cam, plane, lt = setup
+    c = Condition(led_layout="design_2x2", physical_falloff=True, flat_field=True, auto_exposure=True)
+    hits = sum(run_trial(cfg, cam, plane, lt, c, "coin_1yen", seed=s, blur_scale=0.5).stage_hits["patrol"] for s in (1, 2, 3))
+    assert hits >= 2
