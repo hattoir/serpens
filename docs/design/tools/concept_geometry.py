@@ -419,8 +419,8 @@ POSES = {
     "child_near_quiet": {"label": "Child near（子どもが近い）", "yaws": [-50, -20, 0, 0], "j1": 25,
                          "note": "物を見ない・指さない。頭と目は子どもへ（物から約 70° 外す）。光と音は控えめ、通知は保護者だけ",
                          "object": "world", "child": 260},
-    "sleep_crescent": {"label": "Sleep / charge（三日月）", "yaws": [45, 45, 45, 45], "j1": 0,
-                       "note": "yaw 合計 180°。合計上限（未決 Q8）と要照合。とぐろ（輪）ではない"},
+    "sleep_crescent": {"label": "Sleep / charge（首をかしげる、合計 145°）", "yaws": [50, 45, 30, 20], "j1": 0,
+                       "note": "yaw 合計 145°（USER-DEC-SERPENS-0003 の暫定上限）。旧三日月 [45,45,45,45]=180° は上限超えのため不使用"},
 }
 
 

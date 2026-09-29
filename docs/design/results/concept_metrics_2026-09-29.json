@@ -461,19 +461,19 @@
       "note": "物を見ない・指さない。頭と目は子どもへ（物から約 70° 外す）。光と音は控えめ、通知は保護者だけ"
     },
     "sleep_crescent": {
-      "label": "Sleep / charge（三日月）",
+      "label": "Sleep / charge（首をかしげる、合計 145°）",
       "yaws_J2_J5": [
+        50,
         45,
-        45,
-        45,
-        45
+        30,
+        20
       ],
       "j1_deg": 0,
-      "yaw_sum_deg": 180,
+      "yaw_sum_deg": 145,
       "within_software_yaw_limit": true,
       "within_j1_cad_range": true,
-      "head_to_tail_mm": 229.0,
-      "note": "yaw 合計 180°。合計上限（未決 Q8）と要照合。とぐろ（輪）ではない"
+      "head_to_tail_mm": 329.0,
+      "note": "yaw 合計 145°（USER-DEC-SERPENS-0003 の暫定上限）。旧三日月 [45,45,45,45]=180° は上限超えのため不使用"
     }
   }
 }
