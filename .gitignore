@@ -26,3 +26,4 @@ simulation/hardware_gaps/HG-H0_friction/results/s1_ratio_sweep.csv
 simulation/hardware_gaps/HG-H0_friction/results/s3_monte_carlo.csv
 simulation/hardware_gaps/*/results/measured/raw/
 simulation/hardware_gaps/**/__pycache__/
+simulation/hardware_gaps/HG-S2_yaw_sum_limit/results/s2_locomotion_runs.json

@@ -118,7 +118,8 @@ def test_command_limits_match_config(config_h: str) -> None:
     lim = load_config()["link"]["limits"]
     pairs = {"LIMIT_AMPLITUDE_DEG": "amplitude_deg", "LIMIT_SPATIAL_DEG": "spatial_freq_deg",
              "LIMIT_TEMPORAL_HZ": "temporal_freq_hz", "LIMIT_GAMMA_DEG": "gamma_deg",
-             "LIMIT_HEAD_SPEED_DPS": "head_speed_dps", "LIMIT_BODY_SPEED_DPS": "body_speed_dps"}
+             "LIMIT_HEAD_SPEED_DPS": "head_speed_dps", "LIMIT_BODY_SPEED_DPS": "body_speed_dps",
+             "LIMIT_YAW_SUM_DEG": "yaw_sum_deg"}
     for c_name, key in pairs.items():
         m = re.search(rf"{c_name}\s*=\s*([0-9.]+)f", config_h)
         assert m, f"{c_name} がファームに無い"
@@ -136,6 +137,18 @@ def test_joint_table_matches_config(config_h: str) -> None:
         assert lo == pytest.approx(float(j["min_deg"])), f"{j['name']} の下限"
         assert hi == pytest.approx(float(j["max_deg"])), f"{j['name']} の上限"
         assert spd == pytest.approx(float(j["max_speed_dps"])), f"{j['name']} の速度"
+
+
+def test_yaw_chain_matches_config(config_h: str) -> None:
+    """巻ける角の合計に使う軸（axis: yaw）の添字がファームと config で同じ。"""
+    cfg = load_config()
+    m = re.search(r"YAW_CHAIN\[N_YAW_CHAIN\]\s*=\s*\{([^}]+)\}", config_h)
+    assert m, "YAW_CHAIN がファームに無い"
+    fw = [int(x) for x in m.group(1).split(",")]
+    want = [i for i, j in enumerate(cfg["joints"]) if j["axis"] == "yaw"]
+    assert fw == want
+    n = re.search(r"#define N_YAW_CHAIN (\d+)", config_h)
+    assert n and int(n.group(1)) == len(want)
 
 
 def test_home_pose_matches_config(config_h: str) -> None:

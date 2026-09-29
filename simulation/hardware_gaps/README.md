@@ -13,9 +13,19 @@
 | [HG-H2_sensor_head](HG-H2_sensor_head/) | SENSOR | 実カメラの FOV・ピント・歪み・ぶれ・露出・照明 | 1 変数ずつの感度 **済み**、実画像の取り込み口あり |
 | [HG-S1_contact_safety](HG-S1_contact_safety/) | SAFETY | 巻き付き・圧迫・引っ張り・曲げ・踏みつけ・持ち上げの力 | worst-case の解析 **済み**（しきい値は User） |
 | [HG-C1_cable_routing](HG-C1_cable_routing/) | MODEL + PARAMETER | 関節渡りのケーブルの長さ変化・たわみ・曲げ半径 | 幾何の掃引 **済み** |
+| [HG-S2_yaw_sum_limit](HG-S2_yaw_sum_limit/) | SAFETY + MODEL | 角度合計の上限 145 / 150 / 160 / 170 / 180° | 掃引 **済み**。**145° を実装**（3 層）、上げる evidence は無い |
+| [HG-S3_torque_limiter](HG-S3_torque_limiter/) | SAFETY + PARAMETER | 機械式トルクリミッターの滑りトルク 0.4〜1.5 N·m | 掃引 **済み**。窓 0.7〜1.0 N·m、config に設計値 |
 
-各フォルダ（HG-S1・HG-C1 は解析式なので sweep_config / plots を省略）: `README.md` / `assumptions.yaml` / `sweep_config.yaml` / `run.py` / `results/` / `plots/` /
+各フォルダ（HG-S1・HG-S2・HG-S3・HG-C1 は解析式 / 小さな掃引なので sweep_config / plots を省略）: `README.md` / `assumptions.yaml` / `sweep_config.yaml` / `run.py` / `results/` / `plots/` /
 `decision_boundary.md`（run.py が自動生成）/ `hardware_test_plan.md`。
+
+## 共有データ
+
+| ファイル | 中身 |
+|---|---|
+| `safety_thresholds.yaml` | 接触しきい値の**暫定値**（PROVISIONAL / SAFETY_UNVERIFIED）。候補・導出・未確認。baseline = 候補の最小。**緩める変更は User 承認** |
+| `child_anthropometry.yaml` | 子どもの身体寸法（Snyder 1977 の生データから独立に再計算）。**2 歳未満は空白** |
+| `../../docs/reports/2026-09-29_child_safety_sources.md` | 出典の全文（調査エージェントの報告。一部だけ独立に検証） |
 
 ## Gap どうしのつながり
 

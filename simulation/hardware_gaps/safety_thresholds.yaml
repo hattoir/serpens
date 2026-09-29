@@ -1,0 +1,84 @@
+# 接触安全の暫定しきい値。**PROVISIONAL / SAFETY_UNVERIFIED**（DEC-USER-0002 §2）
+#
+# 導出の方針: 規格・子どもの anthropometry・生体力学の文献から Engineering Agent が導く。User は数値を決めない。
+#   - 単一資料の成人値を子どもへそのまま転用しない
+#   - 候補が複数あれば **安全側（小さい値）を baseline** にして探索する
+#   - 確定は H1 / H2 以降の実測と、規格本文の確認（下の unverified）の後
+# 出典の全文と検証状況: docs/reports/2026-09-29_child_safety_sources.md
+# 安全側へ厳しくする変更は自律的に行ってよい。**緩める（値を大きくする）変更は User の承認が要る**（DEC-USER-0002 §5）。
+status: PROVISIONAL_SAFETY_UNVERIFIED
+last_derived: 2026-09-29
+
+# --- 子どもの痛み閾値（生体力学の測定）から成人の規格値を縮めるための係数 -------------------------------
+pain_scaling:
+  child_pressure_pain_thenar_n_per_cm2: {mean: 17.9, sd: 9.74, mean_minus_1sd: 8.17}   # Nikolajsen 2011（4〜12 歳 n=50、1 cm² の圧力計、母指球）。二次情報（要旨の値）で未確認
+  adult_iso15066_thenar_n_per_cm2: 200.0                                               # ISO/TS 15066 Table A.2（成人 100 人、75 パーセンタイル）
+  factor_conservative: 0.041     # mean_minus_1sd / 200
+  factor_mean: 0.0895            # mean / 200
+  caveat: "圧力計の形（丸いゴム 1 cm² と 平らな金属 2 cm²）・統計量（平均と 75 パーセンタイル）が違う。オーダーの比較。2 歳未満は測定に含まれない"
+
+# --- しきい値（N）。baseline = 候補の最小 -------------------------------------------------------------
+quasi_static_contact_force_n:
+  hand_finger:
+    baseline: 5.7
+    candidates:
+      - {value: 5.7,  basis: "ISO/TS 15066 手・指 140 N × 0.041（子どもの痛み閾値 mean−1SD ÷ 成人）", label: DERIVED_FROM_ADULT_STANDARD}
+      - {value: 8.2,  basis: "子どもの痛み閾値 mean−1SD 8.17 N/cm² × 接触面積 1 cm²", label: DERIVED_FROM_CHILD_MEASUREMENT}
+      - {value: 12.5, basis: "140 N × 0.0895（mean ベース）", label: DERIVED_FROM_ADULT_STANDARD}
+  neck:
+    baseline: 5.0
+    candidates:
+      - {value: 5.0,  basis: "Walker 2010（3 か月〜15 歳 n=30、気管支鏡）: 輪状軟骨への外力で声門下の気道が 50% 以上つぶれた力。1 歳未満で最小 5 N（平均 10.5 N）", label: CHILD_MEASURED_LOCALIZED}
+      - {value: 6.1,  basis: "ISO/TS 15066 首 150 N × 0.041", label: DERIVED_FROM_ADULT_STANDARD}
+    note: "局所（輪状軟骨）の力。幅のある帯が首を締める場合の力は別（未確認）。**首への接触は幾何で防ぐ**（下の geometry）"
+  chest:
+    baseline: 5.7
+    candidates:
+      - {value: 5.7,  basis: "ISO 140 N（胸骨・大胸筋）× 0.041", label: DERIVED_FROM_ADULT_STANDARD}
+      - {value: 12.6, basis: "× 0.0895", label: DERIVED_FROM_ADULT_STANDARD}
+  forearm_upper_arm:
+    baseline: 6.1
+    candidates:
+      - {value: 6.1,  basis: "ISO 150〜160 N × 0.041", label: DERIVED_FROM_ADULT_STANDARD}
+      - {value: 13.4, basis: "× 0.0895", label: DERIVED_FROM_ADULT_STANDARD}
+  face:
+    baseline: 2.7
+    candidates:
+      - {value: 2.7,  basis: "ISO 咬筋 65 N × 0.041。ISO は顔・頭部への接触を許容しない（A.3.2）", label: DERIVED_FROM_ADULT_STANDARD}
+    note: "意図した接触なし。顔の高さに届く構造ではない（体高 30〜94 mm）ので通常は関係しない。持ち上げられたときだけ"
+transient_impact_factor:
+  baseline: 1.0                 # 衝撃の限界 = 準静的と同じ（安全側）。ISO/TS 15066 は 2.0 を使う（成人・脚注 c）。子どもには転用しない
+  iso15066_adult: 2.0
+pressure_limit_n_per_cm2:
+  baseline: 8.2                 # 子どもの痛み閾値 mean−1SD（母指球）。縁・角の小さな接触面積では 力 = 圧力 × 面積 の方が先に効く
+  iso15066_adult_hand: [190, 300]   # 成人の値。**転用しない**
+
+# --- 形の規則（力ではなく幾何で守る。**いずれも規格本文は未確認**）--------------------------------------
+geometry_rules:
+  accessible_gap_forbidden_mm: [5.0, 12.0]
+  accessible_gap_basis: "EN 71-1 4.10.3 / ASTM F963 4.13.2 / EN 1176-1 D.10（要約での確認）: 5 mm の棒が入る隙間は 12〜13 mm の棒も入らなければならない。指の最初の関節の最小 8.3〜8.7 mm（Snyder 1977）はこの帯に入る。IEC 61032 プローブ 19 は 5.6 mm（3 歳未満）"
+  applies_to: "関節の可動域の全角度で、人が触れる範囲の隙間（外装のスキマ、関節のカバーの縁、腹面インサートの隙間）"
+  small_parts_cylinder_mm: {diameter: 31.7, depth: [25.4, 57.1]}   # ASTM F963 4.6.1。外れた部品がこの筒に入る = 誤飲物（CAD.md の禁止事項と同じ）
+  reentrant_pocket_forbidden: true      # C 字の口が内径より狭い（角度合計 > 180°）と首・手首が引っかかる。上限 145° はこの余裕
+  neck_head_opening_forbidden_mm: [64.0, 230.0]   # 首（最小 63.7）は入るが頭（頭幅 119 以上。EN 1176 のプローブは 130〜230 と伝聞）は抜けない開口。閉じた開口を作らない
+  cable_free_loop_max_mm: 300.0         # ASTM F963 4.14.1（18 か月未満の紐）。外に出る線・ストラップの長さ
+  breakaway_cord_n: 22.2                # ASTM F963 4.14.1.1（紐の離脱荷重）
+
+# --- 機体が耐えるべき負荷（しきい値ではなく、壊れない・破片を出さない条件）--------------------------------
+child_load_cases:
+  pull_n:
+    primary_under_3y: {one_hand_p95: [47.8, 72.7], two_hand_seated_p95: 149.9, max_seen: 165.4}   # CPSC 24〜35 か月
+    envelope_le_6y: {one_hand_p95: 209.5, max_seen: 238.5}                                          # CPSC 60〜71 か月
+    under_2y: {p95: [22.0, 35.0], note: "9〜17 か月の小さな n。値は参考"}
+    source: "CPSC Child Strength Measures（6〜23 か月 / 24〜71 か月）。測定（CHILD_MEASURED）"
+  step_n: "未確認（幼児の体重の一部〜全部を仮置き = HG-S1 の 80〜150 N）"
+  grip_p95_n: {age_3y: [45.0, 66.0], age_5y: [84.0, 86.0]}   # Ramirez-Osuna 2026（つかむ力。引く力ではない）
+
+# --- 未確認（これが埋まるまで SAFETY_UNVERIFIED）---------------------------------------------------------
+unverified:
+  - "2 歳未満（Primary target を含む）の首・手首・指の寸法と、その痛み・つぶれ閾値（Nikolajsen は 4〜12 歳）"
+  - "規格本文の確認: EN 71-1、ASTM F963、EN 1176-1、IEC 61032、ISO 13482（数値は要約経由）"
+  - "子どもの絞扼（首）の力の閾値（Walker 2010 は輪状軟骨への局所の力のみ）"
+  - "子どもの指の挟み込み（つぶれ）の閾値"
+  - "Nikolajsen 2011 / Pedersen 2020 の原著の確認（要旨の値）"
+  - "H1 の実測（機体が実際に出す力）"

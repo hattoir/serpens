@@ -153,16 +153,20 @@ def test_rest_arc_leaves_room_for_breathing(cfg: dict) -> None:
 
 
 def test_rest_arc_has_no_self_intersection(cfg: dict) -> None:
-    """R03 の休憩姿勢: 合計 200° 以上曲げ、呼吸で ±振れても中心線間隔が下限以上。
+    """休憩姿勢: はっきり曲がった弧で、呼吸で ±振れても中心線間隔が下限以上。
 
-    曲げ量は software_operational_limit（現在 ±50° CONDITIONAL、CAD R03 由来）で決まる。
-    **旧とぐろ（329°巻き）は R03 では作れない。** `legacy_poses` を参照。
+    2026-09-29 まで「合計 200° 以上」を要求していた。DEC-USER-0002 で胴体ヨーの角度合計の上限 145°
+    （link.limits.yaw_sum_deg、体が輪を作って手首・首を囲い込めない）を採用したので、
+    **呼吸の振幅を最大に足しても上限以下**に変えた（安全側）。**旧とぐろ（329°巻き）は作れない。** `legacy_poses` を参照。
     """
     poses = Poses(cfg)
     sc = cfg["self_collision"]
     coil = poses.rest()
-    assert sum(coil[f"J{k}"] for k in range(1, 7)) > 200
     amp = cfg["breath"]["amplitude_by_axis"]
+    body = [f"J{k}" for k in range(1, 7)]
+    total = sum(coil[n] for n in body)
+    assert total >= 120.0, "休憩姿勢がほとんど曲がっていない"
+    assert total + sum(abs(amp[n]) for n in body) <= float(cfg["link"]["limits"]["yaw_sum_deg"])
     for d in (-1.0, 0.0, 1.0):
         pose = {k: v + d * amp[k] for k, v in coil.items()}
         pts = poses.points(pose)

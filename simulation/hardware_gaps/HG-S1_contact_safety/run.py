@@ -143,7 +143,7 @@ def write(out: dict[str, Any]) -> None:
         for dn in (A["body_parts_mm"]["neck"][1], A["body_parts_mm"]["neck"][1] + 10.0):
             cells = [f"{math.degrees(2 * math.atan(float(A['body']['link_mm']) / (w + dn + 2 * m))):.1f}°" for m in (5.0, 10.0)]
             L.append(f"| {w:g} | {dn:g} | " + " | ".join(cells) + " |")
-    L.append("\n現在の機械の可動域 ±55°（PROVISIONAL）は、幅 92 mm・首 90 mm では余裕 0。**機械ストッパーは ±52° 前後以下にする必要がある**"
+    L.append("\n現在の機械の可動域 ±55°（PROVISIONAL）は、幅 92 mm では内径 90 mm で、首の大きい側（88.5 mm）との余裕が 1.5 mm しかない。**機械ストッパーは ±52° 前後以下にする必要がある**"
              "（関節部の幅が太いほど厳しい。幅 60 mm なら ±58〜61°）。\n")
     L.append("\n## 2. 囲める角と、角度合計の上限の窓\n")
     L.append("囲める最大の角 = 胴体 yaw の本数 × 可動域（+ 頭 yaw）。**180° を超えると、手首・首などを囲い込める**。\n")
@@ -164,6 +164,19 @@ def write(out: dict[str, Any]) -> None:
         L.append(f"- {name}: 直進だけなら角度合計 {straight:.0f}° 以上、旋回も含めると {turn:.0f}° 以上が要る（最も曲げる歩容で {worst:.0f}°）。"
                  f"上限を 180° 未満に置けば囲い込みは起きない → 窓は **{turn:.0f}°〜180°**"
                  + ("" if turn < 180 else "（**窓が無い**: 旋回に 180° 以上要る）"))
+    th_path = HERE.parent / "safety_thresholds.yaml"
+    if th_path.exists():
+        th = yaml.safe_load(th_path.read_text(encoding="utf-8"))["quasi_static_contact_force_n"]
+        link_m = float(A["body"]["link_mm"]) / 1000.0
+        L.append("\n### 暫定しきい値（`safety_thresholds.yaml`、PROVISIONAL / SAFETY_UNVERIFIED）と比べた押し付け力（N。節の中点 / 関節から 20 mm）\n")
+        L.append("| 部位 | しきい値 baseline | ソフト上限 0.45 N·m が効いている | ソフトが効かず機械のリミッターだけ 0.7 N·m | どちらも効かない（ストール 3 N·m） |\n|---|---|---|---|---|")
+        for region, v in th.items():
+            f = float(v["baseline"])
+            row = [f"{t / (link_m / 2):.0f} / {t / 0.020:.0f}" for t in (0.45, 0.7, 3.0)]
+            L.append(f"| {region} | {f:g} | " + " | ".join(row) + " |")
+        L.append("\n**どの層でも、関節のトルクだけではしきい値（2.7〜6.1 N）を満たせない**（0.45 N·m でも節の中点で 9.5 N）。"
+                 "守るのは幾何（人が触れる範囲に 5〜12 mm の隙間を作らない、首・手首が入る閉じた開口を作らない、C 字の口を袋小路にしない）と、"
+                 "力を逃がす柔らかい外装。トルクの層（ソフト + 機械のリミッター）は、故障時に力を桁で下げるための最後の保険。\n")
     L.append("\n## 3. 押し付ける力（輪の内径より太い物に巻いたとき）\n")
     L.append("関節トルクが両側の節の中点（腕 47.5 mm）で押す力。最悪は関節の近く（20 mm）で押す場合。\n")
     L.append("| 場合 | 関節トルク N·m | 節の中点での力 N | 関節から 20 mm での力 N |\n|---|---|---|---|")

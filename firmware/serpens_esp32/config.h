@@ -19,6 +19,8 @@ static const float LIMIT_TEMPORAL_HZ     = 1.0f;
 static const float LIMIT_GAMMA_DEG       = 30.0f;
 static const float LIMIT_HEAD_SPEED_DPS  = 120.0f;
 static const float LIMIT_BODY_SPEED_DPS  = 240.0f;  // BODY 指令（とぐろ・鎌首）の速度上限
+// 胴体ヨーの連続した角度の和の上限（体が輪を作って手首・首を囲い込めない）。PROVISIONAL / SAFETY_UNVERIFIED（DEC-USER-0002）
+static const float LIMIT_YAW_SUM_DEG     = 145.0f;
 
 // ---- 異常で緊急停止（ラッチ）する条件 ----
 static const uint8_t FAULT_TEMP_LIMIT_C = 60;       // behavior.safety.overheat_c(55) より上
@@ -51,6 +53,10 @@ static const JointCfg JOINTS[N_AXES] = {
 };
 
 // 起動時の姿勢（config/robot.yaml の poses.home）。J7 = +8° は呼吸が下限で切れないため
+// yaw の鎖（尾 → 頭）: 巻ける角の合計に効く軸の添字（胴体ヨー J1..J6 + 頭ヨー J8）。config の axis: yaw と同じ順
+#define N_YAW_CHAIN 7
+static const uint8_t YAW_CHAIN[N_YAW_CHAIN] = {0, 1, 2, 3, 4, 5, 7};
+
 static const float HOME_DEG[N_AXES] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 8.0f, 0.0f, 0.0f};
 
 // ---- サーボ（docs/sts3215_registers.md） ----

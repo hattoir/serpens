@@ -19,13 +19,14 @@ configs:                             # HG-H0 と同じ overlay。胴体 yaw の�
   FW7_YAW5_HEADYAW: {overlay: config/robot_fw7_yaw5_headyaw.yaml}
   FW7_YAW6:         {overlay: config/robot_fw7_yaw6.yaml}
 
-# 子どもの体の太さ（直径 mm。**幅として置く。出典未確認の目安 = ASSUMPTION**。対象年齢も未決定 = OQ-0003）
+# 子どもの体の太さ（直径 mm、[最小, 大きい側]）。**Snyder 1977 の生データ（2〜7 歳）から**（child_anthropometry.yaml、DEC-USER-0002 §1）。
+# 最小 = 観測の最小、大きい側 = 6〜7 歳の P95。**2 歳未満（Primary target を含む）は出典が無く空白**
 body_parts_mm:
-  finger: [10.0, 16.0]
-  wrist: [30.0, 45.0]
-  forearm: [40.0, 60.0]
-  neck: [70.0, 90.0]
-  ankle: [40.0, 60.0]
+  finger: [8.3, 12.7]                # 最初の関節が通らない最小の穴（指を隙間へ入れる寸法）
+  wrist: [29.3, 43.3]
+  forearm: [41.7, 61.8]
+  neck: [63.7, 88.5]
+  chest: [138.2, 211.0]
 
 # 歩容（HG-H0 の格子と同じ。旋回の γ は 可動域 − 振幅 まで）
 gait:
@@ -42,7 +43,7 @@ torque:
 
 # 子どもが加える外力（**幅として置く。ASSUMPTION**）
 external:
-  pull_n: [10.0, 80.0]               # 尾や頭をつかんで引く
+  pull_n: [10.0, 240.0]              # 尾や頭をつかんで引く。CPSC 実測: 3 歳未満の 2 手 P95 150 N、6 歳以下の 1 手 P95 210 N（最大 238 N）
   bend_force_n: [5.0, 40.0]          # 手で節を曲げる（節の先を押す）
   step_n: [80.0, 150.0]              # 片足で踏む（幼児の体重の一部〜全部）
   lift_mass_kg: [0.87, 1.10]         # 片端を持って持ち上げる（機体の質量。overlay の ASSUMPTION）

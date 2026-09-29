@@ -17,6 +17,29 @@
 
 ---
 
+## 2026-09-29 — 安全値の採用: 対象年齢・角度合計 145°・機械式トルクリミッター（User 決定 DEC-USER-0002）と、接触しきい値の暫定導出
+
+**Decision**: (1) 対象年齢 = Primary 3 歳未満、Safety envelope 6 歳以下。寸法は年齢から推測せず、Snyder 1977 の生データ（自分で再計算）から。
+(2) 接触しきい値は User が決めず Engineering が導出する。暫定 baseline（PROVISIONAL / SAFETY_UNVERIFIED、`simulation/hardware_gaps/safety_thresholds.yaml`）:
+手・指 5.7 N、首 5.0 N、胸 5.7 N、腕 6.1 N、顔 2.7 N、衝撃も準静的と同じ（係数 1.0）、圧力 8.2 N/cm²。
+(3) 胴体ヨーの角度合計の上限 `link.limits.yaw_sum_deg = 145°`（yaw の鎖 = 胴体 + 頭ヨー）を、機体の指令検査・最後の砦・ServoBus の 3 層とファームに実装した。
+(4) 機械式トルクリミッターを設計に含める（`safety_limits.torque.mechanical_limiter`、窓 0.7〜1.0 N·m、baseline 0.7、出力側）。
+
+**Why**: (2) 成人の規格値（ISO/TS 15066 の 65〜160 N、200〜300 N/cm²）を子どもに転用しない。子どもの痛み閾値（Nikolajsen 2011、mean−1SD 8.2 N/cm²）で成人値を縮め（× 0.041）、
+乳児の気道の局所の力（Walker 2010、5 N）と並べ、候補の最小を baseline にした（DEC-USER-0002 §2）。
+(3) HG-S2 で 145〜180° を掃引: 直進の速さは変わらず、旋回半径が縮むだけ（145° で最悪 185 mm、仮置きの要件 600 mm の 31%）。180° 以上は C 字の口が袋小路になる → 上げる evidence が無い。
+(4) HG-S3 で 0.4〜1.5 N·m を掃引: 不要な滑り（≤ 5%、過渡 ×1.5、個体差 −30%）・歯車の保護・首の保持を同時に満たす窓が 0.7〜1.0。0.6 は個体差 −30% で 15% 滑る。
+
+**Alternatives**: 接触しきい値を成人の規格値のまま使う（子どもに危険側）/ 1 つの資料に決める（単一資料の転用になる）/ トルクの制限だけで守る（しきい値 5.7 N は関節から 20 mm で 0.11 N·m 以下 = 歩容の 0.13〜0.69 N·m を下回り、移動と両立しない）。
+
+**Trade-offs**: 暫定しきい値は安全側で、トルクだけでは満たせない → **幾何（5〜12 mm の隙間を作らない、閉じた開口・袋小路を作らない）と柔らかい外装で守る**設計要求になった。
+休憩姿勢 `rest_arc` は 240° → 135° に開いた（同じ形のまま）。2 歳未満の寸法は出典が無く、Primary target の一部が空白のまま。
+
+**Context**: 調査エージェントの報告は、Snyder の百分位だけ独立に検証した。それ以外（CPSC の引く力、ISO/TS 15066 の値、Walker / Nikolajsen の原著、EN 71 / ASTM F963 の条文）は `SAFETY_UNVERIFIED`。
+`docs/reports/2026-09-29_child_safety_sources.md`、`ai-outbox/decisions/2026-09-29_DEC-USER-0002_safety_values.md`。
+
+---
+
 ## 2026-09-29 — C044 のトルク参照値を現行資料へ更新し、トルク制限レジスタ比を 0.287 → 0.167 に下げた（User 承認）
 
 **Decision**: `safety_limits.torque` の参照値を、現行の Seeed / Feetech 資料の C044（7.4V / 1:191）の値

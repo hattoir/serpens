@@ -1,0 +1,1161 @@
+{
+ "locomotion": [
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 145.0,
+   "speed_max": 21.425585538303263,
+   "turn_radius_min_mm": 80.4628927566756,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 145.0,
+   "speed_max": 48.99777506781042,
+   "turn_radius_min_mm": 111.39592978133132,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 145.0,
+   "speed_max": 83.77337383776602,
+   "turn_radius_min_mm": 118.08379203810075,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 145.0,
+   "speed_max": 70.49531959877157,
+   "turn_radius_min_mm": 89.79450578917796,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 145.0,
+   "speed_max": 145.4312135029648,
+   "turn_radius_min_mm": 99.28104340777384,
+   "n_gaits": 165
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 145.0,
+   "speed_max": 196.1207986687399,
+   "turn_radius_min_mm": 141.02127308151964,
+   "n_gaits": 153
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 145.0,
+   "speed_max": 20.726056678285744,
+   "turn_radius_min_mm": 92.18633096099283,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 145.0,
+   "speed_max": 46.397338648714346,
+   "turn_radius_min_mm": 109.92321215736845,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 145.0,
+   "speed_max": 83.51427560883856,
+   "turn_radius_min_mm": 119.45519532699666,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 145.0,
+   "speed_max": 70.05798286041544,
+   "turn_radius_min_mm": 99.09560826709775,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 145.0,
+   "speed_max": 151.53942553975241,
+   "turn_radius_min_mm": 129.0036452289843,
+   "n_gaits": 166
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 145.0,
+   "speed_max": 208.93674577554467,
+   "turn_radius_min_mm": 134.42163487214165,
+   "n_gaits": 156
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 145.0,
+   "speed_max": 43.670008257878386,
+   "turn_radius_min_mm": 132.6289652321667,
+   "n_gaits": 157
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 145.0,
+   "speed_max": 85.2507110903984,
+   "turn_radius_min_mm": 174.98131069358425,
+   "n_gaits": 157
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 145.0,
+   "speed_max": 129.84361319734873,
+   "turn_radius_min_mm": 184.7401064816643,
+   "n_gaits": 157
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 145.0,
+   "speed_max": 119.76151676506254,
+   "turn_radius_min_mm": 124.60217720711603,
+   "n_gaits": 157
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 145.0,
+   "speed_max": 202.88055928989536,
+   "turn_radius_min_mm": 162.08146387070403,
+   "n_gaits": 154
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 145.0,
+   "speed_max": 249.1310046915202,
+   "turn_radius_min_mm": 165.77675823429868,
+   "n_gaits": 142
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 150.0,
+   "speed_max": 21.425585538303263,
+   "turn_radius_min_mm": 80.4628927566756,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 150.0,
+   "speed_max": 48.99777506781042,
+   "turn_radius_min_mm": 111.39592978133132,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 150.0,
+   "speed_max": 83.77337383776602,
+   "turn_radius_min_mm": 118.08379203810075,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 150.0,
+   "speed_max": 70.49531959877157,
+   "turn_radius_min_mm": 89.79450578917796,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 150.0,
+   "speed_max": 145.4312135029648,
+   "turn_radius_min_mm": 99.28104340777384,
+   "n_gaits": 166
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 150.0,
+   "speed_max": 196.1207986687399,
+   "turn_radius_min_mm": 141.02127308151964,
+   "n_gaits": 153
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 150.0,
+   "speed_max": 20.726056678285744,
+   "turn_radius_min_mm": 92.18633096099283,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 150.0,
+   "speed_max": 46.397338648714346,
+   "turn_radius_min_mm": 109.92321215736845,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 150.0,
+   "speed_max": 83.51427560883856,
+   "turn_radius_min_mm": 119.45519532699666,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 150.0,
+   "speed_max": 70.05798286041544,
+   "turn_radius_min_mm": 99.09560826709775,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 150.0,
+   "speed_max": 151.53942553975241,
+   "turn_radius_min_mm": 129.0036452289843,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 150.0,
+   "speed_max": 208.93674577554467,
+   "turn_radius_min_mm": 134.42163487214165,
+   "n_gaits": 156
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 150.0,
+   "speed_max": 43.670008257878386,
+   "turn_radius_min_mm": 76.33405710237858,
+   "n_gaits": 161
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 150.0,
+   "speed_max": 85.2507110903984,
+   "turn_radius_min_mm": 95.33442853838966,
+   "n_gaits": 161
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 150.0,
+   "speed_max": 129.84361319734873,
+   "turn_radius_min_mm": 102.9427761013233,
+   "n_gaits": 161
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 150.0,
+   "speed_max": 119.76151676506254,
+   "turn_radius_min_mm": 87.85755782182159,
+   "n_gaits": 161
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 150.0,
+   "speed_max": 202.88055928989536,
+   "turn_radius_min_mm": 162.08146387070403,
+   "n_gaits": 156
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 150.0,
+   "speed_max": 249.1310046915202,
+   "turn_radius_min_mm": 163.5092892905642,
+   "n_gaits": 143
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 160.0,
+   "speed_max": 21.425585538303263,
+   "turn_radius_min_mm": 52.47103373878285,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 160.0,
+   "speed_max": 48.99777506781042,
+   "turn_radius_min_mm": 63.95659018793648,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 160.0,
+   "speed_max": 83.77337383776602,
+   "turn_radius_min_mm": 67.12818943953373,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 160.0,
+   "speed_max": 70.49531959877157,
+   "turn_radius_min_mm": 50.553982867225585,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 160.0,
+   "speed_max": 145.4312135029648,
+   "turn_radius_min_mm": 93.63922019272486,
+   "n_gaits": 167
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 160.0,
+   "speed_max": 196.1207986687399,
+   "turn_radius_min_mm": 103.10396632740476,
+   "n_gaits": 154
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 160.0,
+   "speed_max": 20.726056678285744,
+   "turn_radius_min_mm": 29.46807033851864,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 160.0,
+   "speed_max": 46.397338648714346,
+   "turn_radius_min_mm": 72.28403442415194,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 160.0,
+   "speed_max": 83.51427560883856,
+   "turn_radius_min_mm": 88.9705108333078,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 160.0,
+   "speed_max": 70.05798286041544,
+   "turn_radius_min_mm": 72.65607560602929,
+   "n_gaits": 173
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 160.0,
+   "speed_max": 151.53942553975241,
+   "turn_radius_min_mm": 103.04289840303079,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 160.0,
+   "speed_max": 208.93674577554467,
+   "turn_radius_min_mm": 123.50908060405055,
+   "n_gaits": 158
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 160.0,
+   "speed_max": 43.670008257878386,
+   "turn_radius_min_mm": 76.33405710237858,
+   "n_gaits": 163
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 160.0,
+   "speed_max": 85.2507110903984,
+   "turn_radius_min_mm": 95.33442853838966,
+   "n_gaits": 163
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 160.0,
+   "speed_max": 129.84361319734873,
+   "turn_radius_min_mm": 102.9427761013233,
+   "n_gaits": 163
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 160.0,
+   "speed_max": 119.76151676506254,
+   "turn_radius_min_mm": 87.85755782182159,
+   "n_gaits": 163
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 160.0,
+   "speed_max": 202.88055928989536,
+   "turn_radius_min_mm": 148.23333387955694,
+   "n_gaits": 157
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 160.0,
+   "speed_max": 249.1310046915202,
+   "turn_radius_min_mm": 163.5092892905642,
+   "n_gaits": 143
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 170.0,
+   "speed_max": 21.425585538303263,
+   "turn_radius_min_mm": 52.47103373878285,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 170.0,
+   "speed_max": 48.99777506781042,
+   "turn_radius_min_mm": 63.95659018793648,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 170.0,
+   "speed_max": 83.77337383776602,
+   "turn_radius_min_mm": 67.12818943953373,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 170.0,
+   "speed_max": 70.49531959877157,
+   "turn_radius_min_mm": 50.553982867225585,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 170.0,
+   "speed_max": 145.4312135029648,
+   "turn_radius_min_mm": 93.63922019272486,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 170.0,
+   "speed_max": 196.1207986687399,
+   "turn_radius_min_mm": 103.10396632740476,
+   "n_gaits": 154
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 170.0,
+   "speed_max": 20.726056678285744,
+   "turn_radius_min_mm": 29.46807033851864,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 170.0,
+   "speed_max": 46.397338648714346,
+   "turn_radius_min_mm": 72.28403442415194,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 170.0,
+   "speed_max": 83.51427560883856,
+   "turn_radius_min_mm": 88.9705108333078,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 170.0,
+   "speed_max": 70.05798286041544,
+   "turn_radius_min_mm": 72.65607560602929,
+   "n_gaits": 174
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 170.0,
+   "speed_max": 151.53942553975241,
+   "turn_radius_min_mm": 103.04289840303079,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 170.0,
+   "speed_max": 208.93674577554467,
+   "turn_radius_min_mm": 123.50908060405055,
+   "n_gaits": 158
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 170.0,
+   "speed_max": 43.670008257878386,
+   "turn_radius_min_mm": 28.832842355345978,
+   "n_gaits": 166
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 170.0,
+   "speed_max": 85.2507110903984,
+   "turn_radius_min_mm": 58.56791806985288,
+   "n_gaits": 166
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 170.0,
+   "speed_max": 129.84361319734873,
+   "turn_radius_min_mm": 83.22292412667241,
+   "n_gaits": 166
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 170.0,
+   "speed_max": 119.76151676506254,
+   "turn_radius_min_mm": 55.12951736275527,
+   "n_gaits": 166
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 170.0,
+   "speed_max": 202.88055928989536,
+   "turn_radius_min_mm": 110.71286678948836,
+   "n_gaits": 159
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 170.0,
+   "speed_max": 249.1310046915202,
+   "turn_radius_min_mm": 113.15888727647629,
+   "n_gaits": 144
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 180.0,
+   "speed_max": 21.425585538303263,
+   "turn_radius_min_mm": 1.3958011201843517,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 180.0,
+   "speed_max": 48.99777506781042,
+   "turn_radius_min_mm": 22.85523889768657,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 180.0,
+   "speed_max": 83.77337383776602,
+   "turn_radius_min_mm": 43.83693541896447,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 180.0,
+   "speed_max": 70.49531959877157,
+   "turn_radius_min_mm": 19.287882953895522,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 180.0,
+   "speed_max": 145.4312135029648,
+   "turn_radius_min_mm": 64.09531221867232,
+   "n_gaits": 169
+  },
+  {
+   "config": "FW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 180.0,
+   "speed_max": 196.1207986687399,
+   "turn_radius_min_mm": 75.27464370386267,
+   "n_gaits": 155
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 180.0,
+   "speed_max": 20.726056678285744,
+   "turn_radius_min_mm": 6.877146011615378,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 180.0,
+   "speed_max": 46.397338648714346,
+   "turn_radius_min_mm": 29.937677560424394,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 180.0,
+   "speed_max": 83.51427560883856,
+   "turn_radius_min_mm": 65.44783683570954,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 180.0,
+   "speed_max": 70.05798286041544,
+   "turn_radius_min_mm": 23.738430134053743,
+   "n_gaits": 176
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 180.0,
+   "speed_max": 151.53942553975241,
+   "turn_radius_min_mm": 103.04289840303079,
+   "n_gaits": 170
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 180.0,
+   "speed_max": 208.93674577554467,
+   "turn_radius_min_mm": 123.50908060405055,
+   "n_gaits": 158
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 3.0,
+   "limit": 180.0,
+   "speed_max": 43.670008257878386,
+   "turn_radius_min_mm": 11.345258627375769,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 5.0,
+   "limit": 180.0,
+   "speed_max": 85.2507110903984,
+   "turn_radius_min_mm": 24.18748854789655,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "decoupled",
+   "ratio": 8.0,
+   "limit": 180.0,
+   "speed_max": 129.84361319734873,
+   "turn_radius_min_mm": 32.50191359390514,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 3.0,
+   "limit": 180.0,
+   "speed_max": 119.76151676506254,
+   "turn_radius_min_mm": 33.496834299960895,
+   "n_gaits": 168
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 5.0,
+   "limit": 180.0,
+   "speed_max": 202.88055928989536,
+   "turn_radius_min_mm": 110.71286678948836,
+   "n_gaits": 160
+  },
+  {
+   "config": "FW6_YAW5",
+   "law": "ellipse",
+   "ratio": 8.0,
+   "limit": 180.0,
+   "speed_max": 249.1310046915202,
+   "turn_radius_min_mm": 110.93436774969469,
+   "n_gaits": 145
+  }
+ ],
+ "geometry": [
+  {
+   "config": "FW5",
+   "limit": 145.0,
+   "wrap_deg": 145.0,
+   "hook": false,
+   "wrap_if_head_excluded": 145.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 145.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 145.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 145.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 145.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 145.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 81.35724029832375,
+    "92": 49.357240298323745
+   }
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": 145.0,
+   "wrap_deg": 145.0,
+   "hook": false,
+   "wrap_if_head_excluded": 175.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 145.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 145.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 145.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 145.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 145.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 81.35724029832375,
+    "92": 49.357240298323745
+   }
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": 145.0,
+   "wrap_deg": 145.0,
+   "hook": false,
+   "wrap_if_head_excluded": 145.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 145.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 145.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 145.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 145.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 145.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 85.01408658620664,
+    "92": 53.014086586206645
+   }
+  },
+  {
+   "config": "FW5",
+   "limit": 150.0,
+   "wrap_deg": 150.0,
+   "hook": false,
+   "wrap_if_head_excluded": 150.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 150.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 150.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 150.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 150.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 150.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 80.63831302997829,
+    "92": 48.63831302997829
+   }
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": 150.0,
+   "wrap_deg": 150.0,
+   "hook": false,
+   "wrap_if_head_excluded": 180.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 150.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 150.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 150.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 150.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 150.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 80.63831302997829,
+    "92": 48.63831302997829
+   }
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": 150.0,
+   "wrap_deg": 150.0,
+   "hook": false,
+   "wrap_if_head_excluded": 150.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 150.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 150.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 150.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 150.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 150.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 84.5533642947185,
+    "92": 52.553364294718506
+   }
+  },
+  {
+   "config": "FW5",
+   "limit": 160.0,
+   "wrap_deg": 160.0,
+   "hook": false,
+   "wrap_if_head_excluded": 160.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 160.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 160.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 160.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 160.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 160.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 79.0741671313647,
+    "92": 47.0741671313647
+   }
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": 160.0,
+   "wrap_deg": 160.0,
+   "hook": false,
+   "wrap_if_head_excluded": 190.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 160.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 160.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 160.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 160.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 160.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 79.0741671313647,
+    "92": 47.0741671313647
+   }
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": 160.0,
+   "wrap_deg": 160.0,
+   "hook": false,
+   "wrap_if_head_excluded": 160.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 160.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 160.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 160.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 160.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 160.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 83.58939320077613,
+    "92": 51.58939320077613
+   }
+  },
+  {
+   "config": "FW5",
+   "limit": 170.0,
+   "wrap_deg": 170.0,
+   "hook": false,
+   "wrap_if_head_excluded": 170.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 170.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 170.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 170.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 170.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 170.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 77.4264455610627,
+    "92": 45.42644556106271
+   }
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": 170.0,
+   "wrap_deg": 170.0,
+   "hook": false,
+   "wrap_if_head_excluded": 200.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 170.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 170.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 170.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 170.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 170.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 77.4264455610627,
+    "92": 45.42644556106271
+   }
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": 170.0,
+   "wrap_deg": 170.0,
+   "hook": false,
+   "wrap_if_head_excluded": 170.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 170.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 170.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 170.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 170.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 170.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 82.56965123975112,
+    "92": 50.569651239751124
+   }
+  },
+  {
+   "config": "FW5",
+   "limit": 180.0,
+   "wrap_deg": 180.0,
+   "hook": false,
+   "wrap_if_head_excluded": 180.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 180.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 180.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 180.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 180.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 180.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 75.69827418917012,
+    "92": 43.69827418917012
+   }
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": 180.0,
+   "wrap_deg": 180.0,
+   "hook": false,
+   "wrap_if_head_excluded": 210.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 180.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 180.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 180.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 180.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 180.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 75.69827418917012,
+    "92": 43.69827418917012
+   }
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": 180.0,
+   "wrap_deg": 180.0,
+   "hook": false,
+   "wrap_if_head_excluded": 180.0,
+   "inner_diameter_w60": 143.72815744840807,
+   "inner_diameter_w92": 111.72815744840807,
+   "finger_wrap_deg": 180.0,
+   "finger_hook": false,
+   "wrist_wrap_deg": 180.0,
+   "wrist_hook": false,
+   "forearm_wrap_deg": 180.0,
+   "forearm_hook": false,
+   "neck_wrap_deg": 180.0,
+   "neck_hook": false,
+   "chest_wrap_deg": 180.0,
+   "chest_hook": false,
+   "self_gap_min_mm": {
+    "60": 81.49531096679365,
+    "92": 49.49531096679365
+   }
+  }
+ ]
+}
