@@ -1,0 +1,99 @@
+# 頭のスコップ＋フタ（頭内に閉じ込める機構）の成立性調査 — MuJoCo 用の設定。単位はキー名の接尾辞（_mm, _g, _deg, _s ...）。
+# 方針（User 決定 2026-09-29）: 頭内取り込み機構は**第 2 段階の製品機能**。この作業はその成立性調査（PRODUCT.md §2）。
+# 出典と ASSUMED の区別:
+#   BRIEF   = User の指示書（2026-09-29）の値
+#   ASSUMED = 指示書に無い、または実物未測定の仮値。**実物の試験片の結果が出るまで「候補」の根拠にしない**
+# ヘビ本体・蛇行・安全機構は扱わない。頭だけをレール（x 方向のスライダー）上のブロックとして動かす。
+# 絨毯は**未対応**（毛への沈み込みを MuJoCo の剛体接触で再現できない。docs/verification_status.md）。
+
+head:
+  width_mm: 48.0                 # BRIEF
+  length_mm: 60.0                # BRIEF
+  skid_height_mm: 5.0            # BRIEF。頭の下面のスキッド。**動きには使わない**（頭は x 方向にだけ動き、高さは固定）
+  mass_g: 80.0                   # BRIEF（ASSUMED）
+
+# スコップ（下あご）。傾斜板は先端（床）から奥行き 30mm（斜面に沿って）で立ち上がる薄板（先端厚 = 板厚）
+scoop:
+  depth_along_slope_mm: 30.0     # BRIEF。「奥行き」= 斜面に沿った長さと解釈（α = 8/12/18° で立ち上がり 4.2 / 6.2 / 9.3 mm）
+  tip_clearance_mm: 0.1          # User 承認 2026-09-29（先端は床に接する。0 / 0.2 / 0.5 は別に振る）
+  wall_thickness_mm: 1.0         # ASSUMED（カップ型の側壁の厚み）
+  wall_height_mm: 5.0            # ASSUMED（傾斜板の上面からの側壁の高さ。床まで下ろした柱状）
+  friction_object: 0.3           # User 承認 2026-09-29（PETG 平滑の仮値。0.15 / 0.5 は上位候補だけ確認）
+  sweep:                         # BRIEF
+    tip_thickness_mm: [0.4, 0.6, 1.0]
+    alpha_deg: [8.0, 12.0, 18.0]
+    side_wall: [false, true]
+    width_mm: [30.0, 40.0]
+
+# 閉じ込め空間（ランプの上端から水平に続く）
+cavity:
+  length_mm: 30.0                # BRIEF（x）
+  width_mm: 30.0                 # BRIEF（y）
+  height_mm: 15.0                # BRIEF（z）
+  floor_plate_mm: 1.5            # ASSUMED
+  wall_mm: 1.0                   # ASSUMED（側壁・奥壁）
+
+# フタ（上あご）。空間の奥の上端にヒンジ。開き 60° → 閉 0°
+lid:
+  open_deg: 60.0                 # BRIEF
+  close_time_s: 0.3              # BRIEF
+  thickness_mm: 1.5              # ASSUMED
+  mass_g: 5.0                    # ASSUMED
+  torque_limit_nm: 0.05          # ASSUMED（物を挟んだとき押しつぶさず止まる程度。先端で約 1.7 N）
+  friction_object: 0.3           # ASSUMED（スコップと同じ）
+  closed_tolerance_deg: 2.0      # これ以下なら「閉じた」
+
+# 対象物（BRIEF）。物 – 床の摩擦は床の値（立方体だけ friction_floor で上書き）
+objects:
+  coin_1yen:   {shape: cylinder, diameter_mm: 20.0, height_mm: 1.5, mass_g: 1.0}
+  battery_cr2032: {shape: cylinder, diameter_mm: 20.0, height_mm: 3.2, mass_g: 3.0}
+  bead:        {shape: sphere, diameter_mm: 8.0, mass_g: 0.3, rolling_friction_m: 2.0e-5}   # 転がり抵抗 c_rr ≈ 0.005 × 半径 4mm（ASSUMED。結果に強く効く）
+  crumb_cube:  {shape: box, edge_mm: 10.0, mass_g: 0.5, friction_floor: 0.8}                  # 「摩擦高め」= 0.8（ASSUMED）
+
+floors:                          # BRIEF。剛体平面（絨毯は未対応）
+  flooring: {friction: 0.3}
+  mat: {friction: 0.6}
+
+motion:
+  speeds_mm_s: [10.0, 20.0, 40.0]   # BRIEF
+  push_force_limit_n: 1.0           # BRIEF（ヘビの推進力相当。ASSUMED）
+  ramp_up_s: 0.1                    # 速度指令の立ち上がり
+  continue_during_close: true       # フタを閉じる間も前進を続ける（厳しい側）
+  settle_after_close_s: 0.2
+  travel_max_mm: 150.0              # 追跡の上限（先端の前進距離）
+
+placement:
+  distance_ahead_mm: [30.0, 60.0]   # ASSUMED（物の中心の、先端からの初期距離の範囲。一様乱数）
+  lateral_offsets_mm: [0.0, 5.0, 10.0]   # BRIEF（符号はランダム）
+  yaw_random: true                  # BRIEF（円板・球は見た目に関係しない）
+
+# フタを閉じるきっかけ
+trigger:
+  default: ideal_center_depth
+  ideal_center_depth_mm: 15.0       # User 承認 2026-09-29: 物の中心が空間の奥へ 15mm 入った瞬間（理想センサー）
+  latency_ms: [0.0, 50.0, 100.0]    # User 指示
+  contact_advance_mm: 50.0          # 「接触から一定距離」: スコップと物の最初の接触から、この距離だけ前進してから閉じる（ASSUMED）
+  tof:                              # 現実のセンサー案（User 指示）。VL53L1X 相当（ASSUMED）
+    sensor_x_mm: 25.0               # 先端からの位置（ランプの上）
+    sensor_z_mm: 14.0               # 床からの高さ
+    fov_half_deg: 13.5              # 27° の視野
+    rate_hz: 30.0
+    threshold_mm: 60.0              # この距離を切ったら
+    advance_mm: 48.0                # そこから前進する距離（= 閾値 − 12mm。物の半径を 6mm と仮定して中心が奥へ入る量に合わせた。センサーは物の大きさを知らない）
+    floor_rejected: true            # 床からの戻りは除く（床の背景を差し引ける最良の場合）
+
+# 数値（収束確認で決める。tools/scoop_convergence.py）
+sim:
+  timestep_s: 2.0e-4
+  solref_time_const_s: 0.002
+  solimp: [0.95, 0.99, 0.0005]
+  cone: elliptic
+  multiccd: true
+  check_every_steps: 5              # トリガー判定・状態の読み出しの間隔
+
+# 評価
+eval:
+  n_stage1: 10                      # 全条件（User 指示: N=10 で全条件 → 上位のみ N=30）
+  n_stage2: 30
+  ci_level: 0.90
+  base_seed: 20260929
