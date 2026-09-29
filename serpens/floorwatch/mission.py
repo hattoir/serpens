@@ -47,6 +47,7 @@ class InspectMission:
     measure: Callable[[], tuple[float, float]] | None = None   # 頭先端から地点まで (前方, 左) [mm]。None なら位置合わせしない
     head_link_mm: float = 0.0                           # 頭ヨーの関節からカメラまでの長さ（狙いの計算に使う）
     attention_ok: Callable[[float], bool] | None = None  # CSAR: 物を照らしてよいか（子どもが遠いと確かめられた）。None なら常に可
+    object_mm: np.ndarray | None = None                  # 見に行く物（地点）の位置。離れるときに避ける（CSAR R3）
     phase: str = "GOTO"
     reason: str = ""
     result: Any = None
@@ -59,6 +60,7 @@ class InspectMission:
     _burst_until: float = 0.0
     _wait_t: float | None = None
     _retreat_from: np.ndarray | None = None
+    _retreat_to: np.ndarray | None = None
 
     def __post_init__(self) -> None:
         self.m = self.cfg["floor_watch"]["mission"]
@@ -161,9 +163,15 @@ class InspectMission:
                 self._enter("SETTLE", t, f"線を候補へ向ける（頭ヨー {delta:+.1f}°）")
                 return
             retreat = float(self.cfg["floor_watch"]["csar"]["retreat_mm"])
-            if retreat > 0:                                              # 見つけたら物から離れる（CSAR R3）。来た向きへ後ろ向きに
+            if retreat > 0:                                              # 見つけたら物から離れる（CSAR R3）
                 self._retreat_from = np.array([snake.x, snake.y])
-                self._enter("RETREAT", t, f"物から {retreat:.0f}mm 離れる（CSAR R3）")
+                self._retreat_to = self._retreat_target(snake)
+                if self._retreat_to is None:
+                    self.loco.stop("inspect: 前へ離れる道が無い。後ろは見えないので下がらない（その場で頭をそらす）")
+                    self._enter("DONE", t, "R3: 前へ離れる道が無い → その場に留まる（後ろへは下がらない）")
+                    self.loco.set_drive(DriveCommand(False, reason="inspect: 完了（離れられない）"), snake, person_xy)
+                    return
+                self._enter("RETREAT", t, f"物から前へ回り込んで離れる（CSAR R3、目標 {self._retreat_to.round().tolist()}）")
                 return
             self._enter("DONE", t)
             self.loco.set_drive(DriveCommand(False, reason="inspect: 完了"), snake, person_xy)
@@ -175,8 +183,38 @@ class InspectMission:
                 self._enter("DONE", t, f"{moved:.0f}mm 離れた")
                 self.loco.set_drive(DriveCommand(False, reason="inspect: 完了"), snake, person_xy)
                 return
-            self.loco.set_drive(self.loco.ctrl.creep(float(self.m["creep_speed_mm_s"]), backward=True,
-                                                     reason="inspect: 物から離れる（CSAR R3）"), snake, person_xy)
+            cmd = self.loco.ctrl.drive_to(t, snake, self._retreat_to, float(c["retreat_speed_mm_s"]), person_xy)
+            if cmd.moving and cmd.params is not None and float(cmd.params.temporal_freq_hz) < 0:
+                # controller はマット端で後退して向き直ることがある。離れるときは後ろが見えないので下がらない → その場に留まる
+                self.loco.stop("inspect: 前が詰まった。後ろは見えないので下がらない")
+                self._enter("DONE", t, f"R3: {moved:.0f}mm 離れたところで前が詰まった → 留まる（後退しない）")
+                self.loco.set_drive(DriveCommand(False, reason="inspect: 完了（前が詰まった）"), snake, person_xy)
+                return
+            self.loco.set_drive(cmd, snake, person_xy)                    # 前向きに（頭のセンサーが見ている向きへ）
+
+    def _retreat_target(self, snake: Any) -> np.ndarray | None:
+        """物から離れる先: 進行方向から ±60/90/120° の候補のうち、そこへの直線が物から `retreat_clear_mm` 以上離れ、マットに余地がある点。
+        **後ろ（尾の向き）へは行かない**（尾にセンサーが無く、子どもが後ろにいるかもしれない。Design ENTRY-0022）。無ければ None（留まる）。"""
+        c = self.cfg["floor_watch"]["csar"]
+        start = np.array([snake.x, snake.y], float)
+        heading = float(snake.theta_head)                          # 頭の向き（前）
+        dist = 2.0 * float(c["retreat_mm"])
+        obj = self.object_mm
+        best, best_clear = None, -1.0
+        for deg in (60.0, -60.0, 90.0, -90.0, 120.0, -120.0):
+            a = heading + math.radians(deg)
+            tgt = start + dist * np.array([math.cos(a), math.sin(a)])
+            if self.loco.ctrl.room_toward(snake, tgt) < float(c["retreat_mm"]):
+                continue
+            if obj is None:
+                clear = float("inf")
+            else:
+                seg = tgt - start
+                k = float(np.clip(np.dot(obj - start, seg) / max(float(seg @ seg), 1e-9), 0.0, 1.0))
+                clear = float(np.linalg.norm(obj - (start + k * seg)))
+            if clear >= float(c["retreat_clear_mm"]) and clear > best_clear:
+                best, best_clear = tgt, clear
+        return best
 
     def _attention_ok(self, t: float) -> bool:
         if self.attention_ok is None or not bool(self.cfg["floor_watch"]["csar"]["defer_capture_when_near"]):

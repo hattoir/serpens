@@ -104,7 +104,7 @@ class FloorWatchExecutor(Executor):
         self.mission = InspectMission(self.cfg, self.session.brain.loco, tgt - direction * offset, self._capture, self._judge,
                                       self.session.t, aim=self._aim, measure=lambda: self._offset_to(tgt),
                                       head_link_mm=float(np.linalg.norm(pts[-1][:2] - pts[-2][:2])),
-                                      attention_ok=self.csar.allows_attention_to_object)
+                                      attention_ok=self.csar.allows_attention_to_object, object_mm=tgt)
         self.session.mission = self.mission
 
     def stop(self, reason: str) -> None:

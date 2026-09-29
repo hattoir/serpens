@@ -54,7 +54,9 @@ def test_a_home_ai_hint_can_only_make_it_nearer(cfg: dict) -> None:
 class _Loco:
     def __init__(self) -> None:
         self.anim = SimpleNamespace(gait=SimpleNamespace(stop=lambda immediate=False: None))
-        self.ctrl = SimpleNamespace(creep=lambda *a, **k: ("creep", a, k), drive_to=lambda *a, **k: ("drive",))
+        from serpens.behavior.controller import DriveCommand
+        self.ctrl = SimpleNamespace(creep=lambda *a, **k: DriveCommand(False), drive_to=lambda *a, **k: DriveCommand(False),
+                                    room_toward=lambda pose, tgt: 1e9)
         self.stops: list[str] = []
 
     def stop(self, reason: str) -> None:
@@ -75,7 +77,7 @@ def _mission(cfg: dict, ok: dict) -> tuple[InspectMission, list[int]]:
 def test_capture_waits_while_a_child_may_be_near_and_resumes_when_far(cfg: dict) -> None:
     ok = {"v": False}
     m, shots = _mission(cfg, ok)
-    snake = SimpleNamespace(x=0.0, y=0.0)
+    snake = SimpleNamespace(x=0.0, y=0.0, theta_head=0.0)
     t = 0.0
     for _ in range(40):                                               # 静止 → 撮影の手前で待つ
         t += 0.1
@@ -91,7 +93,7 @@ def test_capture_waits_while_a_child_may_be_near_and_resumes_when_far(cfg: dict)
 def test_a_child_arriving_mid_capture_stops_the_capture(cfg: dict) -> None:
     ok = {"v": True}
     m, shots = _mission(cfg, ok)
-    snake = SimpleNamespace(x=0.0, y=0.0)
+    snake = SimpleNamespace(x=0.0, y=0.0, theta_head=0.0)
     t = 0.0
     while m.phase != "CAPTURE":
         t += 0.1
@@ -105,7 +107,7 @@ def test_a_child_arriving_mid_capture_stops_the_capture(cfg: dict) -> None:
 def test_capture_is_deferred_after_the_wait_limit(cfg: dict) -> None:
     ok = {"v": False}
     m, shots = _mission(cfg, ok)
-    snake = SimpleNamespace(x=0.0, y=0.0)
+    snake = SimpleNamespace(x=0.0, y=0.0, theta_head=0.0)
     t = 0.0
     limit = float(cfg["floor_watch"]["csar"]["capture_wait_s"])
     while m.active and t < limit + 30:
@@ -193,3 +195,50 @@ def test_home_ai_child_near_hint_in_the_task_blocks_highlight_even_when_the_robo
     tid = home.task("highlight_point", target={"x_m": target[0], "y_m": target[1], "yaw_rad": 0.0}, child_near=True)
     assert run(ex, home, tid, max_ticks=10) == "failed" and "子どもが近い" in home.last_reason(tid)
     assert ex.csar.state(session.t) == NEAR
+
+
+def test_retreat_never_drives_backward_and_keeps_away_from_the_object(cfg: dict, tmp_path: Path) -> None:
+    """Design ENTRY-0022: 尾にセンサーが無いので、後ろ向きに下がらない（歩容の周波数が負 = 後退）。前へ回り込む。"""
+    scene = FloorScene()
+    session, ex, ep, home = rig(cfg, scene, tmp_path)
+    _ready(ex, home, cfg, scene, tmp_path)
+    target = ahead(ex, 0.20)
+    scene.objects.append(FloorObject("washer", target[0], target[1], 20.0, 1.5, 0.9, True))
+    tid = home.task("inspect_point", target={"x_m": target[0], "y_m": target[1], "yaw_rad": 0.0})
+    loco = session.brain.loco
+    real = loco.set_drive
+    cmds: list = []
+
+    def spy(cmd, snake, person):
+        if ex.mission is not None and ex.mission.phase == "RETREAT":
+            cmds.append(cmd)
+        return real(cmd, snake, person)
+    loco.set_drive = spy
+    assert run(ex, home, tid) == "done", home.last_reason(tid)
+    moving = [c for c in cmds if c.moving and c.params is not None]
+    assert moving, "離れる動きが無い"
+    assert all(c.params.temporal_freq_hz > 0 for c in moving)          # 後退は一度も無い
+
+
+def test_retreat_target_avoids_the_object_and_is_none_when_boxed_in(cfg: dict) -> None:
+    """前のどの候補も物の近くを通るなら、下がらずにその場に留まる（None）。道があれば、その直線は物から retreat_clear_mm 以上。"""
+    class Ctrl:
+        def __init__(self, room: float) -> None:
+            self.room = room
+
+        def room_toward(self, pose, tgt):
+            return self.room
+    clear = float(cfg["floor_watch"]["csar"]["retreat_clear_mm"])
+    on_top = InspectMission(cfg, SimpleNamespace(ctrl=Ctrl(1e9), anim=None), np.zeros(2), lambda: {}, lambda f: [], 0.0,
+                            object_mm=np.array([0.0, 0.0]))
+    assert on_top._retreat_target(SimpleNamespace(x=0.0, y=0.0, theta_head=0.0)) is None     # 物の真上 → どの道も物に近い
+    boxed = InspectMission(cfg, SimpleNamespace(ctrl=Ctrl(0.0), anim=None), np.zeros(2), lambda: {}, lambda f: [], 0.0,
+                           object_mm=np.array([200.0, 0.0]))
+    assert boxed._retreat_target(SimpleNamespace(x=0.0, y=0.0, theta_head=0.0)) is None      # マットに余地が無い
+    ok = InspectMission(cfg, SimpleNamespace(ctrl=Ctrl(1e9), anim=None), np.zeros(2), lambda: {}, lambda f: [], 0.0,
+                        object_mm=np.array([150.0, 0.0]))
+    tgt = ok._retreat_target(SimpleNamespace(x=0.0, y=0.0, theta_head=0.0))
+    assert tgt is not None
+    k = float(np.clip(np.dot(np.array([150.0, 0.0]), tgt) / float(tgt @ tgt), 0.0, 1.0))
+    assert float(np.linalg.norm(np.array([150.0, 0.0]) - k * tgt)) >= clear
+    assert float(tgt @ np.array([1.0, 0.0])) > -1e-6 or abs(float(np.degrees(np.arctan2(tgt[1], tgt[0])))) <= 120.0
