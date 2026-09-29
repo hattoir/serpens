@@ -11,8 +11,10 @@
 | [HG-H0_friction](HG-H0_friction/) | PARAMETER + MODEL | 腹面と床の方向別摩擦、異方性摩擦の法則の形 | 掃引・Monte Carlo・判定境界・試験計画・取り込み **済み** |
 | [HG-H1_actuator](HG-H1_actuator/) | PARAMETER + SAFETY | C044 のトルク・電流・熱・上限の効き・衝撃 | 同上 **済み** |
 | [HG-H2_sensor_head](HG-H2_sensor_head/) | SENSOR | 実カメラの FOV・ピント・歪み・ぶれ・露出・照明 | 1 変数ずつの感度 **済み**、実画像の取り込み口あり |
+| [HG-S1_contact_safety](HG-S1_contact_safety/) | SAFETY | 巻き付き・圧迫・引っ張り・曲げ・踏みつけ・持ち上げの力 | worst-case の解析 **済み**（しきい値は User） |
+| [HG-C1_cable_routing](HG-C1_cable_routing/) | MODEL + PARAMETER | 関節渡りのケーブルの長さ変化・たわみ・曲げ半径 | 幾何の掃引 **済み** |
 
-各フォルダ: `README.md` / `assumptions.yaml` / `sweep_config.yaml` / `run.py` / `results/` / `plots/` /
+各フォルダ（HG-S1・HG-C1 は解析式なので sweep_config / plots を省略）: `README.md` / `assumptions.yaml` / `sweep_config.yaml` / `run.py` / `results/` / `plots/` /
 `decision_boundary.md`（run.py が自動生成）/ `hardware_test_plan.md`。
 
 ## Gap どうしのつながり

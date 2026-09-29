@@ -1,0 +1,696 @@
+{
+ "holes": [
+  {
+   "limit": "software",
+   "limit_deg": 50.0,
+   "width_mm": 60.0,
+   "hole_mm": 143.72815744840807,
+   "finger": "入る（締め付けられない）",
+   "wrist": "入る（締め付けられない）",
+   "forearm": "入る（締め付けられない）",
+   "neck": "入る（締め付けられない）",
+   "ankle": "入る（締め付けられない）"
+  },
+  {
+   "limit": "software",
+   "limit_deg": 50.0,
+   "width_mm": 92.0,
+   "hole_mm": 111.72815744840807,
+   "finger": "入る（締め付けられない）",
+   "wrist": "入る（締め付けられない）",
+   "forearm": "入る（締め付けられない）",
+   "neck": "入る（締め付けられない）",
+   "ankle": "入る（締め付けられない）"
+  },
+  {
+   "limit": "mechanical",
+   "limit_deg": 55.0,
+   "width_mm": 60.0,
+   "hole_mm": 122.49330206226077,
+   "finger": "入る（締め付けられない）",
+   "wrist": "入る（締め付けられない）",
+   "forearm": "入る（締め付けられない）",
+   "neck": "入る（締め付けられない）",
+   "ankle": "入る（締め付けられない）"
+  },
+  {
+   "limit": "mechanical",
+   "limit_deg": 55.0,
+   "width_mm": 92.0,
+   "hole_mm": 90.49330206226077,
+   "finger": "入る（締め付けられない）",
+   "wrist": "入る（締め付けられない）",
+   "forearm": "入る（締め付けられない）",
+   "neck": "入る（締め付けられない）",
+   "ankle": "入る（締め付けられない）"
+  },
+  {
+   "limit": "geometry_onset",
+   "limit_deg": 64.8,
+   "width_mm": 60.0,
+   "hole_mm": 89.69604669702184,
+   "finger": "入る（締め付けられない）",
+   "wrist": "入る（締め付けられない）",
+   "forearm": "入る（締め付けられない）",
+   "neck": "境目",
+   "ankle": "入る（締め付けられない）"
+  },
+  {
+   "limit": "geometry_onset",
+   "limit_deg": 64.8,
+   "width_mm": 92.0,
+   "hole_mm": 57.69604669702184,
+   "finger": "入る（締め付けられない）",
+   "wrist": "入る（締め付けられない）",
+   "forearm": "境目",
+   "neck": "入らない（押し付けられうる）",
+   "ankle": "境目"
+  }
+ ],
+ "enclosure": [
+  {
+   "config": "FW5",
+   "limit": "software",
+   "body_yaw": 4,
+   "max_enclosure_deg": 200.0
+  },
+  {
+   "config": "FW5",
+   "limit": "mechanical",
+   "body_yaw": 4,
+   "max_enclosure_deg": 220.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": "software",
+   "body_yaw": 4,
+   "max_enclosure_deg": 230.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "limit": "mechanical",
+   "body_yaw": 4,
+   "max_enclosure_deg": 255.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": "software",
+   "body_yaw": 5,
+   "max_enclosure_deg": 250.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "limit": "mechanical",
+   "body_yaw": 5,
+   "max_enclosure_deg": 275.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "limit": "software",
+   "body_yaw": 5,
+   "max_enclosure_deg": 280.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "limit": "mechanical",
+   "body_yaw": 5,
+   "max_enclosure_deg": 310.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "limit": "software",
+   "body_yaw": 6,
+   "max_enclosure_deg": 300.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "limit": "mechanical",
+   "body_yaw": 6,
+   "max_enclosure_deg": 330.0
+  }
+ ],
+ "gait": [
+  {
+   "config": "FW5",
+   "amp": 20.0,
+   "waves": 0.75,
+   "need_straight_deg": 35.30733729460361,
+   "need_turn_deg": 95.30733729460361,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW5",
+   "amp": 20.0,
+   "waves": 1.0,
+   "need_straight_deg": 28.284271247461916,
+   "need_turn_deg": 80.0,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW5",
+   "amp": 20.0,
+   "waves": 1.25,
+   "need_straight_deg": 22.217520893957424,
+   "need_turn_deg": 77.00455430868541,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW5",
+   "amp": 20.0,
+   "waves": 1.5,
+   "need_straight_deg": 21.627240055123814,
+   "need_turn_deg": 81.62724005512382,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW5",
+   "amp": 30.0,
+   "waves": 0.75,
+   "need_straight_deg": 52.96100594190541,
+   "need_turn_deg": 92.9610059419054,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW5",
+   "amp": 30.0,
+   "waves": 1.0,
+   "need_straight_deg": 42.42640687119287,
+   "need_turn_deg": 75.75974020452621,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW5",
+   "amp": 30.0,
+   "waves": 1.25,
+   "need_straight_deg": 33.326281340936134,
+   "need_turn_deg": 66.65961467426943,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW5",
+   "amp": 30.0,
+   "waves": 1.5,
+   "need_straight_deg": 32.44086008268572,
+   "need_turn_deg": 72.44086008268572,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW5",
+   "amp": 40.0,
+   "waves": 0.75,
+   "need_straight_deg": 70.61467458920723,
+   "need_turn_deg": 90.61467458920723,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW5",
+   "amp": 40.0,
+   "waves": 1.0,
+   "need_straight_deg": 56.56854249492383,
+   "need_turn_deg": 73.23520916159049,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW5",
+   "amp": 40.0,
+   "waves": 1.25,
+   "need_straight_deg": 44.43504178791485,
+   "need_turn_deg": 61.101708454581484,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW5",
+   "amp": 40.0,
+   "waves": 1.5,
+   "need_straight_deg": 43.25448011024763,
+   "need_turn_deg": 63.25448011024763,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 20.0,
+   "waves": 0.75,
+   "need_straight_deg": 60.30733729460361,
+   "need_turn_deg": 120.30733729460361,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 20.0,
+   "waves": 1.0,
+   "need_straight_deg": 53.284271247461916,
+   "need_turn_deg": 105.0,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 20.0,
+   "waves": 1.25,
+   "need_straight_deg": 47.21752089395743,
+   "need_turn_deg": 102.00455430868541,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 20.0,
+   "waves": 1.5,
+   "need_straight_deg": 46.62724005512381,
+   "need_turn_deg": 106.62724005512382,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 30.0,
+   "waves": 0.75,
+   "need_straight_deg": 77.96100594190541,
+   "need_turn_deg": 117.9610059419054,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 30.0,
+   "waves": 1.0,
+   "need_straight_deg": 67.42640687119287,
+   "need_turn_deg": 100.75974020452621,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 30.0,
+   "waves": 1.25,
+   "need_straight_deg": 58.326281340936134,
+   "need_turn_deg": 91.65961467426943,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 30.0,
+   "waves": 1.5,
+   "need_straight_deg": 57.44086008268572,
+   "need_turn_deg": 97.44086008268572,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 40.0,
+   "waves": 0.75,
+   "need_straight_deg": 95.61467458920723,
+   "need_turn_deg": 115.61467458920723,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 40.0,
+   "waves": 1.0,
+   "need_straight_deg": 81.56854249492383,
+   "need_turn_deg": 98.23520916159049,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 40.0,
+   "waves": 1.25,
+   "need_straight_deg": 69.43504178791486,
+   "need_turn_deg": 86.10170845458148,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_HEADYAW",
+   "amp": 40.0,
+   "waves": 1.5,
+   "need_straight_deg": 68.25448011024763,
+   "need_turn_deg": 88.25448011024763,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 20.0,
+   "waves": 0.75,
+   "need_straight_deg": 43.50478309318972,
+   "need_turn_deg": 116.89763956914396,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 20.0,
+   "waves": 1.0,
+   "need_straight_deg": 32.3606797749979,
+   "need_turn_deg": 99.85575108672569,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 20.0,
+   "waves": 1.25,
+   "need_straight_deg": 28.284271247461927,
+   "need_turn_deg": 95.0,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 20.0,
+   "waves": 1.5,
+   "need_straight_deg": 24.717594367195737,
+   "need_turn_deg": 99.71759436719573,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 30.0,
+   "waves": 0.75,
+   "need_straight_deg": 65.25717463978458,
+   "need_turn_deg": 112.84645935371594,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 30.0,
+   "waves": 1.0,
+   "need_straight_deg": 48.54101966249685,
+   "need_turn_deg": 93.53362663008852,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 30.0,
+   "waves": 1.25,
+   "need_straight_deg": 42.426406871192896,
+   "need_turn_deg": 80.0,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 30.0,
+   "waves": 1.5,
+   "need_straight_deg": 37.0763915507936,
+   "need_turn_deg": 87.07639155079359,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 40.0,
+   "waves": 0.75,
+   "need_straight_deg": 87.00956618637944,
+   "need_turn_deg": 109.46980823262,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 40.0,
+   "waves": 1.0,
+   "need_straight_deg": 64.7213595499958,
+   "need_turn_deg": 87.21150217345138,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 40.0,
+   "waves": 1.25,
+   "need_straight_deg": 56.568542494923854,
+   "need_turn_deg": 74.06854249492383,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW6_YAW5",
+   "amp": 40.0,
+   "waves": 1.5,
+   "need_straight_deg": 49.435188734391474,
+   "need_turn_deg": 74.43518873439146,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 20.0,
+   "waves": 0.75,
+   "need_straight_deg": 68.48490411631002,
+   "need_turn_deg": 141.89763956914396,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 20.0,
+   "waves": 1.0,
+   "need_straight_deg": 57.3557510867257,
+   "need_turn_deg": 124.85575108672569,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 20.0,
+   "waves": 1.25,
+   "need_straight_deg": 53.28427124746193,
+   "need_turn_deg": 120.0,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 20.0,
+   "waves": 1.5,
+   "need_straight_deg": 49.71759436719574,
+   "need_turn_deg": 124.71759436719573,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 30.0,
+   "waves": 0.75,
+   "need_straight_deg": 90.22735617446503,
+   "need_turn_deg": 137.84645935371594,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 30.0,
+   "waves": 1.0,
+   "need_straight_deg": 73.53362663008855,
+   "need_turn_deg": 118.53362663008852,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 30.0,
+   "waves": 1.25,
+   "need_straight_deg": 67.4264068711929,
+   "need_turn_deg": 105.0,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 30.0,
+   "waves": 1.5,
+   "need_straight_deg": 62.0763915507936,
+   "need_turn_deg": 112.07639155079359,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 40.0,
+   "waves": 0.75,
+   "need_straight_deg": 111.96980823262003,
+   "need_turn_deg": 134.46980823261998,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 40.0,
+   "waves": 1.0,
+   "need_straight_deg": 89.7115021734514,
+   "need_turn_deg": 112.21150217345138,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 40.0,
+   "waves": 1.25,
+   "need_straight_deg": 81.56854249492386,
+   "need_turn_deg": 99.06854249492383,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW5_HEADYAW",
+   "amp": 40.0,
+   "waves": 1.5,
+   "need_straight_deg": 74.43518873439147,
+   "need_turn_deg": 99.43518873439146,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 20.0,
+   "waves": 0.75,
+   "need_straight_deg": 52.21277625777855,
+   "need_turn_deg": 138.28427124746193,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 20.0,
+   "waves": 1.0,
+   "need_straight_deg": 40.00000000000001,
+   "need_turn_deg": 118.64101615137753,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 20.0,
+   "waves": 1.25,
+   "need_straight_deg": 31.703929748159418,
+   "need_turn_deg": 113.20888737524703,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 20.0,
+   "waves": 1.5,
+   "need_straight_deg": 28.284271247461927,
+   "need_turn_deg": 118.28427124746192,
+   "gamma": 30.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 30.0,
+   "waves": 0.75,
+   "need_straight_deg": 78.31916438666782,
+   "need_turn_deg": 134.31916438666778,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 30.0,
+   "waves": 1.0,
+   "need_straight_deg": 60.000000000000014,
+   "need_turn_deg": 108.0,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 30.0,
+   "waves": 1.25,
+   "need_straight_deg": 47.55589462223912,
+   "need_turn_deg": 94.81333106287057,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 30.0,
+   "waves": 1.5,
+   "need_straight_deg": 42.426406871192896,
+   "need_turn_deg": 102.42640687119287,
+   "gamma": 20.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 40.0,
+   "waves": 0.75,
+   "need_straight_deg": 104.4255525155571,
+   "need_turn_deg": 132.42555251555706,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 40.0,
+   "waves": 1.0,
+   "need_straight_deg": 80.00000000000001,
+   "need_turn_deg": 104.0,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 40.0,
+   "waves": 1.25,
+   "need_straight_deg": 63.407859496318835,
+   "need_turn_deg": 84.70552360820164,
+   "gamma": 10.0
+  },
+  {
+   "config": "FW7_YAW6",
+   "amp": 40.0,
+   "waves": 1.5,
+   "need_straight_deg": 56.568542494923854,
+   "need_turn_deg": 86.56854249492382,
+   "gamma": 10.0
+  }
+ ],
+ "compression": [
+  {
+   "case": "上限 -40%",
+   "torque_nm": 0.27,
+   "force_per_contact_n_mid": 5.684210526315789,
+   "force_per_contact_n_20mm": 13.5
+  },
+  {
+   "case": "上限 +0%",
+   "torque_nm": 0.45,
+   "force_per_contact_n_mid": 9.473684210526315,
+   "force_per_contact_n_20mm": 22.5
+  },
+  {
+   "case": "上限 +40%",
+   "torque_nm": 0.63,
+   "force_per_contact_n_mid": 13.263157894736842,
+   "force_per_contact_n_20mm": 31.5
+  },
+  {
+   "case": "上限が効かない（ストール）",
+   "torque_nm": 3.0,
+   "force_per_contact_n_mid": 63.1578947368421,
+   "force_per_contact_n_20mm": 150.0
+  },
+  {
+   "case": "脱力（バックドライブ）",
+   "torque_nm": 0.5,
+   "force_per_contact_n_mid": 10.526315789473685,
+   "force_per_contact_n_20mm": 25.0
+  }
+ ],
+ "external": [
+  {
+   "case": "尾・頭をつかんで引く（体が曲がっていると横にてこが出る）",
+   "axis": "yaw",
+   "torque_lo_nm": 0.5,
+   "torque_hi_nm": 24.0
+  },
+  {
+   "case": "手で節の先を押して曲げる",
+   "axis": "yaw",
+   "torque_lo_nm": 0.475,
+   "torque_hi_nm": 3.8
+  },
+  {
+   "case": "片足で節を踏む（関節の横に掛かる曲げ）",
+   "axis": "pitch/roll（構造）",
+   "torque_lo_nm": 3.8,
+   "torque_hi_nm": 7.125
+  },
+  {
+   "case": "FW5: 頭をつかんで持ち上げる（首 J1 に体重のモーメント）",
+   "axis": "pitch（J1）",
+   "torque_lo_nm": 2.2006723950000002,
+   "torque_hi_nm": 2.6897107050000004
+  },
+  {
+   "case": "FW6_HEADYAW: 頭をつかんで持ち上げる（首 J1 に体重のモーメント）",
+   "axis": "pitch（J1）",
+   "torque_lo_nm": 2.392703145,
+   "torque_hi_nm": 2.9244149550000005
+  },
+  {
+   "case": "FW6_YAW5: 頭をつかんで持ち上げる（首 J1 に体重のモーメント）",
+   "axis": "pitch（J1）",
+   "torque_lo_nm": 2.56553082,
+   "torque_hi_nm": 3.1356487800000004
+  },
+  {
+   "case": "FW7_YAW5_HEADYAW: 頭をつかんで持ち上げる（首 J1 に体重のモーメント）",
+   "axis": "pitch（J1）",
+   "torque_lo_nm": 2.7575615700000005,
+   "torque_hi_nm": 3.3703530300000004
+  },
+  {
+   "case": "FW7_YAW6: 頭をつかんで持ち上げる（首 J1 に体重のモーメント）",
+   "axis": "pitch（J1）",
+   "torque_lo_nm": 2.9303892450000006,
+   "torque_hi_nm": 3.5815868550000007
+  }
+ ]
+}

@@ -1,0 +1,18 @@
+# HG-C1 関節渡りのケーブル — 仮定（**実ケーブル未選定。すべて仮値**）
+gap_id: HG-C1_cable_routing
+gap_class: [MODEL_GAP, PARAMETER_GAP]
+label: CABLE_GEOMETRY_SIM
+joint:
+  mechanical_limit_deg: 55.0         # 機械の可動域（PROVISIONAL）。HG-S1 の読みでは ±52° 前後以下にしたい
+cable:
+  min_bend_radius_mm: 10.0           # CAD.md の仮値「ケーブル D5／曲げ R10」（束の実測で置き換える）
+  margin_mm: 2.0                     # 最大の弦に足す余長
+envelope:
+  bow_space_mm: 12.0                 # たわみを逃がせる横の空き（外装の内側。**CAD で確認が要る**）
+sweep:
+  anchor_mm: [15.0, 25.0, 35.0, 45.0]      # 固定側アンカーの yaw 軸からの距離 a
+  anchor_asym_mm: [0.0, 15.0]              # 可動側 b = a + これ（FW04 は a=20, b=35）
+  lateral_offset_mm: [0.0, 5.0, 10.0, 20.0, 28.5, 35.0]   # 平面図での yaw 軸からの横のずれ e（FW04 は −28.5）
+  dz_mm: [0.0, 20.0]                       # アンカーの高さの差（上ループ・下ループ）
+  bend_radius_mm: [5.0, 10.0, 15.0]        # ケーブルの許容曲げ半径の候補（束・細線・FFC）
+  bow_space_mm: [8.0, 12.0, 20.0]          # たわみを逃がせる空きの候補
