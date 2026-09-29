@@ -146,3 +146,9 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - **USER-DEC-SERPENS-DESIGN-0002（CSAR の撮影）**: CHILD_NEAR では写真確認を延期、passive snapshot のみ可、後ろ向きではなく向きを変えて前へ離脱、reinspect_point、highlight_point は CHILD_NEAR の hazard に禁止 → `csar_choreography_2026-09-29.md` §7
 - **USER-DEC-SERPENS-0003**: 対象 3 歳未満・Safety Envelope 6 歳以下（人体寸法は一次資料から、`child_anthropometry_sources_2026-09-29.md`）/ 接触の閾値は Engineering が導出 / **yaw 合計 145°（暫定）** / 機械式トルクリミッターは検証する Safety Layer / Safety 値は逐一聞かずに検証
 - Design への影響: 眠りの三日月（180°）は使わない → **「首をかしげる」[50,45,30,20]（合計 145°）**を眠り・充電の案に（OPEN-011: Head Yaw を合計に含めるか）。関節の外形にトルクリミッターの厚みを見込む（Engineering の寸法待ち）
+
+## USER-DEC-SERPENS-0004（Head Yaw と 145°）の反映
+
+- 145° = Body Curvature Budget。Head Yaw は合計に入れないが独立した Safety Axis。3D enclosure / entrapment check は必須（Engineering）
+- Design 側の sweep（ENTRY-0026）: **Design の提案は Head Yaw ±30°**（J3 の補助つきで CSAR の視線を満たす最小。眠りの見た目のために広げない）
+- OPEN-SERPENS-DESIGN-011 は解決

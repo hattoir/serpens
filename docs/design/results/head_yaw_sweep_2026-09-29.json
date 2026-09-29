@@ -1,0 +1,77 @@
+{
+  "source": "KINEMATIC_SIM / DESIGN_ESTIMATE（上から 2D、判定はしない）",
+  "csar": [
+    {
+      "head_yaw_max": 0,
+      "gaze_away_from_object_deg": 50,
+      "reaches_90": false,
+      "reaches_120": false,
+      "reaches_150": false,
+      "body_moves_near_object": "J2 だけ（首と L1 の前が振れる）"
+    },
+    {
+      "head_yaw_max": 15,
+      "gaze_away_from_object_deg": 65,
+      "reaches_90": false,
+      "reaches_120": false,
+      "reaches_150": false,
+      "body_moves_near_object": "J2 だけ（首と L1 の前が振れる）"
+    },
+    {
+      "head_yaw_max": 30,
+      "gaze_away_from_object_deg": 80,
+      "reaches_90": false,
+      "reaches_120": false,
+      "reaches_150": false,
+      "body_moves_near_object": "J2 だけ（首と L1 の前が振れる）"
+    },
+    {
+      "head_yaw_max": 45,
+      "gaze_away_from_object_deg": 95,
+      "reaches_90": true,
+      "reaches_120": false,
+      "reaches_150": false,
+      "body_moves_near_object": "J2 を減らせる"
+    },
+    {
+      "head_yaw_max": 60,
+      "gaze_away_from_object_deg": 110,
+      "reaches_90": true,
+      "reaches_120": false,
+      "reaches_150": false,
+      "body_moves_near_object": "J2 を減らせる"
+    }
+  ],
+  "sleep_145": [
+    {
+      "head_yaw": 0,
+      "gaze_to_own_body_deg": 93,
+      "head_to_body_min_gap_mm": 99.2,
+      "head_hits_body": false
+    },
+    {
+      "head_yaw": 15,
+      "gaze_to_own_body_deg": 78,
+      "head_to_body_min_gap_mm": 96.0,
+      "head_hits_body": false
+    },
+    {
+      "head_yaw": 30,
+      "gaze_to_own_body_deg": 63,
+      "head_to_body_min_gap_mm": 89.1,
+      "head_hits_body": false
+    },
+    {
+      "head_yaw": 45,
+      "gaze_to_own_body_deg": 48,
+      "head_to_body_min_gap_mm": 79.9,
+      "head_hits_body": false
+    },
+    {
+      "head_yaw": 60,
+      "gaze_to_own_body_deg": 33,
+      "head_to_body_min_gap_mm": 69.3,
+      "head_hits_body": false
+    }
+  ]
+}
