@@ -97,6 +97,12 @@ def _endpoint(port: int, client_id: str):
     return serpens, ep, event_topic("safety_state")
 
 
+def _live_offline_since(got: list, t_from: float) -> list[float]:
+    """t_from 以後に**生で**（retain でなく）届いた OFFLINE の受信時刻。モジュール共通のブローカーには前の試験の retain の
+    OFFLINE が残っていて、負荷で購読が接続より先になると、それが「今起きた OFFLINE」に見えていた（2026-09-29、負荷下 1/8）。"""
+    return [t for m, r, t in got if m["mode"] == "OFFLINE" and not r and t >= t_from]
+
+
 def _home(port: int, topic: str, client_id: str):
     """client_id は購読者ごとに変える。同じ id が 2 つ繋がるとブローカーが古い方を蹴り、paho の自動再接続で
     互いを蹴り合う（再接続のたびに retain が届き直し、「購読した瞬間の retain」を確かめたことにならない）。"""
@@ -116,8 +122,8 @@ def test_retained_safety_state_and_lwt_fires_at_1_5x_keepalive(broker_port: int)
     assert any(r for _m, r, _t in got)
     t_drop = time.time()
     serpens.freeze()                                                                 # 黙る（PINGREQ が止まる。ソケットは開いたまま）
-    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got), timeout_s=KEEPALIVE_S * 3), got
-    dt = [t for m, _r, t in got if m["mode"] == "OFFLINE"][0] - t_drop
+    assert _wait(lambda: bool(_live_offline_since(got, t_drop)), timeout_s=KEEPALIVE_S * 3), got
+    dt = _live_offline_since(got, t_drop)[0] - t_drop
     assert KEEPALIVE_S * 1.0 <= dt <= KEEPALIVE_S * 2.5, f"LWT まで {dt:.2f}s（期待 ≈ 1.5 × {KEEPALIVE_S}s）"
     serpens.drop_socket()
     home.close()
@@ -131,8 +137,8 @@ def test_lwt_fires_immediately_when_the_socket_dies(broker_port: int) -> None:
     assert _wait(lambda: any(m["mode"] == "DRIVING" for m, _r, _t in got))
     t_drop = time.time()
     serpens.drop_socket()
-    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got), timeout_s=KEEPALIVE_S), got
-    assert [t for m, _r, t in got if m["mode"] == "OFFLINE"][0] - t_drop < KEEPALIVE_S
+    assert _wait(lambda: bool(_live_offline_since(got, t_drop)), timeout_s=KEEPALIVE_S), got
+    assert _live_offline_since(got, t_drop)[0] - t_drop < KEEPALIVE_S
     home.close()
 
 
@@ -143,8 +149,8 @@ def test_graceful_close_publishes_offline_immediately_and_reconnect_overwrites(b
     assert _wait(lambda: any(m["mode"] == "DRIVING" for m, _r, _t in got))
     t0 = time.time()
     ep.close()                                                                       # 正常終了: 自分で OFFLINE、LWT は出ない
-    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got)), got
-    assert [t for m, _r, t in got if m["mode"] == "OFFLINE"][0] - t0 < KEEPALIVE_S * 0.9
+    assert _wait(lambda: bool(_live_offline_since(got, t0))), got
+    assert _live_offline_since(got, t0)[0] - t0 < KEEPALIVE_S * 0.9
     # 立ち上げ直し → 接続時に今の状態で retain を上書き
     serpens2, ep2, _ = _endpoint(broker_port, "serpens-close-2")
     ep2.mode = "DISARMED"
@@ -174,15 +180,19 @@ def test_reconnect_overwrites_lwt_from_the_network_thread_without_stalling_it(br
         announce()
         took.append(time.time() - t)
     serpens._on_connect[:] = [timed]
+    t_drop = time.time()
     serpens.drop_socket()                                                            # 落ちる → LWT の OFFLINE
-    assert _wait(lambda: any(m["mode"] == "OFFLINE" for m, _r, _t in got), timeout_s=KEEPALIVE_S), got
-    n, t0 = serpens.connections, time.time()
+    assert _wait(lambda: bool(_live_offline_since(got, t_drop)), timeout_s=KEEPALIVE_S), got
+    # 「LWT より後」は時刻でなく受信順で切る。Windows の time.time() は刻みが粗く（約 15ms）、LWT と t0 が同じ刻みに入ると
+    # 「t >= t0」が LWT 自身を拾っていた（負荷下 1/6 で再現、2026-09-29）
+    k = next(i for i, (m, r, t) in enumerate(got) if m["mode"] == "OFFLINE" and not r and t >= t_drop)
+    n = serpens.connections
     serpens.reconnect()                                                              # CONNACK → announce（ネットワークスレッド）
     assert _wait(lambda: len(took) >= 1), "announce が呼ばれない"
     assert took[0] < 1.0, f"announce が {took[0]:.2f}s 固まった（ネットワークスレッドで PUBACK を待っている）"
     time.sleep(KEEPALIVE_S * 2)                                                      # keepalive 1.5 倍を越えて見張る
     assert serpens.connections == n + 1, "keepalive 切れで切断・再接続された"
-    after = [(m["mode"], r) for m, r, t in got if t >= t0]
+    after = [(m["mode"], r) for m, r, _t in got[k + 1:]]
     assert after and after[0][0] == "DISARMED" and ("OFFLINE", False) not in after, after   # 生きている間に LWT が出ない
     late, got_late = _home(broker_port, topic, "home-reconnect-late")
     assert _wait(lambda: any(r for _m, r, _t in got_late)), got_late
@@ -229,14 +239,14 @@ def test_endpoint_builds_on_paho_normally_and_announces_on_first_connect(broker_
     serpens, ep, topic = _endpoint(broker_port, "serpens-build")
     assert _wait(lambda: serpens.connections >= 1)
     home, got = _home(broker_port, topic, "home-build")
-    assert _wait(lambda: any(r for _m, r, _t in got)), got
-    first = [m for m, r, _t in got if r][0]
-    assert (first["mode"], first["stop_reason"]) == ("DISARMED", "BOOT"), first
+    # 前の試験の retain（OFFLINE）が先に届くことがある（購読が announce より先）。announce の DISARMED / BOOT が retain で届くのを待つ
+    assert _wait(lambda: any(r and (m["mode"], m["stop_reason"]) == ("DISARMED", "BOOT") for m, r, _t in got)), got
     with pytest.raises(RuntimeError):                                                # 接続後の will は黙って無視しない
         serpens.set_will(event_topic("safety_state"), ep._offline_payload("UNKNOWN"))
+    t_drop = time.time()
     serpens.drop_socket()
-    assert _wait(lambda: any(m["mode"] == "OFFLINE" and m["stop_reason"] == "UNKNOWN" for m, _r, _t in got),
-                 timeout_s=KEEPALIVE_S), got                                          # Endpoint が渡した will が出る
+    assert _wait(lambda: any(m["mode"] == "OFFLINE" and m["stop_reason"] == "UNKNOWN" and not r and t >= t_drop
+                             for m, r, t in got), timeout_s=KEEPALIVE_S), got       # Endpoint が渡した will が生で出る
     home.close()
 
 
