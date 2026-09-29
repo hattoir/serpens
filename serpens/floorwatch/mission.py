@@ -95,8 +95,8 @@ class InspectMission:
                 self.loco.stop("inspect: 到着。静止を待つ")
                 self._enter("SETTLE", t)
                 return
-            self.loco.set_drive(self.loco.ctrl.drive_to(t, snake, self.target_mm, float(self.m["speed_mm_s"]), person_xy),
-                                snake, person_xy)
+            self.loco.set_drive(self.loco.ctrl.drive_to(t, snake, self.target_mm, float(self.m["speed_mm_s"]), person_xy,
+                                                        allow_reverse=False), snake, person_xy)   # 後ろは見えない
         elif self.phase == "SETTLE":
             self.loco.stop("inspect: 静止中")
             if t - self._phase_t >= float(self.m["settle_s"]):
@@ -183,8 +183,9 @@ class InspectMission:
                 self._enter("DONE", t, f"{moved:.0f}mm 離れた")
                 self.loco.set_drive(DriveCommand(False, reason="inspect: 完了"), snake, person_xy)
                 return
-            cmd = self.loco.ctrl.drive_to(t, snake, self._retreat_to, float(c["retreat_speed_mm_s"]), person_xy)
-            if cmd.moving and cmd.params is not None and float(cmd.params.temporal_freq_hz) < 0:
+            cmd = self.loco.ctrl.drive_to(t, snake, self._retreat_to, float(c["retreat_speed_mm_s"]), person_xy,
+                                          allow_reverse=False)
+            if cmd.blocked or (cmd.moving and cmd.params is not None and float(cmd.params.temporal_freq_hz) < 0):
                 # controller はマット端で後退して向き直ることがある。離れるときは後ろが見えないので下がらない → その場に留まる
                 self.loco.stop("inspect: 前が詰まった。後ろは見えないので下がらない")
                 self._enter("DONE", t, f"R3: {moved:.0f}mm 離れたところで前が詰まった → 留まる（後退しない）")

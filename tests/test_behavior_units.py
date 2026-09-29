@@ -189,6 +189,19 @@ def test_controller_edge_recovery_and_edge_goal(cfg: dict) -> None:
     assert not goal.moving and goal.blocked                                # 人の方を向いて端に着いた
 
 
+
+def test_controller_does_not_reverse_blind_when_reverse_is_not_allowed(cfg: dict) -> None:
+    """尾にセンサーが無いので、Floor Watch（allow_reverse=False）ではマット端で後退せず、止まって blocked を返す（Design ENTRY-0022）。"""
+    c = cfg["behavior"]["controller"]
+    ctrl = Controller(cfg)
+    x = cfg["mat"]["width_mm"] - c["head_reach_mm"] - c["mat_margin_mm"] + 20.0
+    p = pose(x, 600.0, 0.0)
+    cmd = ctrl.drive_to(c["forward_min_s"] + 0.1, p, np.array([3000.0, 600.0]), 100.0, allow_reverse=False)
+    assert not cmd.moving and cmd.blocked
+    later = ctrl.drive_to(c["forward_min_s"] + 0.2, p, np.array([3000.0, 600.0]), 100.0, allow_reverse=False)
+    assert not (later.moving and later.params is not None and later.params.temporal_freq_hz < 0)
+
+
 # ---- 表現 ------------------------------------------------------------------------
 def rig(cfg: dict) -> tuple[Primitives, Animator, MockServoBus]:
     clock = FakeClock()

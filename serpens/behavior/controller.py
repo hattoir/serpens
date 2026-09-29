@@ -129,8 +129,11 @@ class Controller:
     # ---- 指令 -----------------------------------------------------------------
     def drive_to(self, t: float, pose: SnakePose, target_xy: np.ndarray, speed_mm_s: float,
                  person_xy: np.ndarray | None = None, stop_at_person: bool = False,
-                 edge_is_goal: bool = False, gait: str = "base") -> DriveCommand:
-        """target_xy へ向かう指令を作る。gait="stalk" で忍び寄りの波形にする。"""
+                 edge_is_goal: bool = False, gait: str = "base", allow_reverse: bool = True) -> DriveCommand:
+        """target_xy へ向かう指令を作る。gait="stalk" で忍び寄りの波形にする。
+
+        allow_reverse=False: マット端で「後退しながら向き直る」をしない（止まって blocked を返す）。尾にセンサーが無いので、
+        人のいる所（Floor Watch）では見えない後ろへ下がらない（Design integration-log ENTRY-0022）。展示は従来どおり True。"""
         c = self.c
         speed = self.speed_limit(pose, person_xy, speed_mm_s)
         if person_xy is not None and stop_at_person and \
@@ -154,6 +157,9 @@ class Controller:
                 or not self.tail_has_room(pose)):    # 後退では尾が先頭。尾の余地が無くなったらやめる
             self._enter("forward", t)
 
+        if self.phase == "back" and not allow_reverse:
+            self._enter("forward", t)
+            return DriveCommand(False, reason=f"マット端（端まで {edge_d:.0f}mm）: 後ろが見えないので下がらずに止まる", blocked=True)
         if self.phase == "back":
             # 後退しながら中央へ向き直る。前進で回ると旋回半径が大きく、頭が壁に当たる。
             # 後退では γ の符号と回る向きが逆になるので符号を反転する
