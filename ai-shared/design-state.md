@@ -131,3 +131,12 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - 人の評価の画像: `docs/design/renders/eval/`（A / E / E2 / E3 × 姿勢 × 画角、同じ画角）
 - **現在の Design の第一候補: SD-01E3（= E2 ＋ 口の線）＋ VISOR の J1 ＋ 同心ナックルの胴**（CAD_CONCEPT。人の評価・Engineering の判定待ち）
 - 次: 芯の色、Head Yaw の首（VISOR の芯の前に頭 yaw サーボ）、ENTRY-0011 の A 案で電装を動かした絵
+
+## 更新（2026-09-29 Engineering の回答を受けて）
+
+- Engineering の回答: ENTRY-0015（ライン光は眉を推奨）・0004（あご LED 6 mm・カメラ 25°）・0019（照明を後ろへ）・0020（スキッドの沈み）・0021（CSAR を模擬で実装）。Design の回答は **ENTRY-0022**
+- **OPEN-SERPENS-DESIGN-001 は解決**（眉の段、X −233〜−229）。首軸 → レンズ 50.3 mm（A）/ 52.3 mm（E 系）
+- 6 本目 = Head Yaw の Design 上の理由は、ライン光の向け直しではなく **CSAR の視線**だけになった
+- 照明: 頬の下（斜め）と口の線（通常）の左右 2 灯で、近/遠の照度比 40 → 15 倍・33 → 11 倍（`tools/light_placement.py`）
+- Fusion: Recovery copy が一度閉じていた（v9 で保存済みを確認して開き直した）。`LIGHT+SKID option` を追加（v10）
+- 次: そりを顎板の形に、VISOR の芯の色、Head Yaw の首、ENTRY-0011 の A 案の絵
