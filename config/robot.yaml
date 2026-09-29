@@ -810,6 +810,14 @@ safety_limits:
   servo_temp_stop_c: 80       # 構想設計書の L0。本機は link.faults.temp_limit_c(60) で手前から止める
   contact_release_ms: 20      # 接触検知 → 脱力の目標。**現状 800ms。未達**（docs/safety_limits.md）
   comms_loss_safe_ms: 3000    # 構想設計書の目標。本機は 400ms で保持（より厳しい）
+  # ---- 指の挟み込み（関節のすき間）。simulation/pinch_gap.py。**厳しい側を採る**（2026-09-29）----
+  # ASTM F963-11 4.18.1（96 か月未満）: 5mm の棒を通すすき間は 13mm の棒も通すこと。構想設計書 16 章: 8mm 以下か 25mm 以上。
+  # 8mm 以下は ASTM より緩い（5〜8mm に子どもの指が入る）→ 5mm 未満か 25mm 以上。全ての関節角度で（閉じていくときに挟む）
+  pinch:
+    small_below_mm: 5.0       # これ未満なら指が入らない
+    large_from_mm: 25.0       # これ以上なら挟まらない
+    tolerance_mm: 0.3         # 製造のばらつき ±（FDM の目安。ASSUMPTION、試作で測る）
+    eccentricity_mm: 0.5      # 関節の軸のずれ・遊び ±（サーボ出力軸の遊び + ホーンの取付。ASSUMPTION、H1 で測る）
   # ---- ELECTRICAL_SAFETY_GATE（docs/safety_limits.md §5）----
   # 実機で測って証拠（日付・条件・測定器）を書くまで COMPLETE にしない。
   # **1 項目でも INCOMPLETE なら実機の自律走行は許可しない**（serpens/electrical_gate.py）。

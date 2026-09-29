@@ -1,0 +1,479 @@
+{
+  "source": "DESIGN_ESTIMATE（Design Agent の概算。HUMAN_EVALUATED = 0、HARDWARE_UNVERIFIED）",
+  "date": "2026-09-29",
+  "heads": [
+    {
+      "key": "H0",
+      "name": "Egg（現行 FW03）",
+      "length_mm": 66.6,
+      "max_width_mm": 76.0,
+      "height_mm": 74.0,
+      "head_to_body_width": 0.83,
+      "eye_diameter_mm": 14.0,
+      "eye_to_head_height": 0.19,
+      "shell_mass_g_ASSUMED": 31.2,
+      "head_mass_g_ASSUMED": 61.8,
+      "com_ahead_of_J1_mm": 27.7,
+      "j1_static_torque_max_Nm_ESTIMATE": 0.017,
+      "j1_torque_fraction_of_software_limit": 0.037,
+      "fov_self_occlusion": {
+        "occluded": false,
+        "blocked_ray_deg_down": [],
+        "window_z_range_mm": [
+          27.1,
+          29.7
+        ],
+        "window_ahead_of_lens_mm": 3.7,
+        "rule": "レンズより前に出る殻は、前方距離 d で Z < 30 − d·tan46° か Z > 30 − d·tan4° に限る（下向き 25°、垂直 42° ASSUMED）"
+      },
+      "line_light_candidates": [
+        {
+          "source_xz": [
+            -232.0,
+            66.0
+          ],
+          "blocked_floor_distances_mm": [],
+          "clear": true
+        }
+      ],
+      "eye_visibility_mm2": {
+        "child_front_eye_level (1 m, 目の高さ 0.4 m)": 254.0,
+        "parent_front_standing (2 m, 1.5 m)": 264.0,
+        "parent_side_standing (2 m, 1.5 m)": 111.0,
+        "child_side_crawling (1 m, 0.2 m)": 93.0,
+        "top_down": 159.0
+      },
+      "notes": [
+        "頭幅 76 < 首 88 < 胴 92。頭が首より細い",
+        "前面が球面なので Z5〜9 の斜め照明が殻の外に出る（FW03 は窓で逃がしている）"
+      ]
+    },
+    {
+      "key": "H1",
+      "name": "Bean（推奨候補）",
+      "length_mm": 78,
+      "max_width_mm": 100,
+      "height_mm": 74,
+      "head_to_body_width": 1.09,
+      "eye_diameter_mm": 24.0,
+      "eye_to_head_height": 0.32,
+      "shell_mass_g_ASSUMED": 59.8,
+      "head_mass_g_ASSUMED": 92.8,
+      "com_ahead_of_J1_mm": 21.6,
+      "j1_static_torque_max_Nm_ESTIMATE": 0.02,
+      "j1_torque_fraction_of_software_limit": 0.044,
+      "fov_self_occlusion": {
+        "occluded": false,
+        "blocked_ray_deg_down": [],
+        "window_z_range_mm": [
+          27.8,
+          29.8
+        ],
+        "window_ahead_of_lens_mm": 2.2,
+        "rule": "レンズより前に出る殻は、前方距離 d で Z < 30 − d·tan46° か Z > 30 − d·tan4° に限る（下向き 25°、垂直 42° ASSUMED）"
+      },
+      "line_light_candidates": [
+        {
+          "source_xz": [
+            -235.0,
+            66.0
+          ],
+          "blocked_floor_distances_mm": [],
+          "clear": true
+        },
+        {
+          "source_xz": [
+            -233.0,
+            66.0
+          ],
+          "blocked_floor_distances_mm": [],
+          "clear": true
+        },
+        {
+          "source_xz": [
+            -230.0,
+            67.0
+          ],
+          "blocked_floor_distances_mm": [],
+          "clear": true
+        },
+        {
+          "source_xz": [
+            -226.0,
+            68.0
+          ],
+          "blocked_floor_distances_mm": [
+            38.0,
+            43.0,
+            47.9
+          ],
+          "clear": false
+        },
+        {
+          "source_xz": [
+            -222.0,
+            68.0
+          ],
+          "blocked_floor_distances_mm": [
+            38.0,
+            43.0,
+            47.9,
+            52.9,
+            57.8,
+            62.8,
+            67.7,
+            72.7,
+            77.6,
+            82.6,
+            87.5,
+            92.5,
+            97.5,
+            102.4,
+            107.4,
+            112.3,
+            117.3,
+            122.2,
+            127.2,
+            132.1,
+            137.1,
+            142.0,
+            147.0
+          ],
+          "clear": false
+        }
+      ],
+      "eye_visibility_mm2": {
+        "child_front_eye_level (1 m, 目の高さ 0.4 m)": 624.0,
+        "parent_front_standing (2 m, 1.5 m)": 614.0,
+        "parent_side_standing (2 m, 1.5 m)": 343.0,
+        "child_side_crawling (1 m, 0.2 m)": 347.0,
+        "top_down": 272.0
+      },
+      "notes": [
+        "鼻先（Z≤60。前 ToF Z42〜55 の窓が顔に載る高さ）はカメラ・前 ToF・斜め照明の平らな顔。ライン光は鼻先の上の『眉の段』（X≈−224, Z66〜70）",
+        "頭幅 100 で横基線 30 mm のライン光（PRODUCT.md の記載）も入る",
+        "首は幅 64 へ絞る提案（首の中の J2 サーボ ±12.4・首シャーシ ±24 が入るかは Engineering 確認）"
+      ]
+    },
+    {
+      "key": "H2",
+      "name": "Wedge（写実寄り）",
+      "length_mm": 104,
+      "max_width_mm": 80,
+      "height_mm": 59,
+      "head_to_body_width": 0.87,
+      "eye_diameter_mm": 16.0,
+      "eye_to_head_height": 0.27,
+      "shell_mass_g_ASSUMED": 58.6,
+      "head_mass_g_ASSUMED": 89.6,
+      "com_ahead_of_J1_mm": 32.2,
+      "j1_static_torque_max_Nm_ESTIMATE": 0.028,
+      "j1_torque_fraction_of_software_limit": 0.063,
+      "fov_self_occlusion": {
+        "occluded": false,
+        "blocked_ray_deg_down": [],
+        "window_z_range_mm": [
+          25.7,
+          29.7
+        ],
+        "window_ahead_of_lens_mm": 4.2,
+        "rule": "レンズより前に出る殻は、前方距離 d で Z < 30 − d·tan46° か Z > 30 − d·tan4° に限る（下向き 25°、垂直 42° ASSUMED）"
+      },
+      "line_light_candidates": [
+        {
+          "source_xz": [
+            -240.0,
+            62.0
+          ],
+          "blocked_floor_distances_mm": [
+            38.0,
+            43.0
+          ],
+          "clear": false
+        }
+      ],
+      "eye_visibility_mm2": {
+        "child_front_eye_level (1 m, 目の高さ 0.4 m)": 123.0,
+        "parent_front_standing (2 m, 1.5 m)": 128.0,
+        "parent_side_standing (2 m, 1.5 m)": 176.0,
+        "child_side_crawling (1 m, 0.2 m)": 195.0,
+        "top_down": 80.0
+      },
+      "notes": [
+        "鼻先を 26 mm 延ばすのでカメラも前へ（X≈−258）。頭の重心が J1 から遠くなる",
+        "頭頂 Z≤62 なので、カメラ上 35 mm の縦基線ライン光（Z62〜70）が鼻先に入らない"
+      ]
+    }
+  ],
+  "joints": {
+    "B0_egg": {
+      "kind": "B0",
+      "rows": [
+        {
+          "yaw_deg": 0,
+          "min_gap_mm": 15.0,
+          "inner_side_gap_mm": 28.1,
+          "collision": false
+        },
+        {
+          "yaw_deg": 5,
+          "min_gap_mm": 14.9,
+          "inner_side_gap_mm": 25.3,
+          "collision": false
+        },
+        {
+          "yaw_deg": 10,
+          "min_gap_mm": 14.5,
+          "inner_side_gap_mm": 22.6,
+          "collision": false
+        },
+        {
+          "yaw_deg": 15,
+          "min_gap_mm": 14.0,
+          "inner_side_gap_mm": 20.3,
+          "collision": false
+        },
+        {
+          "yaw_deg": 20,
+          "min_gap_mm": 13.2,
+          "inner_side_gap_mm": 18.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 25,
+          "min_gap_mm": 12.2,
+          "inner_side_gap_mm": 15.8,
+          "collision": false
+        },
+        {
+          "yaw_deg": 30,
+          "min_gap_mm": 10.9,
+          "inner_side_gap_mm": 13.5,
+          "collision": false
+        },
+        {
+          "yaw_deg": 35,
+          "min_gap_mm": 9.5,
+          "inner_side_gap_mm": 11.2,
+          "collision": false
+        },
+        {
+          "yaw_deg": 40,
+          "min_gap_mm": 7.8,
+          "inner_side_gap_mm": 8.8,
+          "collision": false
+        },
+        {
+          "yaw_deg": 45,
+          "min_gap_mm": 5.9,
+          "inner_side_gap_mm": 6.4,
+          "collision": false
+        },
+        {
+          "yaw_deg": 50,
+          "min_gap_mm": 3.9,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        }
+      ],
+      "collision_any": false,
+      "angles_with_side_gap_in_8_to_25mm": [
+        10,
+        15,
+        20,
+        25,
+        30,
+        35,
+        40
+      ],
+      "rule": "構想設計書 16 章: すき間 8 mm 以下か 25 mm 以上（docs/safety_limits.md §2）。閉じていく 8〜25 mm が指の挟み込み域"
+    },
+    "B1_knuckle": {
+      "kind": "B1",
+      "rows": [
+        {
+          "yaw_deg": 0,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 5,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 10,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 15,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 20,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 25,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 30,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 35,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 40,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 45,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        },
+        {
+          "yaw_deg": 50,
+          "min_gap_mm": 4.0,
+          "inner_side_gap_mm": 4.0,
+          "collision": false
+        }
+      ],
+      "collision_any": false,
+      "angles_with_side_gap_in_8_to_25mm": [],
+      "rule": "構想設計書 16 章: すき間 8 mm 以下か 25 mm 以上（docs/safety_limits.md §2）。閉じていく 8〜25 mm が指の挟み込み域",
+      "wedge": {
+        "lip_deg": 40.0,
+        "requirement": "lip_deg ≤ 90 − yaw_max（= 40°）でないと、曲げの内側で唇が前リンクへ入る",
+        "angles": {
+          "yaw_+0": {
+            "lip_angle_deg": 40.0,
+            "wedge_deg": 97.4,
+            "apex_gap_mm": 4.0
+          },
+          "yaw_+50": {
+            "lip_angle_deg": 90.0,
+            "wedge_deg": 97.4,
+            "apex_gap_mm": 4.0
+          },
+          "yaw_-50": {
+            "lip_angle_deg": -10.0,
+            "wedge_deg": 97.4,
+            "apex_gap_mm": 4.0
+          }
+        }
+      }
+    }
+  },
+  "poses": {
+    "patrol": {
+      "label": "Patrol（巡回）",
+      "yaws_J2_J5": [
+        20,
+        30,
+        -5,
+        -30
+      ],
+      "j1_deg": 5,
+      "yaw_sum_deg": 15,
+      "within_software_yaw_limit": true,
+      "within_j1_cad_range": true,
+      "head_to_tail_mm": 543.0,
+      "note": "低い頭、ゆるい S。目は柔らかい青緑、呼吸だけ"
+    },
+    "discover_point": {
+      "label": "Discover – Point（見つけた）",
+      "yaws_J2_J5": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "j1_deg": 0,
+      "yaw_sum_deg": 0,
+      "within_software_yaw_limit": true,
+      "within_j1_cad_range": true,
+      "head_to_tail_mm": 573.0,
+      "note": "撮影のため静止。体の一直線が物を指す矢印になる（ポインター犬の構え）"
+    },
+    "look_person": {
+      "label": "Look at person（人を見る）",
+      "yaws_J2_J5": [
+        45,
+        10,
+        0,
+        0
+      ],
+      "j1_deg": 30,
+      "yaw_sum_deg": 55,
+      "within_software_yaw_limit": true,
+      "within_j1_cad_range": true,
+      "head_to_tail_mm": 522.0,
+      "note": "J2 で頭ごと人へ、J1 で見上げる。目を明るく、短い音。物は体の線が指したまま"
+    },
+    "marker_wait": {
+      "label": "Marker（ここにあるよ）",
+      "yaws_J2_J5": [
+        10,
+        20,
+        25,
+        25
+      ],
+      "j1_deg": 10,
+      "yaw_sum_deg": 80,
+      "within_software_yaw_limit": true,
+      "within_j1_cad_range": true,
+      "head_to_tail_mm": 489.0,
+      "note": "子どもが近くにいない時だけ。物の横で頭を物へ向けたまま待つ『生きたピン』。囲まない"
+    },
+    "child_near_quiet": {
+      "label": "Child near（子どもが近い）",
+      "yaws_J2_J5": [
+        -50,
+        -20,
+        0,
+        0
+      ],
+      "j1_deg": 25,
+      "yaw_sum_deg": -70,
+      "within_software_yaw_limit": true,
+      "within_j1_cad_range": true,
+      "head_to_tail_mm": 498.0,
+      "note": "物を見ない・指さない。頭と目は子どもへ（物から約 70° 外す）。光と音は控えめ、通知は保護者だけ"
+    },
+    "sleep_crescent": {
+      "label": "Sleep / charge（三日月）",
+      "yaws_J2_J5": [
+        45,
+        45,
+        45,
+        45
+      ],
+      "j1_deg": 0,
+      "yaw_sum_deg": 180,
+      "within_software_yaw_limit": true,
+      "within_j1_cad_range": true,
+      "head_to_tail_mm": 229.0,
+      "note": "yaw 合計 180°。合計上限（未決 Q8）と要照合。とぐろ（輪）ではない"
+    }
+  }
+}
