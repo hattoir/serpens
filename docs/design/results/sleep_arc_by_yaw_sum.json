@@ -1,0 +1,42 @@
+[
+  {
+    "yaw_sum_limit": 145,
+    "each_deg": 36.25,
+    "head_tail_mm": 335,
+    "surface_opening_mm": 279,
+    "centerline_R_mm": 153,
+    "inner_R_mm": 107
+  },
+  {
+    "yaw_sum_limit": 150,
+    "each_deg": 37.5,
+    "head_tail_mm": 320,
+    "surface_opening_mm": 264,
+    "centerline_R_mm": 148,
+    "inner_R_mm": 102
+  },
+  {
+    "yaw_sum_limit": 160,
+    "each_deg": 40.0,
+    "head_tail_mm": 291,
+    "surface_opening_mm": 235,
+    "centerline_R_mm": 139,
+    "inner_R_mm": 93
+  },
+  {
+    "yaw_sum_limit": 170,
+    "each_deg": 42.5,
+    "head_tail_mm": 260,
+    "surface_opening_mm": 204,
+    "centerline_R_mm": 131,
+    "inner_R_mm": 85
+  },
+  {
+    "yaw_sum_limit": 180,
+    "each_deg": 45.0,
+    "head_tail_mm": 229,
+    "surface_opening_mm": 173,
+    "centerline_R_mm": 124,
+    "inner_R_mm": 78
+  }
+]

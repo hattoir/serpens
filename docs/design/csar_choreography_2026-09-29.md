@@ -95,3 +95,17 @@ DETECTED → VERIFYING → REGISTERED → PARENT_NOTIFIED → RETREAT → SAFE_W
 - 保護者: Child near の振る舞い（頭が子どもへ・物から外れる）を見て安心するか
 - 大人の被験者で代用する予備: Serpens の頭の向き・体の線が、見ている人の視線をどこへ運ぶか（視線計測がなければ「どこを見たか」を答えてもらう）
 - 子どもを対象にする評価は倫理・安全の手続きが要る（Design だけで計画しない）
+
+## 7. User Decision 反映（2026-09-29、USER-DEC-SERPENS-DESIGN-0002）
+
+優先順位: **child safety > immediate photo verification > notification latency**
+
+| 状態・子ども | 変更点 |
+|---|---|
+| VERIFYING・NEAR/UNKNOWN | 撮影の閃光・ライン光・目立つ LED なし。**ambient light だけで、頭を向け直さず・目立つ動きなしに撮れる時だけ passive snapshot**。それ以外は候補の位置・confidence・時刻を Map に残し `needs_reinspection=true` |
+| RETREAT | **後ろ向き 300 mm は第一候補にしない。** 安全な方向へ向きを変えて前へ離れる（体の線・鼻先が物を指さない向きを選ぶ、§2「物を指さない向き」）。検証は Engineering |
+| 子どもが離れた後 | `reinspect_point` を自動生成 → 再接近 → 照明 → 高品質撮影 → Risk 再判定（Discovery Loop の 1〜2 から） |
+| highlight_point | CHILD_NEAR 中の hazard には禁止。adult-only / child-clear の時だけ |
+
+**Design の見せ方の追加**（passive snapshot のとき）: 目の光は変えない（明るさも上げない）、頭は止まったまま、撮影の合図になる動き（首を下げる・一直線で止まる）を出さない。**巡回中のひと休みにしか見えない**ことを目標にする。
+「向きを変えて前へ離脱」は、胴を大きく曲げる旋回になるので、合計 145° の範囲と子どもの側へ尾を振らない向き（尾を物・子どもの反対へ）を Engineering と合わせる。

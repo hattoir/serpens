@@ -1,0 +1,26 @@
+[
+  {
+    "pose": "均等 [36,36,36,37]",
+    "yaw_sum": 145,
+    "head_tail_mm": 335,
+    "head_gaze_vs_tail_deg": 108
+  },
+  {
+    "pose": "頭で振り返る [48,42,35,20]",
+    "yaw_sum": 145,
+    "head_tail_mm": 328,
+    "head_gaze_vs_tail_deg": 96
+  },
+  {
+    "pose": "尾を寄せる [20,35,42,48]",
+    "yaw_sum": 145,
+    "head_tail_mm": 328,
+    "head_gaze_vs_tail_deg": 119
+  },
+  {
+    "pose": "首をかしげる [50,45,30,20]",
+    "yaw_sum": 145,
+    "head_tail_mm": 329,
+    "head_gaze_vs_tail_deg": 94
+  }
+]
