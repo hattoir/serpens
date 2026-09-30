@@ -233,3 +233,7 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 ## 更新（2026-09-30 夜）覆いは案 A に決定（ENTRY-D-0013）
 
 - User が案 A（8° の殻）を採用。`J1 COVER A ADOPTED`（Fusion、STL あり）。次: 襟への接合の設計、Head Yaw との干渉、B2 の印刷待ち
+
+## 更新（2026-09-30 夜）覆い A を襟と一体化・v2 の質量と重心（ENTRY-D-0014）
+
+- 待機せずに進めた: `NECK-V v4 with COVER A`（一体）、v2 の質量・重心（SG90 の +y 偏り 約 2.8 mm → ダミー質量を推奨）。Head Yaw は MVP の外
