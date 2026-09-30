@@ -390,4 +390,5 @@ User に聞かずに、Design Agent と `ai-shared/` を読み書きして修正
 - **迷ったら安全側**。安全側に倒す変更は自分で進めてよい。**安全基準を緩める変更は、自分で確定しない**（`.ai/LOCAL_RULES.md`「Safety に関わる重大変更は Human Approval」。共通 OS は厳しい側が勝つ）。理由と**感度分析**を書き、`SAFETY_UNVERIFIED` を付けた**提案（PROPOSED）**として ENTRY に残す。
 - **設定（`config/robot.yaml` など）を変えるときは、最適案が出てから、根拠つきの別コミット**にする（戻せるように、変えるファイルと手順を ENTRY に書く）。既存の動作（表情・鎌首など）を壊す変更は、範囲を**追加の設定**（作業モードごとの上限）で表し、既存の上限は変えない。
 - **停止条件**: 未処理の `To: Engineering` が空で、最適化の収束基準（`AUTONOMY.md` §7）を満たしたら、`engineering-state.md` に「待機」と書いて止まる。相手宛ての `Needs response` が返ってきたら再開する。
+- **軌跡の記録（2026-10-01 追記）**: 作業のまとまり（ENTRY を書くたび・設定を変えたとき・訂正したとき）ごとに、**正本 `ai-shared/PRODUCT_HISTORY.md` の §9 へ 1 節を足し、変わったら §1（現在地）・§6（数値の推移）・§7（訂正・撤回）を直す**。結果が悪くても書く。間違いは消さず「訂正」として足す。数字には出どころ（実測 / シミュレーション / prior）を付ける。そのあと **`python tools/update_history.py`** で git 由来の自動台帳 `agent/HISTORY.md`（全コミット・ブランチの地図・DECISIONS の見出し・ENTRY の索引）を更新する（`--check` で古さの確認）。手書きの年表を 2 つ作らない。`docs/autonomy/PRODUCT_HISTORY.md` は正本のコピー。
 - 破壊的操作はしない（force push・履歴の書き換え・main への merge・大量削除）。
