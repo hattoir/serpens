@@ -11,6 +11,8 @@ G（漏斗）= 口が 60 → 奥で 30 に狭まる形。他の案（A / B / C�
   plate         口に厚さ plate の床の板（垂直な前面の段差）を足す（前回のスコップの「先端の厚み」の対照）
   skirt_mm      壁の下端に付ける柔らかいスカートの高さ（3 / 6 mm。TPU の薄い帯。ヒンジ + ばねでたわむ）。0 = なし
   skirt_k       スカートのばね定数 [N·m/rad]（ASSUMED）
+  curtain_len_mm 垂れ布の長さ（既定 = 屋根から床まで全高）。短くすると、蝶番を壁の途中に付ける。**物の前の縁が口の面から垂れ布の長さ以上奥にあれば、垂れ布は物の後ろへ落ちて出口を塞げる**
+  rim_fillet_mm 1 円玉・CR2032 の縁の丸み [mm]（実物の縁は丸い。既定は直角 = 段差に対して悲観側）
   bump_mm       床の凹凸の振幅（±bump）。**絨毯の代用**（絨毯は未対応。「毛に埋まる」の代わりに、床の凹凸 ±0.5 mm でスカートと壁の下端のすき間の効きを見る）
 """
 from __future__ import annotations
@@ -59,6 +61,20 @@ class Passive(Form):
         self.skirt = float(params.get("skirt_mm", 0.0)) * MM
         self.skirt_k = float(params.get("skirt_k", 5.0e-4))
         self.bump = float(params.get("bump_mm", 0.0))
+        self.curtain_len = None if params.get("curtain_len_mm") is None else float(params["curtain_len_mm"]) * MM
+
+    def fully_inside(self, rel, margin) -> bool:
+        """短い垂れ布のときは、物の前の縁が垂れ布の長さ + margin より奥へ入るまで前進する（垂れ布が物の後ろへ落ちられるように）。"""
+        if self.gate_mode == "curtain" and self.curtain_len is not None:
+            rx, ry, rz = rel
+            return self.r_bound + self.curtain_len + margin <= rx <= self.depth and abs(ry) <= self.half_w and self.zb - 1.0e-3 <= rz <= self.zb + self.height
+        return super().fully_inside(rel, margin)
+
+    def debug(self, model, data) -> float:
+        if self.gate_mode != "curtain":
+            return 0.0
+        j = self.mj.mj_name2id(model, self.mj.mjtObj.mjOBJ_JOINT, "curt_j")
+        return math.degrees(float(data.qpos[model.jnt_qposadr[j]]))     # 垂れ布の開き角 [°]
 
     def build(self) -> Parts:
         fc = self.fc
@@ -73,12 +89,13 @@ class Passive(Form):
             parts.obj_pairs.append(("cavplate", self.mu_wall))
         if self.gate_mode == "curtain":
             F = float(self.p.get("curtain_f", 0.1))
-            Lf = zb + Hc - (zb + c)                                          # 垂れ布の長さ（屋根の縁から床のすき間まで）
+            Lf = zb + Hc - (zb + c) if self.curtain_len is None else self.curtain_len       # 垂れ布の長さ（既定: 屋根の縁から床のすき間まで）
+            hz = zb + Hc if self.curtain_len is None else zb + c + Lf                       # 蝶番の高さ
             k = F * Lf / math.radians(45.0)
             m = 1.5e-4                                                        # TPU 0.2 mm × 30 × 15 mm ≈ 0.1〜0.2 g（ASSUMED）
             i = m * Lf * Lf / 3.0
             parts.children.append(
-                f'<body name="curtain" pos="{_f(-t)} 0 {_f(zb + Hc)}">'
+                f'<body name="curtain" pos="{_f(-t)} 0 {_f(hz)}">'
                 f'<joint name="curt_j" type="hinge" axis="0 -1 0" range="0 90" stiffness="{k:.6g}" damping="{2 * 0.5 * math.sqrt(k * i):.6g}" armature="{i:.6g}"/>'
                 f'<inertial pos="0 0 {_f(-Lf / 2)}" mass="{m:.6g}" diaginertia="{i:.6g} {i:.6g} 1e-12"/>'
                 f'<geom name="curtain_g" type="box" size="0.00015 {_f(W2 + t / 2)} {_f(Lf / 2)}" pos="0 0 {_f(-Lf / 2)}" {CLS}/></body>')
@@ -92,36 +109,39 @@ class Passive(Form):
         return parts
 
     def _skirts(self, parts: Parts, funnel: bool) -> None:
-        """壁の下端に付ける柔らかいスカート（薄い帯。壁の下端にヒンジ、ばねでたわむ。下端が床に届く）。"""
+        """壁の下端に付ける柔らかいスカート（薄い帯）。壁の下端にヒンジ、ばねでたわむ。**外向きに 30° 傾けて吊る**: 床の凸に下端が押されると、
+        傾きが増えて外へ逃げる（垂直に吊ると、凸に押されても圧縮でしか逃げられず、頭が止まる）。下端は床（公称）に届く長さ = 高さ / cos 30°。"""
         fc = self.fc
         h, k, t, D, W2 = self.skirt, self.skirt_k, self.wall, self.depth, self.half_w
         th = 0.15e-3                                                          # 帯の半分の厚み（0.3 mm、TPU）
+        tilt = math.radians(30.0)
+        L = h / math.cos(tilt)                                                # 帯の長さ
         m = 5.0e-5
-        strips = []                                                           # (名前, 中心 x, 中心 y, 長さ, 向き z[°], 蝶番の軸, 帯の長さ方向)
-        for tag, s in (("l", 1.0), ("r", -1.0)):
-            strips.append((f"sk{tag}", D / 2, s * (W2 + t / 2), D, 0.0, "1 0 0"))
+        strips = []                                                           # (名前, 中心 x, 中心 y, 壁に沿う長さ, 向き z[°], 外向きの符号)
+        for tag, s_ in (("l", 1.0), ("r", -1.0)):
+            strips.append((f"sk{tag}", D / 2, s_ * (W2 + t / 2), D, 0.0, s_))
         if funnel:
             lf = fc["funnel"]["length_mm"] * MM
             wf2 = fc["funnel"]["front_width_mm"] * MM / 2.0
-            for tag, s in (("fl", 1.0), ("fr", -1.0)):
-                x0, y0, x1, y1 = -lf, s * (wf2 + t / 2), 0.0, s * (W2 + t / 2)
-                ln = math.hypot(x1 - x0, y1 - y0)
-                strips.append((f"sk{tag}", (x0 + x1) / 2, (y0 + y1) / 2, ln, math.degrees(math.atan2(y1 - y0, x1 - x0)), "1 0 0"))
-        for nm, cx, cy, ln, ang, axis in strips:
-            i = m * (ln * ln + h * h) / 12.0
+            for tag, s_ in (("fl", 1.0), ("fr", -1.0)):
+                x0, y0, x1, y1 = -lf, s_ * (wf2 + t / 2), 0.0, s_ * (W2 + t / 2)
+                strips.append((f"sk{tag}", (x0 + x1) / 2, (y0 + y1) / 2, math.hypot(x1 - x0, y1 - y0), math.degrees(math.atan2(y1 - y0, x1 - x0)), s_))
+        for nm, cx, cy, ln, ang, s_ in strips:
+            i = m * (ln * ln + L * L) / 12.0
             parts.children.append(
-                f'<body name="{nm}_b" pos="{_f(cx)} {_f(cy)} {_f(h)}" euler="0 0 {ang:.6g}">'
-                f'<joint name="{nm}_j" type="hinge" axis="{axis}" range="-60 60" stiffness="{k:.6g}" damping="{2 * 0.3 * math.sqrt(k * i):.6g}" armature="{i:.6g}"/>'
-                f'<inertial pos="0 0 {_f(-h / 2)}" mass="{m:.6g}" diaginertia="{i:.6g} {i:.6g} {i:.6g}"/>'
-                f'<geom name="{nm}" type="box" size="{_f(ln / 2)} {_f(th)} {_f(h / 2)}" pos="0 0 {_f(-h / 2)}" {CLS}/></body>')
+                f'<body name="{nm}_o" pos="{_f(cx)} {_f(cy)} {_f(h)}" euler="0 0 {ang:.6g}">'
+                f'<body name="{nm}_b" pos="0 0 0" euler="{s_ * math.degrees(tilt):.6g} 0 0">'
+                f'<joint name="{nm}_j" type="hinge" axis="1 0 0" range="-40 40" stiffness="{k:.6g}" damping="{2 * 0.3 * math.sqrt(k * i):.6g}" armature="{i:.6g}"/>'
+                f'<inertial pos="0 0 {_f(-L / 2)}" mass="{m:.6g}" diaginertia="{i:.6g} {i:.6g} {i:.6g}"/>'
+                f'<geom name="{nm}" type="box" size="{_f(ln / 2)} {_f(th)} {_f(L / 2)}" pos="0 0 {_f(-L / 2)}" {CLS}/></body></body>')
             parts.obj_pairs.append((nm, self.mu_wall))
             parts.raw_pairs.append(f'<pair geom1="{nm}" geom2="floor" condim="3" friction="0.5 0.5 1e-4 1e-4 1e-4" solref="SOLREF" solimp="SOLIMP"/>')
-        # 奥の壁の下端（物が奥の壁の下へ抜けないように）
-        ib = m * ((2 * (W2 + t)) ** 2 + h * h) / 12.0
+        # 奥の壁の下端（物が奥の壁の下へ抜けないように）。外向き = +x
+        ib = m * ((2 * (W2 + t)) ** 2 + L * L) / 12.0
         parts.children.append(
-            f'<body name="skb_b" pos="{_f(D + t / 2)} 0 {_f(h)}">'
-            f'<joint name="skb_j" type="hinge" axis="0 1 0" range="-60 60" stiffness="{k:.6g}" damping="{2 * 0.3 * math.sqrt(k * ib):.6g}" armature="{ib:.6g}"/>'
-            f'<inertial pos="0 0 {_f(-h / 2)}" mass="{m:.6g}" diaginertia="{ib:.6g} {ib:.6g} {ib:.6g}"/>'
-            f'<geom name="skb" type="box" size="{_f(th)} {_f(W2 + t)} {_f(h / 2)}" pos="0 0 {_f(-h / 2)}" {CLS}/></body>')
+            f'<body name="skb_b" pos="{_f(D + t / 2)} 0 {_f(h)}" euler="0 {-math.degrees(tilt):.6g} 0">'
+            f'<joint name="skb_j" type="hinge" axis="0 1 0" range="-40 40" stiffness="{k:.6g}" damping="{2 * 0.3 * math.sqrt(k * ib):.6g}" armature="{ib:.6g}"/>'
+            f'<inertial pos="0 0 {_f(-L / 2)}" mass="{m:.6g}" diaginertia="{ib:.6g} {ib:.6g} {ib:.6g}"/>'
+            f'<geom name="skb" type="box" size="{_f(th)} {_f(W2 + t)} {_f(L / 2)}" pos="0 0 {_f(-L / 2)}" {CLS}/></body>')
         parts.obj_pairs.append(("skb", self.mu_wall))
         parts.raw_pairs.append('<pair geom1="skb" geom2="floor" condim="3" friction="0.5 0.5 1e-4 1e-4 1e-4" solref="SOLREF" solimp="SOLIMP"/>')

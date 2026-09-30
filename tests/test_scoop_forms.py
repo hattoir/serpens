@@ -94,3 +94,43 @@ def test_straddling_is_told_apart_from_being_guided_by_the_walls(cfg: dict) -> N
     assert a.success and not a.wall_contact
     b = run_form_episode(cfg, "hood", p, "crumb_cube", "flooring", 10.0, 10.0, 1)
     assert b.entered_ever and b.wall_contact
+
+
+def test_any_rigid_step_at_the_mouth_blocks_even_a_2_micron_one(cfg: dict) -> None:
+    """段差 0.002 mm でも押されて逃げる（有る / 無いで決まり、大きさは効かない）。すき間 0〜1 mm は、段差 0 なら効かない。"""
+    base = {"funnel": True, "gate": True, "retreat": 0, "backstop": None}
+    for c in (0.0, 1.0):
+        assert run_form_episode(cfg, "hood", {**base, "clearance_mm": c}, "coin_1yen", "flooring", 10.0, 0.0, 1).success
+    r = run_form_episode(cfg, "hood", {**base, "clearance_mm": 0.1, "plate": 0.002}, "coin_1yen", "flooring", 10.0, 0.0, 1)
+    assert r.outcome == "pushed_ahead" and not r.entered_ever
+
+
+def test_gate_force_limit_does_not_matter_for_closing_behind_the_object(cfg: dict) -> None:
+    """ゲートが閉じるのは物が口の面より奥に入ってからなので、力の上限を 0.25 N まで下げても保持は変わらない（2.8 N 以下で成立）。"""
+    base = {"funnel": True, "gate": True, "retreat": 30, "backstop": None}
+    for f in (5.0, 2.8, 0.25):
+        assert run_form_episode(cfg, "hood", {**base, "gate_force_n": f}, "crumb_cube", "flooring", 10.0, 0.0, 1).success
+
+
+def test_passive_curtain_needs_a_tiny_opening_force_and_a_short_flap(cfg: dict) -> None:
+    """受け身の垂れ布: 開く力 0.1 N は 1 円玉の床の摩擦（約 3 mN）より大きく、押されて逃げる。全高の垂れ布は物の上に垂れかかり、後退で物が出る。
+    8 mm の短い垂れ布 + 3 mN なら、1 円玉は入り、後退しても残る。"""
+    base = {"funnel": True, "gate": "curtain", "backstop": None}
+    args = ("coin_1yen", "flooring", 10.0, 0.0, 1)
+    assert run_form_episode(cfg, "hood", {**base, "curtain_f": 0.1, "retreat": 0}, *args).outcome == "pushed_ahead"
+    full = run_form_episode(cfg, "hood", {**base, "curtain_f": 0.003, "retreat": 30}, "battery_cr2032", "flooring", 10.0, 0.0, 1)
+    assert full.outcome == "escaped"
+    short = run_form_episode(cfg, "hood", {**base, "curtain_f": 0.003, "curtain_len_mm": 8.0, "retreat": 30}, *args)
+    assert short.success
+
+
+def test_tolerance_expectation_is_bounded_by_the_grid_not_interpolated() -> None:
+    """許容差の確率版: 格子点の間の保持率は分からないので、下限（小さい方）/ 上限（大きい方）で期待値の範囲を出す。t=0 だけ 100%、0.002 で 0% なら 0〜0.67%。"""
+    import importlib.util
+    from pathlib import Path
+    spec = importlib.util.spec_from_file_location("tol_mc", Path(__file__).resolve().parents[1] / "tools" / "scoop_forms_tolerance_mc.py")
+    m = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(m)
+    import numpy as np
+    lo, hi = m.expected_bounds([0.0, 0.002, 0.1], np.array([1.0, 0.0, 0.0]))
+    assert lo == pytest.approx(0.0) and hi == pytest.approx(0.002 / 0.3)

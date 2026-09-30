@@ -183,36 +183,58 @@ def recommend_sections(A, scr, s3, bd) -> None:
         o = d.get(tg)
         if not o:
             return None
-        k = sum(I(o[x], "successes") for x in OBJS)
-        n = sum(I(o[x], "n") for x in OBJS)
-        return k, n
-
-    fun10, fun2 = rate(bd, T(True, True, 0, 10.0)), rate(bd, T(True, True, 0, 2.0))
-    pl10, pl2 = rate(bd, T(False, True, 0, 10.0)), rate(bd, T(False, True, 0, 2.0))
-    cup = rate(s3, "cup|ID=40,gap_mm=0.0|v0|stop")
+        return sum(I(o[x], "successes") for x in OBJS), sum(I(o[x], "n") for x in OBJS)
 
     def pc(x):
         return f"{100 * x[0] / x[1]:.0f}%（{x[0]}/{x[1]}）" if x else "—"
 
+    gc, cc, cc2 = load_cells_of("gateforce"), load_cells_of("curtain"), load_cells_of("curtain2")
+
+    def gsum(cells, par, v, key="success"):
+        tg = tag_of_dict("hood", par, v)
+        k = [cell_sum(cells, tg, o, key=key) for o in OBJS]
+        return sum(x[0] for x in k), sum(x[1] for x in k)
+
+    fun10, fun2 = rate(bd, T(True, True, 0, 10.0)), rate(bd, T(True, True, 0, 2.0))
+    g28 = gsum(gc, {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": 2.8}, 10.0)
+    g28v2 = gsum(gc, {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": 2.8}, 2.0)
+    g025 = gsum(gc, {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": 0.25}, 10.0)
+    g5 = gsum(gc, {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": 5.0}, 10.0)
+    c_spec = [gsum(cc, {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": 0, "backstop": None}, 10.0) for F in (0.1, 0.3, 1.0)]
+    c_spec_r = [gsum(cc, {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": 30, "backstop": None}, 10.0) for F in (0.01, 0.03, 0.1, 0.3, 1.0)]
+    c_full = gsum(cc2, {"funnel": True, "gate": "curtain", "curtain_f": 0.003, "retreat": 30, "backstop": None}, 10.0)
+    c_short = {F: gsum(cc2, {"funnel": True, "gate": "curtain", "curtain_f": F, "curtain_len_mm": 8.0, "retreat": 30, "backstop": None}, 10.0) for F in (0.001, 0.003, 0.01, 0.03, 0.1)}
+    c_short_co = {F: [cell_sum(cc2, tag_of_dict("hood", {"funnel": True, "gate": "curtain", "curtain_f": F, "curtain_len_mm": 8.0, "retreat": 30, "backstop": None}, 10.0), o) for o in ("coin_1yen", "battery_cr2032")] for F in (0.003, 0.01)}
+    cup = rate(s3, "cup|ID=40,gap_mm=0.0|v0|stop")
+
     A("## 8. 推奨（1〜2 案）\n")
     A("**推奨案の前提（守れないなら、推奨は成り立たない）**:\n")
-    A("- **絨毯は未対応**（剛体の平らな床だけ）。壁の下端の**すき間 0.1 mm は、絨毯の毛（数 mm〜）に埋まる**可能性が高い。壁の下端が毛に沈む・毛が壁の下から物を押す・物が毛に埋もれて壁の前の縁で止まる、のいずれも未検証。**推奨案は、毛に埋まらない硬い床（フローリング・マット）が前提**で、絨毯で成り立つとは言えない。")
-    A("- 物の位置を知る理想センサー（物の中心が奥へ入ったことを検知する）と、頭が物にまっすぐ近づく動きが前提（ASSUMED）。壁の下端のすき間 0.1 mm を、印刷・組立の精度で守れることも前提。")
-    A("- 安全は SAFETY_UNVERIFIED。下の各案の「安全上の懸念」は、暫定しきい値（手・指 5.7 N。PROVISIONAL）との比較であって、確認ではない。\n")
-    A("### 推奨 1: 漏斗つきの受け身のフード + ゲート（機構なし）\n")
-    A(f"- 結果（N = 30 / 対象物、頭 10 mm/s と 2 mm/s、内訳は §7）: 漏斗つき 10 mm/s **{pc(fun10)}**、2 mm/s **{pc(fun2)}**（直線の口: 10 mm/s {pc(pl10)}、2 mm/s {pc(pl2)}）。")
-    A("- **駆動数: 1**（ゲートだけ。機構なし）")
-    A("- **印刷しやすさ（見立て）: 易**（箱形。壁の下端の 0.1 mm のすき間は、印刷後の平面度に依存するので要確認）")
-    A("- **安全上の懸念（ゲートが指やしっぽを挟まないか）**: 口の面に立つ板が 0.2 s で 18 mm 降りる（最大 約 135 mm/s）。力の上限は 5 N（ASSUMED）で、暫定の手・指しきい値 5.7 N に**余裕 0.7 N しかない**。"
-      "降りる途中の隙間は 18 → 0 mm で、**指が入る 5〜12 mm の禁止帯（`geometry_rules.accessible_gap_forbidden_mm`）を必ず通る**。口に入った指・ペットのしっぽを板の下端と床が挟む恐れがある。"
-      "対策の候補（未検証）: 閉じる力を 2 N 以下、ゆっくり、下端を柔らかいリップ（TPU）に、閉じる前に口の中の異物を検知して止める・戻す。挟み込みの力の実測が要る（SAFETY_UNVERIFIED）。\n")
+    A("- **絨毯は未対応**（剛体の平らな床だけ）。壁の下端の**すき間 0.1 mm は、絨毯の毛（数 mm〜）に埋まる**可能性が高い。壁の下端が毛に沈む・毛が壁の下から物を押す・物が毛に埋もれて壁の前の縁で止まる、のいずれも未検証。"
+      "**推奨案は、毛に埋まらない硬い床（フローリング・マット）が前提**で、絨毯で成り立つとは言えない（床の凹凸 ±0.5 mm の代用では、保持は 93%（凹凸）対 95%（平ら）で差が小さい。§12.3。毛の柔らかさ・厚みは入っていない）。")
+    A("- **口の前縁に、床の板・リップ（剛体の段差）を付けない**（`plate` = 0）。0.002 mm の段差でも 0%（§12.1b、確率版 `scoop_forms_tolerance_mc.md`）。段差の許容差は実質ゼロで、面一を印刷の精度で保証できない。すき間 `clearance_mm` は 0〜1 mm では効かない。")
+    A("- 物の位置を知る理想センサー（物の中心が奥へ入ったことを検知する）と、頭が物にまっすぐ近づく動きが前提（ASSUMED）。")
+    A("- 安全は SAFETY_UNVERIFIED。下の「安全上の懸念」は、暫定しきい値（手・指 5.7 N。PROVISIONAL）との比較であって、確認ではない。\n")
+    A("### 推奨 1: 漏斗つきフード + 出口の閉じ（受け身の垂れ布は条件つき / 駆動のゲートは 2.8 N 以下で成立）\n")
+    A(f"- **フード本体（機構なし）**: 漏斗つき N = 30 / 対象物で 10 mm/s **{pc(fun10)}**、2 mm/s **{pc(fun2)}**（§7）。")
+    A("- **(a) 受け身の TPU 垂れ布（駆動なし）は、依頼の範囲（閉じる力 0.1〜1 N、全高）では成立しない**。"
+      f"開く力 0.1 / 0.3 / 1 N は、1 円玉の床の摩擦（約 3 mN）より大きく、物が押されて逃げる（保持 {pc(c_spec[0])} / {pc(c_spec[1])} / {pc(c_spec[2])}）。"
+      f"境界は 0.01〜0.03 N（0.01 N で 37%、0.03 N で 6%）。**全高の垂れ布は、入っても物の上に垂れかかったまま落ちず、頭が後退すると物が出ていく**（0%）。"
+      "成り立つのは、**8 mm の短い垂れ布 + 閉じる力 3 mN 以下**（`curtain_len_mm`）の 1 円玉・CR2032 だけ"
+      f"（F = 0.003 N で 1 円玉 {kn(c_short_co[0.003][0])}・CR2032 {kn(c_short_co[0.003][1])}。後退 30 mm でも保持）。**ビーズは、力 1 mN でも押されて逃げる**（転がるので押す力に抵抗しない）。立方体（10 mm）は短い垂れ布で入らなかった（原因は未確認）。"
+      "**条件**: 開く力 ≲ 3 mN（TPU の薄板で実現できるかは未確認）・短い垂れ布・ビーズと立方体は対象外。")
+    A(f"- **(b) 駆動のゲートは、2.8 N 以下（暫定しきい値 5.7 N の半分以下）で成立する**。上限を 5 → 0.25 N に下げても保持は変わらない（10 mm/s: 5 N {pc(g5)}、**2.8 N {pc(g28)}**、0.25 N {pc(g025)}。2 mm/s の 2.8 N は {pc(g28v2)}。挟まった 0 回。§12.4）。"
+      "ゲートが閉じるのは物が口の面より奥に入ったあとなので、力は要らない。**推奨は (b)**（垂れ布 (a) は条件が厳しい）。")
+    A("- **駆動数**: (b) 1（ゲート）/ (a) 0（駆動なし）")
+    A("- **印刷しやすさ（見立て）**: フード 易（壁の下端のすき間 0.1 mm は印刷後の平面度に依存。**リップ・板は付けない**）/ (b) ゲート板 易 / (a) 垂れ布は、開く力 3 mN 以下にするには TPU をごく薄く（0.05 mm 級）する必要があり、**難**（Design の試験片 B は 0.4〜0.6 mm）。")
+    A("- **安全上の懸念**: (b) ゲートの力は **2.8 N 以下に設定できる**（暫定しきい値 5.7 N の半分以下。余裕 2.9 N）。ただし降りる途中の隙間は 18 → 0 mm で、指が入る 5〜12 mm の禁止帯を通り、口に入った指・ペットのしっぽを板の下端と床が挟む恐れは残る。"
+      "対策の候補（未検証）: 力を 1 N 以下・ゆっくり・下端を柔らかいリップに・閉じる前に口の中の異物を検知して止める。(a) 垂れ布は力が小さい（≤ 0.03 N）が、薄い板の縁の**圧力**が暫定の圧力限界（8.2 N/cm²）を超えないかは `flank_v.md` の垂れ布の節で確認（力 1 N・縁 0.4 mm × 30 mm で 8.3 N/cm² と同程度）。挟み込みの力の実測が要る（SAFETY_UNVERIFIED）。\n")
     A("### 推奨 2（条件つき）: 被せるカップ（内径 40 mm）\n")
-    A(f"- 結果（N = 30 に相当する 40 回 / 対象物: 位置ずれ 0 / 3 / 6 / 10 mm × 床 2 × 5）: **{pc(cup)}**（位置ずれ 10 mm まで全部入る）。内径 30 mm は 6 mm 以上ずれると縁が 1 円玉・CR2032 に乗って挟まることがある。")
-    A("- **条件**: カップを下ろす前に、頭の位置を物の真上へ ±10 mm 以内に合わせられること（理想センサー・位置合わせの動きは含めていない = ASSUMED）。これが成り立たなければ、推奨 1 のほうが単純。")
+    A(f"- 結果（40 回 / 対象物: 位置ずれ 0 / 3 / 6 / 10 mm × 床 2 × 5）: **{pc(cup)}**（位置ずれ 10 mm まで全部入る）。内径 30 mm は 6 mm 以上ずれると縁が 1 円玉・CR2032 に乗って挟まることがある。")
+    A("- **条件**: カップを下ろす前に、頭の位置を物の真上へ ±10 mm 以内に合わせられること（位置合わせの動きは含めていない = ASSUMED）。" + camera_line())
     A("- **駆動数: 1**（昇降。ゲートなし。位置合わせの動きは別）")
-    A("- **印刷しやすさ（見立て）: 易**（カップと屋根）")
-    A("- **安全上の懸念**: 上から降りる縁と床の間（隙間 0〜1 mm）が指・しっぽを挟む。降りる力の上限 5 N（ASSUMED）は暫定しきい値 5.7 N に近い。縁の下に入った指を検知して止めるのが前提。SAFETY_UNVERIFIED。\n")
-    A("**推奨しない**: B（ベルト式ランプ）は壁・脚に当てたときだけ成功し、駆動 2、印刷は難（φ3〜4 mm のローラーと薄いベルト）。A（サイドスイーパー）・C（ブラシ）・E（フック）は、受け身のフードより悪い（§3、§9）。\n")
+    A("- **印刷しやすさ（見立て）: 易**（カップと屋根。縁と床のすき間 0〜1 mm は保持に効かない。**縁に段差を付けない**）")
+    A("- **安全上の懸念**: 上から降りる縁と床の間（隙間 0〜1 mm）が指・しっぽを挟む。降りる力の上限 5 N（ASSUMED）は暫定しきい値 5.7 N に近い → **2.8 N 以下**にする（カップの力の掃引は未実施。ゲートと同様に成り立つ見込み）。縁の下に入った指を検知して止めるのが前提。SAFETY_UNVERIFIED。\n")
+    A("**推奨しない**: B（ベルト式ランプ）は壁・脚に当てたときだけ成功し、駆動 2、印刷は難。A（サイドスイーパー）・C（ブラシ）・E（フック）は、受け身のフードより悪い（§3、§9）。スカート（§12.3）は、この 4 種の物・床の凹凸 ±0.5 mm では効果がなく、平らな床では保持が下がる（3 mm で 92%、6 mm で 83%。スカートなし 95%）。\n")
 
 
 def failure_sections(A, scr) -> None:
@@ -244,6 +266,144 @@ def failure_sections(A, scr) -> None:
     A("- 推奨 1（機構なしのフード）で進めるか、位置合わせ（±10 mm）を前提に推奨 2（カップ）を進めるか\n")
 
 
+
+def load_cells_of(name: str) -> list[dict]:
+    p = RES / f"scoop_forms_{name}_cells.csv"
+    return list(csv.DictReader(open(p, encoding="utf-8"))) if p.exists() else []
+
+
+def cell_sum(cells: list[dict], tag: str, obj: str | None = None, max_offset: float = 99.0, key: str = "success") -> tuple[int, int]:
+    cs = [x for x in cells if x["tag"] == tag and (obj is None or x["obj"] == obj) and float(x["offset"]) <= max_offset]
+    return sum(int(x[key]) for x in cs), sum(int(x["n"]) for x in cs)
+
+
+def kn(k_n: tuple[int, int]) -> str:
+    k, n = k_n
+    return f"{100 * k / n:.0f}% ({k}/{n})" if n else "—"
+
+
+def tag_of_dict(form: str, params: dict, v: float) -> str:
+    body = ",".join(f"{k}={params[k]}" for k in sorted(params))
+    return f"{form}|{body}|v{v:g}|stop"
+
+
+def variant_sections(A) -> None:
+    A("## 12. 実物の許容差・受け身の垂れ布・スカート・ゲート力（追加の検討）\n")
+    # ---- 1. 段差 × すき間 ----
+    tc = load_cells_of("tolerance")
+    if tc:
+        A("### 12.1 口の前縁の段差 × 前縁と床のすき間（許容差の材料）\n")
+        A("漏斗つきのフード + ゲート、頭 10 mm/s、N = 30 / 対象物。**段差**は、口の前縁に足した床の板（垂直な前面）の厚み。**すき間**は、壁と板の下端の床からの高さ。"
+          "位置ずれ 0・5 mm の分だけで集計（10 mm ずれの 1 円玉・CR2032 は、段差・すき間と関係なく失敗するので除く）。\n")
+        A("| すき間 [mm] | 段差 [mm] | " + " | ".join(NAME[o] for o in OBJS) + " | 4 種の計 |\n|---|---|---|---|---|---|---|")
+        for c in (0.0, 0.3, 1.0):
+            for st in (0.0, 0.1, 0.2, 0.5):
+                tg = tag_of_dict("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": c, "plate": st}, 10.0)
+                cells_o = [cell_sum(tc, tg, o, 5.0) for o in OBJS]
+                tot = (sum(x[0] for x in cells_o), sum(x[1] for x in cells_o))
+                A(f"| {c:g} | {st:g} | " + " | ".join(kn(x) for x in cells_o) + f" | {kn(tot)} |")
+        A("")
+        A("読み: 段差が 0 なら、すき間 0〜1 mm でも保持は変わらない（物はすき間より厚いので壁の下をくぐれない）。**段差は 0.1 mm でも 0%**（次の 12.1b で 0.002 mm まで細かくしても 0%）。すき間は 0〜1 mm では効かない。\n")
+
+    # ---- 2. 垂れ布 ----
+    cc = load_cells_of("curtain")
+    if cc:
+        A("### 12.2 ゲートを受け身の TPU 垂れ布にした変種（駆動なし）\n")
+        A("口の面の屋根の縁に蝶番で吊るした薄い板（TPU 0.2 mm、質量 約 0.15 g、ASSUMED）。頭の前進で物に押されて奥へ開き、通したあとは自分のばねで閉じる。**外へは開かない**。"
+          "「閉じる力」F は下端を 45° 開いたときのばねの力（ばね定数 k = F × 長さ / 45°、**0.1〜1 N は ASSUMED**。開く力も同じばね）。"
+          "0.01 / 0.03 N は、成立の境界を見るために足した。漏斗つき、N = 30 / 対象物。後退 30 mm は、閉じ終わり後に頭が下がっても物が残るか（垂れ布が出口を塞ぐか）。\n")
+        A("| 閉じる力 F [N] | 頭 mm/s | 後退 | " + " | ".join(NAME[o] for o in OBJS) + " | 4 種の計 |\n|---|---|---|---|---|---|---|---|")
+        for v, F, retreat in [(10.0, F, r) for F in (0.01, 0.03, 0.1, 0.3, 1.0) for r in (0, 30)] + [(2.0, F, 30) for F in (0.1, 0.3, 1.0)]:
+            tg = tag_of_dict("hood", {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": retreat, "backstop": None}, v)
+            cells_o = [cell_sum(cc, tg, o) for o in OBJS]
+            tot = (sum(x[0] for x in cells_o), sum(x[1] for x in cells_o))
+            A(f"| {F:g} | {v:g} | {retreat} mm | " + " | ".join(kn(x) for x in cells_o) + f" | {kn(tot)} |")
+        A("")
+
+    # ---- 3. スカート + 床の凹凸 ----
+    sc = load_cells_of("skirt")
+    if sc:
+        A("### 12.3 壁の下端の柔らかいスカート（高さ 3 / 6 mm）と、床の凹凸 ±0.5 mm\n")
+        A("**絨毯は未対応のまま。「毛に埋まる」の代わりに、床の凹凸 ±0.5 mm（高さ場。相関長 約 8 mm、すべての設計で同じ床）で代用した**（絨毯の毛の柔らかさ・厚みは入っていない。凹凸で壁の下端のすき間が 0.1 mm から変わる影響だけを見る）。"
+          "スカート = 壁の下端に外向き 30° に吊った TPU の帯（0.3 mm）。ヒンジ + ばね（k は ASSUMED、2 水準）でたわみ、下端が床に届く。壁の下端は床から skirt の高さに上がる。漏斗つき + ゲート、頭 10 mm/s、N = 30 / 対象物。\n")
+        A("| 床 | スカート高さ [mm] | k [N·m/rad] | " + " | ".join(NAME[o] for o in OBJS) + " | 4 種の計 |\n|---|---|---|---|---|---|---|---|")
+        for bump in (0.0, 0.5):
+            for h, k in [(0.0, None)] + [(h, k) for h in (3.0, 6.0) for k in (2.0e-4, 2.0e-3)]:
+                par = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "bump_mm": bump}
+                if h:
+                    par.update({"skirt_mm": h, "skirt_k": k})
+                tg = tag_of_dict("hood", par, 10.0)
+                cells_o = [cell_sum(sc, tg, o) for o in OBJS]
+                tot = (sum(x[0] for x in cells_o), sum(x[1] for x in cells_o))
+                A(f"| {'平ら' if not bump else '凹凸 ±0.5 mm'} | {h:g} | {'—' if k is None else f'{k:g}'} | " + " | ".join(kn(x) for x in cells_o) + f" | {kn(tot)} |")
+        A("")
+
+    # ---- 5. ゲート力 ----
+    gc = load_cells_of("gateforce")
+    if gc:
+        A("### 12.4 ゲート力の上限（5 N の想定をやめ、暫定しきい値 5.7 N の半分 2.8 N 以下で成立するか）\n")
+        A("駆動のゲートの力の上限だけを変える（閉じる時間 0.2 s は同じ）。漏斗つき、閉じ終わり後に頭が 30 mm 後退する（ゲートが物を保持していないと物が残る）、N = 30 / 対象物。"
+          "「挟まった」= 物がゲートの下端に挟まって閉じ切れなかった回数。\n")
+        A("| ゲート力の上限 [N] | 頭 mm/s | " + " | ".join(NAME[o] for o in OBJS) + " | 4 種の計 | 挟まった |\n|---|---|---|---|---|---|---|---|")
+        for F, v in [(5.0, 10.0), (2.8, 10.0), (2.0, 10.0), (1.0, 10.0), (0.5, 10.0), (0.25, 10.0), (2.8, 2.0)]:
+            tg = tag_of_dict("hood", {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": F}, v)
+            cells_o = [cell_sum(gc, tg, o) for o in OBJS]
+            tot = (sum(x[0] for x in cells_o), sum(x[1] for x in cells_o))
+            pin = sum(cell_sum(gc, tg, o, key="pinched")[0] for o in OBJS)
+            A(f"| {F:g} | {v:g} | " + " | ".join(kn(x) for x in cells_o) + f" | {kn(tot)} | {pin} |")
+        A("")
+
+
+
+def camera_line() -> str:
+    """カップの位置合わせ ±10 mm を、カメラの誤差（VGA / UXGA、距離 100〜300 mm）から逆算する 1 行。FOV 65° は ASSUMED（config/robot.yaml）。"""
+    fov = math.radians(65.0)
+    def mm_px(d, w):
+        return 2 * d * math.tan(fov / 2) / w
+    v1, v3 = mm_px(100, 640), mm_px(300, 640)
+    u1, u3 = mm_px(100, 1600), mm_px(300, 1600)
+    return (f"**カップに要る位置合わせ ±10 mm は、カメラの画素では効かない**: ±10 mm は VGA（{v1:.2f}〜{v3:.2f} mm/px）で {10 / v3:.0f}〜{10 / v1:.0f} 画素、"
+            f"UXGA（{u1:.2f}〜{u3:.2f} mm/px）で {10 / u3:.0f}〜{10 / u1:.0f} 画素に当たり、画素の量子化（±0.5 px = ±{0.5 * u1:.2f}〜{0.5 * v3:.1f} mm）は許容の 1/{10 / (0.5 * v3):.0f} 以下。"
+            f"**支配するのは取り付け・姿勢の角度誤差**で、距離 300 mm なら ±{math.degrees(math.atan(10 / 300)):.1f}°、100 mm なら ±{math.degrees(math.atan(10 / 100)):.1f}° 以内なら ±10 mm を満たす"
+            "（FOV 65°・距離誤差なしは ASSUMED。FOV は定規で実測待ち = OQ-0002）。")
+
+
+def variant2_sections(A) -> None:
+    tc = load_cells_of("tolerance2") + load_cells_of("tolerance3")
+    if tc:
+        A("### 12.1b 段差の境界を細かく + 縁の丸み（実物の許容差）\n")
+        A("1 円玉・CR2032 の縁は実物では丸い。既定（直角）は段差に対して悲観側なので、**縁の丸み 0.3 mm** の場合も見た（`rim_fillet_mm`）。漏斗つき・ゲートあり・すき間 0.1 mm、頭 10 mm/s、N = 30 / 対象物、位置ずれ 0・5 mm のみ。\n")
+        A("| 縁の丸み | 段差 [mm] | " + " | ".join(NAME[o] for o in OBJS) + " | 4 種の計 |\n|---|---|---|---|---|---|---|")
+        rows = [(0.3, pl) for pl in (0.0, 0.002, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.5)] + [(None, pl) for pl in (0.002, 0.005, 0.01, 0.02, 0.05)]
+        for fil, pl in rows:
+            par = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, "plate": pl}
+            if fil is not None:
+                par["rim_fillet_mm"] = fil
+            tg = tag_of_dict("hood", par, 10.0)
+            cells_o = [cell_sum(tc, tg, o, 5.0) for o in OBJS]
+            tot = (sum(x[0] for x in cells_o), sum(x[1] for x in cells_o))
+            A(f"| {'0.3 mm' if fil else '直角'} | {pl:g} | " + " | ".join(kn(x) for x in cells_o) + f" | {kn(tot)} |")
+        A("\n読み: **0.002 mm の段差でも 0%**（縁の丸み 0.3 mm でも同じ）。境界は「段差が有る / 無い」で、大きさではない。実物の許容差の材料は `simulation/results/scoop_forms_tolerance_mc.md`（段差 t ~ U(0, 0.3) mm、すき間 c ~ U(0, 0.5) mm の確率版。期待値 0〜0.7%）。\n")
+    cc = load_cells_of("curtain2")
+    if cc:
+        A("### 12.2b 垂れ布の追加の対照（開く力をさらに下げる / 垂れ布を短くする）\n")
+        A("**診断（トレース）**: 全高（15 mm）の垂れ布は、物の前の縁が口の面の 1 mm 奥にあるため、**物の上に垂れかかったまま（CR2032 で 38° 開いたまま）落ちない**。後退すると物は垂れ布の下をくぐって出る（後退 30 mm で 0%）。"
+          "垂れ布が物の後ろへ落ちるには、物の前の縁が垂れ布の長さより奥にある必要がある（30 mm の空間に 1 円玉 φ20 が入ると、前の縁は最大でも口から 10 mm）。"
+          "そこで、**8 mm の短い垂れ布**（蝶番を壁の途中の高さ 8.1 mm に付ける）と、頭を物の前の縁が 9 mm 以上奥へ入るまで進める合図に変えた変種を足した。開く力は、物の床の摩擦（1 円玉 約 3 mN）より小さくないと物が押されて逃げるので、**1〜3 mN** も試した。"
+          "**これは依頼の仕様（全高の垂れ布・0.1〜1 N）からの変更で、原因の切り分けのための追加の対照**。\n")
+        A("| 垂れ布 | 閉じる力 F [N] | 後退 | " + " | ".join(NAME[o] for o in OBJS) + " | 4 種の計 |\n|---|---|---|---|---|---|---|---|")
+        rows = [("全高 15 mm", None, F, r) for F in (0.001, 0.003) for r in (0, 30)] + [("短い 8 mm", 8.0, F, r) for F in (0.001, 0.003, 0.01, 0.03, 0.1) for r in (0, 30)]
+        for lab, ln, F, r in rows:
+            par = {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": r, "backstop": None}
+            if ln:
+                par["curtain_len_mm"] = ln
+            tg = tag_of_dict("hood", par, 10.0)
+            cells_o = [cell_sum(cc, tg, o) for o in OBJS]
+            tot = (sum(x[0] for x in cells_o), sum(x[1] for x in cells_o))
+            A(f"| {lab} | {F:g} | {r} mm | " + " | ".join(kn(x) for x in cells_o) + f" | {kn(tot)} |")
+        A("")
+
+
 def main() -> None:
     scr, com, s3 = load("screen"), load("combos"), load("stage3")
     allg = {**scr, **com}
@@ -260,6 +420,29 @@ def main() -> None:
       "摩擦・質量・トルク・速度・センサーはすべて ASSUMED（理想センサー）。実現性の調査であり、製品仕様の確定ではない。絨毯は未対応（剛体平面のみ）。\n")
     A("前回（`scoop_beak_2026-09-30.md`）: ちょうつがい式の腕（くちばし）は、1 円玉・立方体 0/1,728、CR2032 7/1,728、ビーズだけ 70%（叩かれて飛んだ分を含む）。"
       "原因は構造的（押して入れる方式は物が頭と同じ速さで運ばれるだけ。腕は床に近いのが真下の 1 点だけで、その前の物には上から当たる）。今回は形と機構を変えた。\n")
+
+    # ---- §0 用語の定義 ----
+    A("## 0. 用語の定義（段差 `plate` と すき間 `clearance_mm`。Design の試験片 B との対応）\n")
+    A("この報告書の「段差」と「すき間」は、次の 2 つの**独立な**設計変数（`config` のパラメータ名）。断面（横から見た図。x = 奥へ、z = 上）:\n")
+    A("```")
+    A("                口の面 x = 0                                   奥の壁 x = 30")
+    A("                    |                                              |")
+    A("   屋根 ============|==============================================|====  下面 z = 15")
+    A("                    |                                              |")
+    A("   前（物が来る） ->  |            空間（30 x 30 x 15 mm）            |")
+    A("                    |                                              |")
+    A("               +----+----------------------------------------------+---  上面 z = clearance_mm + plate")
+    A("   段差の面 -> |          床の板（plate。0 なら板は無い）             |      板の前面は垂直（口の面 x = 0 に立つ）")
+    A("               +----+----------------------------------------------+---  下面 z = clearance_mm")
+    A("        ^ clearance_mm（壁・板の下端の、床からのすき間。壁も板も同じ値）")
+    A("   ======================== 床 z = 0 ================================")
+    A("```\n")
+    A("- **`plate`（段差）= 口の下の床の板の厚み [mm]**。物は床の上を来て、板の前面（高さ `clearance_mm` 〜 `clearance_mm + plate`）に当たる。**0 = 板なし**（口の面には左右の壁だけ。物は床の上をそのまま入る = 面一）。")
+    A("- **`clearance_mm`（すき間）= 壁の下端（と、板があるときは板の下面）の床からの高さ [mm]**。既定 0.1。物はこのすき間より厚い（1 円玉 1.5 mm 以上）ので、すき間の下はくぐれない。")
+    A("- 2 つは**独立**（板なしでも、すき間は壁の下端に効く）。段差 0.1 mm でも保持が 0% になり、すき間は 0〜1 mm でほぼ効かない（§12.1）。")
+    A("- **Design の試験片 B（`docs/design/test_piece_b/`）との対応**: Design は「前縁の段差 0 / 0.3 / 1.0 mm」を**リップ板の下面が床から浮く高さ**と解釈した（= ここの `clearance_mm` に近い）。"
+      "リップ板そのものの厚み（= ここの `plate`。B1_LIP は厚さ 1.2、前縁は 12° のランプで先端厚 0.6）は固定。**この 2 つを独立に変えられる形（`plate` = リップの厚み、`clearance_mm` = 浮く高さ）に直す**よう、Design に依頼済み。"
+      "シミュレーションの予測: `plate` が 0 でない（リップがある）と、`clearance_mm` によらず押されて逃げる。\n")
 
     # ---- 結論 ----
     bd0 = load("baseline")
@@ -282,6 +465,9 @@ def main() -> None:
     A("- **前の押す方式（0%）との違いを生んだ設計変数は、「口の床の段差（傾斜板の先端の厚み）を 0 にし、床をそのまま空間の床にした」ことの 1 つ**。"
       "口に 0.1 mm の床の板（段差）を足しただけで、全対象物が 0% に戻る（§7.6）。段差が無いと、物は押されず、頭が物を**またぐ**。")
     A("- **ゲートの効果は、頭が後退して口から離れるときにだけ出る**（ゲートなし + 後退 30 mm は 0%、ゲートありは変わらない。§7.5）。頭が止まったままなら、ゲートの有無で結果は変わらない。")
+    A("- **実物の許容差**: 口の前縁の段差は、**0.002 mm でも 0%**（段差が有る / 無いで決まり、大きさは効かない）。段差 t ~ U(0, 0.3) mm・すき間 c ~ U(0, 0.5) mm の確率版で、**保持の期待値は 0〜0.7%（下限 ≈ 0%）**（`scoop_forms_tolerance_mc.md`）。すき間は 0〜1 mm では効かない。**口の前縁に床の板・リップ（剛体の段差）を付けない**ことが前提。")
+    A("- **ゲートを受け身の TPU 垂れ布にした変種は、依頼の範囲（0.1〜1 N）では成立しない**（0%）。境界は 0.01〜0.03 N で、成り立つのは 8 mm の短い垂れ布 + 3 mN 以下の 1 円玉・CR2032 だけ（ビーズ・立方体は入らない）。**駆動のゲートは 2.8 N 以下でも成立する**（0.25 N まで 95%）。")
+    A("- 壁の下端のスカート（3 / 6 mm）は、床の凹凸 ±0.5 mm（**絨毯の代用**）でも効果が見えず、平らな床では保持が下がる。カップの位置合わせ ±10 mm は、カメラの画素では効かず、**取り付け角の誤差（300 mm で ±1.9°）が支配する**（§8）。")
     A("- **機構を足して成功が増えるのは条件つき**: B（ベルト式ランプ）は**壁・脚に当てたときだけ**成功し（当てないと保持 0/864）、D（カップ）は内径 40 mm なら位置ずれ 10 mm まで全部入る"
       "（内径 30 mm は 6 mm 以上ずれると縁が物に乗って挟まることがある）。A（サイドスイーパー）・C（ブラシ）・E（フック）は、受け身のフードより悪い。")
     A("- 「叩かれて飛び込んだ」は保持に数えず、別集計（`knocked_in`）にした。A と E で目立つ。")
@@ -408,6 +594,8 @@ def main() -> None:
     if bd:
         recommend_sections(A, scr, s3, bd)
     failure_sections(A, scr)
+    variant_sections(A)
+    variant2_sections(A)
     p = RES / "scoop_forms_extra.md"
     if p.exists():
         A(p.read_text(encoding="utf-8"))

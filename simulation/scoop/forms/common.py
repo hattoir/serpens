@@ -65,7 +65,8 @@ class Form:
         self.zb = 0.0                 # 空間の床の高さ（開放底 = 0。ベルトは持ち上がる）
         self.front_extent = 0.0       # 開いた状態で頭の一番前が口の面よりどれだけ前へ出るか（物の初期位置の基準）
         ob = cfg["objects"][obj_name]
-        self.obj_geom_xml, self.obj_half_h, self.r_bound, self.obj_asset = _object_geom(ob)
+        rf = self.p.get("rim_fillet_mm")                                   # 円柱（1 円玉・CR2032）の縁の丸み [mm]。既定は直角（悲観側）
+        self.obj_geom_xml, self.obj_half_h, self.r_bound, self.obj_asset = _object_geom(ob, None if rf is None else float(rf))
         self.mu_wall = float(self.fc["friction_wall"])
 
     # --- ビルド ---
@@ -87,6 +88,10 @@ class Form:
 
     def reset(self, model: Any, data: Any) -> None:
         pass
+
+    def debug(self, model: Any, data: Any) -> float:
+        """診断（trace 用）の値。垂れ布の角度など。"""
+        return 0.0
 
     def always(self, model: Any, data: Any, t: float) -> None:
         """常時動く機構（ベルト・ブラシ）の指令。"""

@@ -195,7 +195,7 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
                     wall_contact = True
                     break
         if trace is not None:
-            trace.append((t, travel / MM, rel[0] / MM, rel[1] / MM, rel[2] / MM, speed_max / MM))
+            trace.append((t, travel / MM, rel[0] / MM, rel[1] / MM, rel[2] / MM, speed_max / MM, form.debug(model, data)))
         data.ctrl[act_vel] = 0.0 if stopped else -v * min(1.0, t / ramp_up)
         form.always(model, data, t)
         # 離散的な機構
@@ -263,7 +263,7 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
         if form.head_moves and not stopped and travel >= travel_max:
             t_end = t
             break
-        if t > 120.0:
+        if t > (min(120.0, travel_max / v + 20.0) if (form.head_moves and v > 0) else 120.0):          # 頭が引っかかって進まないときの打ち切り
             t_end = t
             break
     head_x = float(data.qpos[slide_adr])

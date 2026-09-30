@@ -5,6 +5,10 @@
     python tools/scoop_forms_sweep.py stage3           上位 3 設計だけを 1 設計 × 対象物あたり N = 30（両方の速度・停止して閉じる / 前進しながら閉じる も別に）
     python tools/scoop_forms_sweep.py baseline         受け身のフードの基準（N = 30）: 漏斗の有無 × ゲートの有無 × 閉じ終わり後の後退（0 / 30 mm）× 頭の速度 2 / 10、
                                                        と、口の床の段差（0.1〜1.5 mm）を足した対照。物 × 床 × 速度 × 位置ずれの内訳の CSV も出す
+    python tools/scoop_forms_sweep.py tolerance        口の前縁の段差 {0, 0.1, 0.2, 0.5} mm × 前縁と床のすき間 {0, 0.3, 1} mm（漏斗つき・ゲートあり。実物の許容差の材料）
+    python tools/scoop_forms_sweep.py curtain          ゲートを受け身の TPU 垂れ布に（駆動なし。閉じる力 0.01〜1 N。ASSUMED）
+    python tools/scoop_forms_sweep.py skirt            壁の下端の柔らかいスカート（高さ 3 / 6 mm）× 床の凹凸 ±0.5 mm（**絨毯の代用**）
+    python tools/scoop_forms_sweep.py gateforce        駆動のゲートの力の上限を 5 → 0.25 N（暫定しきい値 5.7 N の半分 2.8 N 以下で成立するか）
     python tools/scoop_forms_sweep.py resummarize      output/ の 1 エピソード 1 行の CSV から集計を作り直す
 
 1 設計 × 1 対象物あたりの試行数 = 床 2 × 位置ずれ（0 / 5 / 10。カップは 0 / 3 / 6 / 10）× n-cell（既定 2）。
@@ -95,13 +99,13 @@ def design_table(rows: list[dict], name: str) -> list[dict]:
     return sorted(rank, key=lambda x: (-x["success"], -x["min_obj"], -x["enter"], x["tag"]))
 
 
-def cell_table(rows: list[dict]) -> None:
+def cell_table(rows: list[dict], name: str = "baseline") -> None:
     """設計 × 物 × 床 × 位置ずれの内訳（受け身のフードの基準。報告書の内訳表と「またぐ」の分類に使う）。"""
     g: dict[tuple, list[dict]] = {}
     for r in rows:
         g.setdefault((r["tag"], r["obj"], r["floor"], r["offset"]), []).append(r)
     RES.mkdir(parents=True, exist_ok=True)
-    with open(RES / "scoop_forms_baseline_cells.csv", "w", newline="", encoding="utf-8") as f:
+    with open(RES / f"scoop_forms_{name}_cells.csv", "w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["tag", "obj", "floor", "offset", "n", "success", "knocked_in", "escaped", "pushed_ahead", "not_entered", "pinched",
                     "entered", "wall_contact", "entered_nowall", "entered_wall", "fire_x_mean_mm", "fire_absy_mean_mm"])
@@ -162,14 +166,14 @@ def load_rank(name: str) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "resummarize"])
+    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "resummarize"])
     ap.add_argument("--n-cell", type=int, default=2)
     ap.add_argument("--workers", type=int, default=14)
     args = ap.parse_args()
     cfg = load_config()
     t0 = time.time()
     if args.stage == "resummarize":
-        for name in ("screen", "combos", "stage3", "baseline"):
+        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce"):
             p = OUT / f"scoop_forms_{name}_rows.csv"
             if p.exists():
                 rows = [{k: _typed(v) for k, v in r.items()} for r in csv.DictReader(open(p, encoding="utf-8"))]
@@ -184,6 +188,48 @@ def main() -> None:
             designs.append(("hood", {"funnel": funnel, "gate": gate, "retreat": retreat, "backstop": None}, v, True))
         for plate in (0.1, 0.3, 0.6, 1.0, 1.5):                       # 口の床の段差（前回のスコップの「先端の厚み」に当たる）を足した対照
             designs.append(("hood", {"funnel": False, "gate": True, "retreat": 0, "backstop": None, "plate": plate}, 10.0, True))
+    elif args.stage == "tolerance":
+        designs, n_cell = [], 5
+        for c, plate in itertools.product((0.0, 0.3, 1.0), (0.0, 0.1, 0.2, 0.5)):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": c, "plate": plate}, 10.0, True))
+    elif args.stage == "curtain":
+        designs, n_cell = [], 5
+        for F, retreat in itertools.product((0.01, 0.03, 0.1, 0.3, 1.0), (0, 30)):
+            designs.append(("hood", {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": retreat, "backstop": None}, 10.0, True))
+        for F in (0.1, 0.3, 1.0):
+            designs.append(("hood", {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": 30, "backstop": None}, 2.0, True))
+    elif args.stage == "tolerance2":                 # 段差の境界を細かく + 縁の丸み（実物の 1 円玉・CR2032 の縁は丸い）
+        designs, n_cell = [], 5
+        base = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1}
+        for fillet, plate in itertools.product((0.3,), (0.0, 0.02, 0.05, 0.1, 0.2, 0.5)):
+            designs.append(("hood", {**base, "plate": plate, "rim_fillet_mm": fillet}, 10.0, True))
+        for plate in (0.02, 0.05):
+            designs.append(("hood", {**base, "plate": plate}, 10.0, True))
+    elif args.stage == "tolerance3":                 # 段差の境界をさらに細かく（0.002〜0.01 mm）。接触のやわらかさの分解能に近い領域
+        designs, n_cell = [], 5
+        base = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1}
+        for fillet, plate in itertools.product((0.3, None), (0.002, 0.005, 0.01)):
+            d = {**base, "plate": plate}
+            if fillet:
+                d["rim_fillet_mm"] = fillet
+            designs.append(("hood", d, 10.0, True))
+    elif args.stage == "curtain2":                   # 垂れ布の追加の対照: 力をさらに下げる、垂れ布を短くして物の後ろへ落ちられるようにする
+        designs, n_cell = [], 5
+        for F, retreat in itertools.product((0.001, 0.003), (0, 30)):
+            designs.append(("hood", {"funnel": True, "gate": "curtain", "curtain_f": F, "retreat": retreat, "backstop": None}, 10.0, True))
+        for F, retreat in itertools.product((0.001, 0.003, 0.01, 0.03, 0.1), (0, 30)):
+            designs.append(("hood", {"funnel": True, "gate": "curtain", "curtain_f": F, "curtain_len_mm": 8.0, "retreat": retreat, "backstop": None}, 10.0, True))
+    elif args.stage == "skirt":
+        designs, n_cell = [], 5
+        for bump in (0.0, 0.5):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "bump_mm": bump}, 10.0, True))
+            for h, k in itertools.product((3.0, 6.0), (2.0e-4, 2.0e-3)):
+                designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "bump_mm": bump, "skirt_mm": h, "skirt_k": k}, 10.0, True))
+    elif args.stage == "gateforce":
+        designs, n_cell = [], 5
+        for F in (5.0, 2.8, 2.0, 1.0, 0.5, 0.25):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": F}, 10.0, True))
+        designs.append(("hood", {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "gate_force_n": 2.8}, 2.0, True))
     elif args.stage == "combos":
         top = top_per_form(load_rank("screen"), ("sweeper", "belt", "brush"))
         designs, n_cell = [], args.n_cell
@@ -218,8 +264,8 @@ def main() -> None:
     rows = run_fcases(cases, workers=args.workers)
     write_rows(args.stage, rows)
     rank = design_table(rows, args.stage)
-    if args.stage == "baseline":
-        cell_table(rows)
+    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce"):
+        cell_table(rows, args.stage)
     print(f"done in {time.time() - t0:.0f} s", flush=True)
     for x in rank[:25]:
         print(f"{x['success']:.3f} min_obj {x['min_obj']:.2f} enter {x['enter']:.2f} launched {x['launched']:.2f}  {x['tag']}")
