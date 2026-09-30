@@ -37,3 +37,14 @@
 - 推奨 1（機構なしのフード）か、位置合わせ ±10 mm を前提にカップか
 - J1 の暫定範囲 −5°〜+10° を採るか。脇の柔らかいカバー（外観・触感）の可否（OPEN-SERPENS-DESIGN-014）。KNUCKLE DRUM の外観（関節に膝ができる）
 - 窓 0.7〜1.0 N·m と、V を守る許容トルク約 0.25 N·m の食い違い（窓は下げない前提。OQ-0116 / OQ-0117）
+
+---
+
+## 更新（追記）— 状態
+
+| 依頼 | 状態 |
+|---|---|
+| A の 1〜8（垂れ布・許容差・確率版・§0 の定義・カメラの逆算・推奨の更新・試験片 B 用の試験計画・DECISIONS・verification_status） | ✅（`agent/engineering-scoop` `64b9487`） |
+| B: 質量表（`mass_additions_g`、PROPOSED）、J7 の静的トルクの訂正（0.204 N·m）、ENTRY-E-0007、垂れ布の挟み込みの節（`flank_v.md` §E） | ✅（`agent/engineering-floor-watch` `dcf5dc7`） |
+| B: J1 の範囲 −5°〜+10° を `robot.yaml` へ | ⬜ **User の判断待ち**（届くまで変えない） |
+| OQ-0116 / OQ-0117 | OPEN のまま（窓 0.7〜1.0 N·m は下げない。5.7 N・0.25 N·m は暫定） |
