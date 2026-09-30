@@ -1,0 +1,30 @@
+{
+ "J2": {
+  "added_cm3": 11.1,
+  "outer_area_cm2": 74.2,
+  "solid_g": 13.7,
+  "hollow_cm3": 8.9,
+  "hollow_g": 11.0
+ },
+ "J3": {
+  "added_cm3": 11.5,
+  "outer_area_cm2": 94.2,
+  "solid_g": 14.2,
+  "hollow_cm3": 11.3,
+  "hollow_g": 14.0
+ },
+ "J4": {
+  "added_cm3": 13.4,
+  "outer_area_cm2": 103.4,
+  "solid_g": 16.6,
+  "hollow_cm3": 12.4,
+  "hollow_g": 15.4
+ },
+ "J5": {
+  "added_cm3": 13.4,
+  "outer_area_cm2": 103.4,
+  "solid_g": 16.6,
+  "hollow_cm3": 12.4,
+  "hollow_g": 15.4
+ }
+}

@@ -174,3 +174,10 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - **FLANK SKIRT STUDY**: 脇のフラップの概念 CAD と運動学モデル。**すき間は減らず増えた**ので採らない（上下まで閉じる袖状のカバーは未設計）。唇・あごのフラップも効かなかった
 - 残り: 背板の層 z ≥ 77（約 1020 mm³/姿勢）、J1 ピッチ（−5° で 601、+22° で 4307 mm³）、J2 の背板の層
 - r の範囲: J3〜J5 は r = 42.5〜50 mm の輪、J2 は 28〜49、J1 はピッチで変わる
+
+## 更新（2026-09-30 深夜）KNUCKLE DRUM 承認・試験片・試験片 B
+
+- User 承認: KNUCKLE DRUM を進める。**レポートの冒頭に「まっすぐ比 約 20 倍の体積が残る」を書き続ける**（`gap_check_report*.md`、`mass_addendum`、試験片 README、ENTRY に反映）。背板の層は未解決のまま、J1 ピッチは動作範囲の回答待ち
+- 円柱肩の試験片 R46 / R34（`docs/design/knuckle_test/`）、質量は中実（最大）61.1 g / 中空 55.8 g（`mass_addendum_2026-09-30.md`）
+- 試験片 B（`docs/design/test_piece_b/`）: 漏斗つきフード ほか。**段差の解釈は Design の仮定**
+- Fusion: Recovery 複製に `KNUCKLE TEST R46/R34 …`、FW02 intake の複製に `TEST PIECE B1 …`（元は未変更）
