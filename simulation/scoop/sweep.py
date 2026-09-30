@@ -38,6 +38,7 @@ class Case:
     lid_front_ahead_mm: float | None = None
     close_time_s: float | None = None
     beak: tuple[float, float] | None = None        # (ヒンジ高さ mm, 腕長 mm)
+    stop_on_trigger: bool | None = None
 
 
 def seed_of(cfg: dict[str, Any], obj: str, offset: float, trial: int) -> int:
@@ -56,14 +57,15 @@ def run_case(case: Case) -> dict[str, Any]:
     r = run_episode(cfg, case.shape, case.obj, case.floor, case.speed, case.offset, seed_of(cfg, case.obj, case.offset, case.trial),
                     trigger=case.trigger, clearance_mm=case.clearance_mm, scoop_mu=case.scoop_mu,
                     rolling_scale=case.rolling_scale, numerics=dict(case.numerics) or None,
-                    rim_fillet_mm=case.rim_fillet_mm, lid_front_ahead_mm=case.lid_front_ahead_mm, close_time_s=case.close_time_s, beak=case.beak)
+                    rim_fillet_mm=case.rim_fillet_mm, lid_front_ahead_mm=case.lid_front_ahead_mm, close_time_s=case.close_time_s, beak=case.beak,
+                    stop_on_trigger=case.stop_on_trigger)
     row = asdict(r)
     row.pop("numerics", None)
     row.update(shape=case.shape.key, tip_mm=case.shape.tip_mm, alpha_deg=case.shape.alpha_deg, side_wall=case.shape.side_wall,
                width_mm=case.shape.width_mm, obj=case.obj, floor=case.floor, speed=case.speed, offset=case.offset,
                trial=case.trial, trigger=case.trigger, clearance_mm=case.clearance_mm, scoop_mu=case.scoop_mu,
                rolling_scale=case.rolling_scale, tag=case.tag, ramp_mm=case.shape.ramp_mm, rim_fillet_mm=case.rim_fillet_mm,
-               lid_front_ahead_mm=case.lid_front_ahead_mm, close_time_s=case.close_time_s,
+               lid_front_ahead_mm=case.lid_front_ahead_mm, close_time_s=case.close_time_s, stop_on_trigger=case.stop_on_trigger,
                beak_hinge_mm=None if case.beak is None else case.beak[0], beak_arm_mm=None if case.beak is None else case.beak[1])
     return row
 
@@ -113,16 +115,21 @@ def summarize(rows: list[dict[str, Any]], keys: tuple[str, ...]) -> list[dict[st
         ent = sum(bool(r.get("entered_ever")) for r in g)
         onh = sum(bool(r.get("on_head_ever")) for r in g)
         launched = sum(r.get("obj_speed_max_mm_s", 0.0) > LAUNCH_SPEED_MM_S for r in g)
+        held = sum(bool(r.get("inside_at_close")) for r in g)
+        trig = sum(bool(r.get("triggered")) for r in g)
+        jam = sum(bool(r.get("triggered")) and abs(r["lid_angle_end_deg"] - (180.0 if r.get("beak_hinge_mm") is not None else 0.0)) > 2.0 for r in g)
+        succ_clean = sum(bool(r["success"]) and r.get("obj_speed_max_mm_s", 0.0) <= LAUNCH_SPEED_MM_S for r in g)
         rode_clean = sum(bool(r.get("rode_ever")) and r.get("obj_speed_max_mm_s", 0.0) <= LAUNCH_SPEED_MM_S for r in g)
         rlo, rhi = wilson(rode, n)
         elo, ehi = wilson(ent, n)
         out.append({**dict(zip(keys, key)), "n": n, "successes": k, "rate": k / n, "ci_lo": lo, "ci_hi": hi,
                     "n_rode": rode, "rate_rode": rode / n, "rode_lo": rlo, "rode_hi": rhi,
-                    "n_launched": launched, "n_rode_clean": rode_clean, "rate_rode_clean": rode_clean / n,
+                    "n_triggered": trig, "n_arm_jam": jam, "n_inside_at_close": held, "escape_mean_mm": sum(r.get("escape_mm", 0.0) for r in g) / n,
+                    "n_success_clean": succ_clean, "n_launched": launched, "n_rode_clean": rode_clean, "rate_rode_clean": rode_clean / n,
                     "n_on_head": onh, "rate_on_head": onh / n,
                     "n_entered": ent, "rate_entered": ent / n, "entered_lo": elo, "entered_hi": ehi,
                     "ride_max_rel_mm": max((r.get("ride_max_rel_mm", 0.0) for r in g), default=0.0),
-                    "front_lift_max_mm": max((r.get("front_lift_max_mm", 0.0) for r in g), default=0.0),
+                    "head_edge_lift_max_mm": max((r.get("head_edge_lift_max_mm", 0.0) for r in g), default=0.0),
                     **{f"n_{o}": cnt.get(o, 0) for o in OUTCOMES},
                     "push_mean_mm": sum(pushed) / len(pushed) if pushed else 0.0,
                     "push_max_mm": max(pushed) if pushed else 0.0,

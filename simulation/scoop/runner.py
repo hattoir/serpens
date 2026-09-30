@@ -22,7 +22,7 @@ import numpy as np
 from simulation.scoop.model import OBJECT_GROUP, MM, Geometry, ModelSpec, Shape, build_mjcf, load_config
 
 SOURCE = "MUJOCO_SIM"
-OUTCOMES = ("success", "pushed_ahead", "lateral", "under", "pinched", "on_ramp", "other")
+OUTCOMES = ("success", "escaped", "pushed_ahead", "lateral", "under", "pinched", "on_ramp", "other")
 
 try:
     import mujoco
@@ -37,12 +37,16 @@ class EpisodeResult:
     success: bool
     triggered: bool
     lid_angle_end_deg: float
-    rode_ever: bool                 # 「乗る」（User 定義 2026-09-29）: 物の前縁が床から 1mm 以上上がった瞬間が一度でもあった
-    rode_end: bool                  # 判定時にも前縁が 1mm 以上上がっている
-    front_lift_max_mm: float        # 前縁の床からの高さの最大値
+    rode_ever: bool                 # 「乗る」: 物の縁（傾斜板に向かう頭側の縁）が床から 1mm 以上上がった瞬間が一度でもあった
+    rode_end: bool                  # 判定時にも 1mm 以上上がっている
+    front_lift_max_mm: float        # 先端側（−x）の縁の、床からの高さの最大値（参考）
+    head_edge_lift_max_mm: float    # 頭側（+x）の縁の、床からの高さの最大値。「乗る」の判定に使う
     obj_speed_max_mm_s: float       # 物の並進速度の最大値。フタの先端速度（≦ 約 175 mm/s）+ 頭の速度の 2 倍を超えたら、はじき飛ばされた疑い
     on_head_ever: bool              # （旧定義）物の中心が先端より後ろで床から離れた。頭の上に完全に載った
     entered_ever: bool              # 「入る」: 途中で一度でも、物の中心が空間（ランプ終端より奥）の内側に載った
+    escape_mm: float                # 判定時の物の中心の、空間の範囲からの距離（0 = 空間の中）
+    inside_at_close: bool           # 閉じ終わった瞬間に空間の中にあった
+    held: bool                      # 閉じ終わりから判定まで（2 秒）ずっと空間の中にあった
     ride_max_rel_mm: float          # 「乗る」が成り立っていた間の、先端から物の中心までの最大距離（負 = 先端より前）
     rel_x_mm: float                 # 判定時の物の先端からの位置（負 = 先端より前）
     y_mm: float
@@ -65,6 +69,8 @@ class _Ids:
     act_vel: int
     act_lid: int
     plate_geom: int
+    hinge_jnt: int
+    hinge_range0: tuple[float, float]
     ramp_geoms: tuple[int, ...]
 
 
@@ -91,7 +97,8 @@ def _prepare(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, clearance_
                obj_body=n(mujoco.mjtObj.mjOBJ_BODY, "obj"), obj_dof=int(model.jnt_dofadr[o]), obj_geom=n(mujoco.mjtObj.mjOBJ_GEOM, "obj_geom"),
                hinge_adr=int(model.jnt_qposadr[n(mujoco.mjtObj.mjOBJ_JOINT, "hinge")]),
                act_vel=n(mujoco.mjtObj.mjOBJ_ACTUATOR, "vel"), act_lid=n(mujoco.mjtObj.mjOBJ_ACTUATOR, "lid_act"),
-               plate_geom=n(mujoco.mjtObj.mjOBJ_GEOM, "plate"),
+               plate_geom=n(mujoco.mjtObj.mjOBJ_GEOM, "plate"), hinge_jnt=n(mujoco.mjtObj.mjOBJ_JOINT, "hinge"),
+               hinge_range0=(float(model.jnt_range[n(mujoco.mjtObj.mjOBJ_JOINT, "hinge")][0]), float(model.jnt_range[n(mujoco.mjtObj.mjOBJ_JOINT, "hinge")][1])),
                ramp_geoms=tuple(g for g in (n(mujoco.mjtObj.mjOBJ_GEOM, "ramp_wl"), n(mujoco.mjtObj.mjOBJ_GEOM, "ramp_wr")) if g >= 0))
     if len(_CACHE) > 64:
         _CACHE.clear()
@@ -138,14 +145,19 @@ def _object_points(model: Any, geom_id: int) -> np.ndarray | None:
     return np.array(model.mesh_vert[a0:a0 + n], dtype=float)
 
 
-def _front_edge_z(model: Any, data: Any, ids: "_Ids", pts: np.ndarray | None) -> float:
-    """物の前縁（中心より前 = −x 側の表面）の、床からの最小の高さ。"""
+def _edge_heights(model: Any, data: Any, ids: "_Ids", pts: np.ndarray | None) -> tuple[float, float]:
+    """(先端側 = 中心より前（−x）の縁の最小の高さ, 頭側 = 中心より後ろ（+x）の縁の最小の高さ)。床からの高さ [m]。
+    物が傾斜板に乗るとき、先に持ち上がるのは頭側の縁（傾斜板に向かう縁）。先端側の縁は傾斜の根元で床に着いたまま。"""
     pos = data.geom_xpos[ids.obj_geom]
     if pts is None:
-        return float(pos[2] - model.geom_size[ids.obj_geom][0])
+        z = float(pos[2] - model.geom_size[ids.obj_geom][0])
+        return z, z
     w = pos + pts @ data.geom_xmat[ids.obj_geom].reshape(3, 3).T
     front = w[w[:, 0] <= pos[0]]
-    return float(front[:, 2].min()) if len(front) else float(w[:, 2].min())
+    head = w[w[:, 0] >= pos[0]]
+    zf = float(front[:, 2].min()) if len(front) else float(w[:, 2].min())
+    zh = float(head[:, 2].min()) if len(head) else float(w[:, 2].min())
+    return zf, zh
 
 
 def _smoothstep(x: float) -> float:
@@ -158,7 +170,8 @@ def run_episode(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, speed_m
                 lid_mu: float | None = None, rolling_scale: float = 1.0, numerics: dict[str, Any] | None = None,
                 initial: dict[str, float] | None = None, rim_fillet_mm: float | None = None,
                 front_face: str | None = None, lid_front_ahead_mm: float | None = None,
-                close_time_s: float | None = None, beak: tuple[float, float] | None = None) -> EpisodeResult:
+                close_time_s: float | None = None, beak: tuple[float, float] | None = None,
+                stop_on_trigger: bool | None = None, trace: list | None = None) -> EpisodeResult:
     """1 回走らせる。`trigger` は "ideal" / "latency:50" / "contact" / "tof"。
     `initial` を渡すと初期位置・向きを固定する（{"d0_mm", "y_mm", "yaw"}。収束確認・単体テスト用）。"""
     if mujoco is None:  # pragma: no cover
@@ -175,6 +188,7 @@ def run_episode(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, speed_m
     else:
         d0, y0, yaw = initial["d0_mm"] * MM, initial["y_mm"] * MM, float(initial.get("yaw", 0.0))
     mujoco.mj_resetData(model, data)
+    model.jnt_range[ids.hinge_jnt] = ids.hinge_range0          # ラッチを外す（前のエピソードで掛けた場合）
     data.qpos[ids.slide_adr] = 0.0
     data.qpos[ids.hinge_adr] = spec.lid_open_rad
     q = ids.obj_qadr
@@ -225,10 +239,17 @@ def run_episode(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, speed_m
     rode_ever = entered_ever = on_head_ever = False
     ride_max = 0.0
     lift_max = 0.0
+    front_lift_max = 0.0
     speed_max = 0.0
     rode_now = False
+    held = True
+    inside_at_close = False
+    latched = False
+    window_started = False
+    stop_head = (not bool(cfg["motion"]["continue_during_close"])) if stop_on_trigger is None else stop_on_trigger
     lift = spec.obj_half_height + 4.0e-4      # （旧定義）中心がこれより高ければ床から離れている
     pts_local = _object_points(model, ids.obj_geom)
+    lid_gid = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, "lid_plate")
     while True:
         mujoco.mj_step(model, data)
         t += dt
@@ -239,17 +260,30 @@ def run_episode(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, speed_m
         travel = -tip_x
         _ox, _oy, _oz = data.xpos[ids.obj_body]
         _rel = float(_ox) - tip_x
-        _fz = _front_edge_z(model, data, ids, pts_local)
-        lift_max = max(lift_max, _fz)
+        _fz, _hz = _edge_heights(model, data, ids, pts_local)
+        lift_max = max(lift_max, _hz)
+        front_lift_max = max(front_lift_max, _fz)
         speed_max = max(speed_max, float(np.linalg.norm(data.qvel[ids.obj_dof:ids.obj_dof + 3])))
-        rode_now = _fz >= RIDE_LIFT_M
+        rode_now = _hz >= RIDE_LIFT_M
         if rode_now:
             rode_ever = True
             ride_max = max(ride_max, _rel)
         if _rel >= 0.0 and _oz > lift:
             on_head_ever = True
-        if _rel >= g.end_x and _oz > lift and abs(_oy) <= g.cav_half_width and _oz >= g.end_z - 1.0e-3:
+        _inside_now = (g.end_x <= _rel <= g.end_x + g.cav_len and abs(_oy) <= g.cav_half_width
+                       and g.end_z - 1.0e-3 <= _oz <= g.end_z + g.cav_height)
+        if _inside_now:
             entered_ever = True
+        if trace is not None:               # 診断用: (t, 頭の前進 mm, 関節角 deg, 物の rel_x mm, 物の z mm, 物の速さ mm/s, 腕と物の接触の法線力 N)
+            fn = 0.0
+            for k in range(data.ncon):
+                c = data.contact[k]
+                if {c.geom1, c.geom2} == {ids.obj_geom, lid_gid}:
+                    ff = np.zeros(6)
+                    mujoco.mj_contactForce(model, data, k, ff)
+                    fn += abs(float(ff[0]))
+            trace.append((t, travel / MM, math.degrees(float(data.qpos[ids.hinge_adr])), _rel / MM, float(_oz) / MM,
+                          float(np.linalg.norm(data.qvel[ids.obj_dof:ids.obj_dof + 3])) / MM, fn))
         data.ctrl[ids.act_vel] = -v * min(1.0, t / ramp_up)
         if close_start is None:
             ox, oy, oz = data.xpos[ids.obj_body]
@@ -289,8 +323,19 @@ def run_episode(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, speed_m
         if close_start is not None:
             frac = _smoothstep((t - close_start) / close_t) if t >= close_start else 0.0
             data.ctrl[ids.act_lid] = open_rad + (spec.lid_closed_rad - open_rad) * frac
-            if not bool(cfg["motion"]["continue_during_close"]) and t >= close_start:
+            if stop_head and t >= close_start:
                 data.ctrl[ids.act_vel] = 0.0
+            if t >= close_start + close_t:
+                if not window_started:         # 「閉じ終わり」の時刻（腕が物に当たって届かなくても、指令が終わった時刻）
+                    window_started = True
+                    inside_at_close = _inside_now
+                held = held and _inside_now
+                q_now = float(data.qpos[ids.hinge_adr])
+                if not latched and abs(q_now - spec.lid_closed_rad) <= math.radians(float(cfg["lid"]["closed_tolerance_deg"])):
+                    # 機械ラッチ: 実際に閉じ位置まで来たら、それ以上開かない（可動域を閉じ位置に絞る）。届いていないときは掛けない
+                    latched = True
+                    qc, d_ = spec.lid_closed_rad, 0.0017
+                    model.jnt_range[ids.hinge_jnt] = (qc - d_, qc) if spec.lid_closed_rad > spec.lid_open_rad else (qc, qc + d_)
             if t >= close_start + close_t + settle:
                 t_end = t
                 break
@@ -298,13 +343,14 @@ def run_episode(cfg: dict[str, Any], shape: Shape, obj: str, floor: str, speed_m
             t_end = t
             break
     return _judge(cfg, spec, g, data, ids, x_obj0, trig_t is not None, trig_travel, t_end or t, dict(numerics or {}),
-                  rode_ever, entered_ever, ride_max / MM, rode_now, lift_max / MM, on_head_ever, speed_max / MM)
+                  rode_ever, entered_ever, ride_max / MM, rode_now, lift_max / MM, on_head_ever, speed_max / MM, held, inside_at_close, front_lift_max / MM)
 
 
 def _judge(cfg: dict[str, Any], spec: ModelSpec, g: Geometry, data: Any, ids: _Ids, x_obj0: float, triggered: bool,
            trig_travel: float | None, t_end: float, numerics: dict[str, Any], rode_ever: bool = False,
            entered_ever: bool = False, ride_max_mm: float = 0.0, rode_now: bool = False, lift_max_mm: float = 0.0,
-           on_head_ever: bool = False, speed_max_mm_s: float = 0.0) -> EpisodeResult:
+           on_head_ever: bool = False, speed_max_mm_s: float = 0.0, held: bool = True,
+           inside_at_close: bool = False, front_lift_max_mm: float = 0.0) -> EpisodeResult:
     tip_x = float(data.qpos[ids.slide_adr])
     ox, oy, oz = (float(x) for x in data.xpos[ids.obj_body])
     rel = ox - tip_x
@@ -315,8 +361,10 @@ def _judge(cfg: dict[str, Any], spec: ModelSpec, g: Geometry, data: Any, ids: _I
     wall = float(cfg["scoop"]["wall_thickness_mm"]) * MM
     fwd = max(0.0, x_obj0 - ox)
     ahead = max(0.0, -rel)
-    if inside and closed:
+    if inside and closed and held:
         outcome = "success"
+    elif closed and inside_at_close:
+        outcome = "escaped"          # 閉じ終わったときは中にいたのに、2 秒のうちに出た（または出ている）
     elif rel < 0.0:
         outcome = "lateral" if abs(oy) > g.half_width + wall else "pushed_ahead"
     elif rel > g.end_x + g.cav_len + 0.02:
@@ -332,8 +380,12 @@ def _judge(cfg: dict[str, Any], spec: ModelSpec, g: Geometry, data: Any, ids: _I
     else:
         outcome = "on_ramp"
     rode_end = rode_now
+    dx = max(g.end_x - rel, 0.0, rel - (g.end_x + g.cav_len))
+    dy = max(abs(oy) - g.cav_half_width, 0.0)
+    escape = math.hypot(dx, dy)
     return EpisodeResult(source=SOURCE, outcome=outcome, success=outcome == "success", triggered=triggered, lid_angle_end_deg=lid_deg,
-                         rode_ever=rode_ever, rode_end=rode_end, front_lift_max_mm=lift_max_mm, obj_speed_max_mm_s=speed_max_mm_s, on_head_ever=on_head_ever,
+                         rode_ever=rode_ever, rode_end=rode_end, head_edge_lift_max_mm=lift_max_mm, front_lift_max_mm=front_lift_max_mm, obj_speed_max_mm_s=speed_max_mm_s, escape_mm=escape / MM,
+                         inside_at_close=inside_at_close, held=held, on_head_ever=on_head_ever,
                          entered_ever=entered_ever, ride_max_rel_mm=ride_max_mm,
                          rel_x_mm=rel / MM, y_mm=oy / MM, forward_disp_mm=fwd / MM, ahead_of_tip_mm=ahead / MM,
                          trigger_travel_mm=None if trig_travel is None else trig_travel / MM, t_end_s=t_end, numerics=numerics)

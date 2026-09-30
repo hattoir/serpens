@@ -108,8 +108,10 @@ def geometry_of(cfg: dict[str, Any], shape: Shape, clearance_mm: float | None = 
     end_x = L * math.cos(a) - t * math.sin(a)
     end_z = c + L * math.sin(a) + t * math.cos(a)
     cav_len = cv["length_mm"] * MM
+    follow = shape.ramp_mm is not None and bool(cfg.get("beak", {}).get("cavity_width_follows_shape", False))
+    cav_w = (shape.width_mm if follow else cv["width_mm"]) * MM
     return Geometry(alpha=a, tip=t, clearance=c, ramp_len=L, half_width=shape.width_mm * MM / 2.0,
-                    end_x=end_x, end_z=end_z, cav_len=cav_len, cav_half_width=cv["width_mm"] * MM / 2.0,
+                    end_x=end_x, end_z=end_z, cav_len=cav_len, cav_half_width=cav_w / 2.0,
                     cav_height=cv["height_mm"] * MM, wall_t=cv["wall_mm"] * MM,
                     hinge_x=end_x + cav_len, hinge_z=end_z + cv["height_mm"] * MM)
 

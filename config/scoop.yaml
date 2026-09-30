@@ -59,7 +59,7 @@ motion:
   push_force_limit_n: 1.0           # BRIEF（ヘビの推進力相当。ASSUMED）
   ramp_up_s: 0.1                    # 速度指令の立ち上がり
   continue_during_close: true       # フタを閉じる間も前進を続ける（厳しい側）
-  settle_after_close_s: 0.2
+  settle_after_close_s: 2.0         # User 指示 2026-09-30: 閉じ終わりから 2 秒後まで見て「保持」を判定する
   travel_max_mm: 150.0              # 追跡の上限（先端の前進距離）
 
 placement:
@@ -105,11 +105,18 @@ ramp_sweep:
   tip_thickness_mm: [0.4, 0.6]      # スコップ μ は 0.3 固定（scoop.friction_object）
   width_mm: 30.0                    # 指示なし → 既定（30）。側壁なし（open）
 
-# 巻き込みくちばし（User 決定 2026-09-29: フタの形を奥ヒンジから変更。奥ヒンジは幾何的に物を奥へ押せない）
-# ヒンジ = ランプ先端の真上。開 = 腕が前へ水平、閉 = 前 → 下 → 奥へ 180° 回って奥向き水平。腕先は床すれすれを通る。
+# 巻き込みくちばし（User 決定 2026-09-29 / 依頼 2026-09-30: フタの形を奥ヒンジから変更。奥ヒンジは幾何的に物を奥へ押せない）
+# ヒンジ = ランプ先端の真上。開 = 腕が前へ水平、閉 = 前 → 下 → 奥へ 180° 回って奥向き水平。腕先は床上 tip_clearance_mm を通る（腕長 = ヒンジ高さ − 隙間）。
 beak:
   hinge_z_mm: [10.0, 12.0, 15.0]    # ASSUMED（12 が基準）
-  arm_mm: 11.0                      # BRIEF
-  tip_clearance_mm: 0.5             # BRIEF。ただしヒンジ 12・腕 11 だと実際の隙間は 1.0（= 12 − 11）。下の arm_variants で両方を見る
+  tip_clearance_mm: 0.5             # BRIEF
+  tip_mm: 0.6                       # 先端厚（依頼に指定なし → 0.6 に固定。0.4 は上位案の感度で見る）
+  ramp_mm: [5.0, 8.0, 10.0]
   close_time_s: [0.3, 0.6]
-  trigger: "contact:0"              # ASSUMED: 物がスコップに触れた瞬間に閉じ始める（先端の接触 / ToF が理想的に働いた場合）
+  width_side: [[30.0, false], [40.0, true]]   # (幅 mm, 側壁)。2 × 2 の全組合せは回数が増えるので 2 通りに絞り、残り 2 通りは上位案の感度で見る
+  cavity_width_follows_shape: true  # 空間の幅 = スコップの幅（腕はその幅いっぱい）
+  speeds_mm_s: [2.0, 10.0]          # 依頼 2026-09-30
+  stop_on_trigger: [true, false]    # true = 検出したら頭を止めてから閉じる / false = 前進しながら閉じる
+  trigger: "contact:0"              # ASSUMED: 物がスコップに触れた瞬間に閉じ始める（接触 / ToF が理想的に働いた場合）
+  torque_limit_nm: 0.05             # ASSUMED（SG90 の停動トルクは約 0.18 N·m とされるが未実測。感度で 0.02 / 0.18 も見る）
+  latch: true                       # 閉じ終わったら開かない（機械ラッチ。可動域を閉じ位置に絞ってモデル化）
