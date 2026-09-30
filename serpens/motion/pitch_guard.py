@@ -12,7 +12,7 @@
   - 上の 2 つは**機体側（`serpens/link/device_motion.py`、ファーム `serpens_esp32.ino`）でも行う**（PC の設定では緩められない）。PC 側（`LinkClient.head`）は先に同じ検査をして、
     範囲外はクランプして記録する（機体の NACK を減らす）。
 
-検証: このモジュールは SOFTWARE_VERIFIED（`tests/test_pitch_guard.py`）。**ファームの C++ は写しで、この環境ではコンパイルしていない（arduino-cli 無し）**。実機の動作は HARDWARE_UNVERIFIED。
+検証: このモジュールは SOFTWARE_VERIFIED（`tests/test_pitch_guard.py`）。ファームの C++ は写しで、`tools/build_firmware.py` でコンパイル成功（SOFTWARE_VERIFIED。ガード無効・有効の両方）。**書き込みはしていない。実機の動作は HARDWARE_UNVERIFIED**。
 """
 from __future__ import annotations
 

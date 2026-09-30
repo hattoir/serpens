@@ -1,7 +1,7 @@
 """Floor Watch の頭（J7）の範囲・速さの強制（R-009。`serpens/motion/pitch_guard.py`、機体側 `device_motion.py`、PC 側 `client.py`、ファーム `config.h` / `.ino`）。
 
 範囲 [−4°, +3°]・窓の端の手前 ≤ 40 °/s は **PROVISIONAL（シミュレーション・prior）**。既定はオフ（HT-001 の実機確認の後に有効化）。
-**ファームの C++ はこの環境ではコンパイルしていない**（arduino-cli 無し）。ここでは定数の一致と、フックの存在を文字列で確かめるだけ。
+ファームの C++ は `tools/build_firmware.py` でコンパイル成功（ガード無効・有効の両方。書き込みはしていない）。ここでは定数の一致と、フックの存在を文字列で確かめる。
 """
 from __future__ import annotations
 

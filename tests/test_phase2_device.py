@@ -197,7 +197,8 @@ def test_device_rejects_out_of_range_head(cfg: dict, label: str, bad: m.Head) ->
 
 
 def test_valid_head_moves_within_limits(cfg: dict) -> None:
-    """正しい HEAD は通り、可動範囲内で動く。期限切れでその場に止まる。"""
+    """正しい HEAD は通り、可動範囲内で動く。期限切れでその場に止まる。（Floor Watch の頭の範囲の強制は、ここでは切る = J7 60° の一般の頭の動作の試験）"""
+    cfg = {**cfg, "neck": {**cfg["neck"], "floor_watch_enforce": False}}
     h = LinkHarness(cfg)
     h.advance(0.2)
     h.client.arm(h.now)
