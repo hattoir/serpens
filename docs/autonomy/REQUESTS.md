@@ -22,4 +22,6 @@
 | R-014 | P1 | Engineering → Design | 頭 E3 統合版の質量・重心（Fusion の物理特性）と、殻の強度の荷重条件への回答（E-0012 (8)） | E-0012 / D-0011 | 依頼済み（Design の回答待ち） |
 | R-015 | P2 | Engineering → Design | +6〜+9° と −7.5°（覆いあり）の危険体積（補間の点。急がない）、ストッパーのパッド仕様（E 10 MPa 級・厚さ 4〜6 mm または板ばね） | E-0012 | 依頼済み |
 | R-016 | P1 | Engineering（自分） | B2 の記録（`ai-shared/b2_results/`）が来たら `tools/b2_compare.py` を回して比較を `simulation/results/b2_vs_sim.md` に出し、不一致の原因を DECISIONS に書く | E-0012 | 待機（印刷待ち） |
+| R-017 | P1 | Engineering → Design | フードが下がりきった 1 ビットの手段（スイッチ / ホール / スキッド接触）。ゲートを閉じる合図はその後。昇降の指令から 0.6 s で立たなければ保持・前進停止・記録 | E-0013 | 依頼済み（Design の回答待ち） |
+| R-018 | P2 | Engineering → Design | J1 サーボ箱の y 方向の寸法（STS3215 参照値 45.23 × 24.73 × 35。REF 箱 y ±18 と不一致）の確認 | E-0013 / R-004 | 依頼済み |
 
