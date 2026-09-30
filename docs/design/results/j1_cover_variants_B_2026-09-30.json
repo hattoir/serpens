@@ -1,0 +1,36 @@
+{
+ "cover": "B",
+ "volume_mm3": 600,
+ "poses": {
+  "p20": {
+   "theta_E": -4,
+   "hazard_with_cover": 23,
+   "cover_head_overlap_mm3": 0.0
+  },
+  "p15": {
+   "theta_E": -3,
+   "hazard_with_cover": 6,
+   "cover_head_overlap_mm3": 0.0
+  },
+  "p14": {
+   "theta_E": -2,
+   "hazard_with_cover": 6,
+   "cover_head_overlap_mm3": 0.0
+  },
+  "p16": {
+   "theta_E": -5,
+   "hazard_with_cover": 29,
+   "cover_head_overlap_mm3": 0.0
+  },
+  "p0": {
+   "theta_E": 0,
+   "hazard_with_cover": 2,
+   "cover_head_overlap_mm3": 0.0
+  },
+  "p21": {
+   "theta_E": 4,
+   "hazard_with_cover": 151,
+   "cover_head_overlap_mm3": 0.0
+  }
+ }
+}

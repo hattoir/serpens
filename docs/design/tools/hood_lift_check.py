@@ -124,7 +124,7 @@ def main():
     boxes = {k: box_mask(b) for k, b in SENS.items()}
     res = {"stroke": {}}
     _, base_mat, base_env = hood_masks(xs, ys, zs, 0.0)
-    for s in (0, 3, 5, 8, 10):
+    for s in (0, 3, 4, 5, 8, 10):
         L = 20.0                                   # 平行リンクの長さ（仮）: 上下 dz = s、前後 dx = L(1-cosφ) を後ろへ
         dx = L * (1 - math.sqrt(1 - (s / L) ** 2)) if s else 0.0
         sweep = np.zeros_like(base_env)
