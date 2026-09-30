@@ -80,6 +80,19 @@ mass_budget_g:
   neck_lifted_mass: 200         # J7 が持ち上げる質量
   neck_lifted_cog_mm: 104       # J7 から重心までの距離
 
+# 質量の追加（Design の見積もり、ENTRY-D-0005 / `docs/design/mass_addendum_2026-09-30.md`。**PROPOSED。収支 mass_budget_g には含めていない**:
+# テスト・MuJoCo は mass_budget_g の合計（1000 g）を使う。確定して収支へ入れるときに、合計・上の body.mass_g・テストを一緒に直す）。
+# 質量の上限 safety_limits.mass_total_g_max（1700 g）との比は tests/test_flank_v.py で確認する。
+mass_additions_g:
+  status: PROPOSED
+  source: "Design ENTRY-D-0005（CAD のボクセルから計算。中空は殻 1.2 mm の上限の見積もり）。実測なし"
+  knuckle_drum_solid_max: {J2: 13.7, J3: 14.2, J4: 16.6, J5: 16.6, total: 61.1}
+  knuckle_drum_hollow_shell_1p2mm_max: {J2: 11.0, J3: 14.0, J4: 15.4, J5: 15.4, total: 55.8}
+  head_lower_rear_fill_solid: 1.8
+  # 頭に足す取り込み機構（フードなど）の質量。中空を前提にする（中実は J7 のトルクと重心が悪化する）。ASSUMED
+  intake_head_hollow_assumed: [10.0, 19.0]
+  intake_head_solid: [55.0, 65.0]
+
 # ArUco マーカ（DICT_4X4_50, 50mm）。位置は尾端からの距離（胴体に沿って）
 # 首マーカは J7 より胴体側（J6-J7 リンク上）。J7 より先だと鎌首でマーカが傾いて検出できない
 # 台座: 60×60×厚さ3mm の平板（50mm マーカ + 周囲 5mm 余白）。外皮の上に載せる着脱式（マジックテープ/薄型磁石）

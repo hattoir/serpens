@@ -82,3 +82,35 @@ def test_hollow_added_mass_keeps_the_head_com_close_to_j1() -> None:
     lever_s, tau_s, _ = m.with_added_mass(65.0, 80.0)
     assert lever_h < 35.0 and tau_h < 0.04 and lever_s > 40.0 and tau_s > tau_h
     assert tau_s < m.SOFT_CAP_NM
+
+
+def test_j7_static_torque_uses_the_robot_yaml_lifted_mass_not_the_design_head_only_value() -> None:
+    """訂正: J7 が持ち上げる質量 200 g・重心 104 mm → 静的 0.204 N·m（ソフトの上限の 45%）。Design の頭だけの 0.020 N·m ではない。
+    中空 10〜19 g を足しても上限内（〜53%）、中実 55〜65 g は 60% を超える。暫定値であり安全の確定ではない。"""
+    m = _j1_head()
+    t0, lever = m.lifted_torque_nm()
+    assert t0 == pytest.approx(0.204, abs=0.002) and lever == pytest.approx(104.0)
+    assert t0 / m.SOFT_CAP_NM == pytest.approx(0.45, abs=0.01)
+    t_h, _ = m.lifted_torque_nm(19.0, 180.0)
+    t_s, _ = m.lifted_torque_nm(65.0, 180.0)
+    assert t_h / m.SOFT_CAP_NM < 0.55 and t_s / m.SOFT_CAP_NM > 0.60 and t_s < m.SOFT_CAP_NM
+
+
+def test_mass_additions_stay_within_the_total_mass_limit_and_outside_the_budget() -> None:
+    """質量の追加（PROPOSED）は収支 mass_budget_g に含めない。全部足しても mass_total_g_max（1700 g）以内。"""
+    import yaml
+    cfg = yaml.safe_load((ROOT / "config" / "robot.yaml").read_text(encoding="utf-8"))
+    b, add = cfg["mass_budget_g"], cfg["mass_additions_g"]
+    assert add["status"] == "PROPOSED" and "knuckle_drum_solid_max" not in b
+    base = b["servo_each"] * b["servo_count"] + b["segment_frame_each"] * b["segment_frame_count"] + b["passive_wheels_total"] + b["head_total"] + b["skin_and_wiring"]
+    worst = base + add["knuckle_drum_solid_max"]["total"] + add["head_lower_rear_fill_solid"] + add["intake_head_solid"][1]
+    assert add["knuckle_drum_solid_max"]["total"] == pytest.approx(61.1) and add["knuckle_drum_hollow_shell_1p2mm_max"]["total"] == pytest.approx(55.8)
+    assert worst <= cfg["safety_limits"]["mass_total_g_max"] and 61.1 / cfg["safety_limits"]["mass_total_g_max"] == pytest.approx(0.036, abs=0.001)
+
+
+def test_curtain_edge_pressure_limits_the_force_before_the_force_threshold_does() -> None:
+    """受け身の垂れ布: 力 1 N は手・指 5.7 N の 1/5.7 だが、縁 0.4 mm では圧力が暫定の限界（8.2 N/cm²）の手前（0.98 N）。3 mN 以下なら限界の 1/40 以下。"""
+    assert flank_v.pressure_limit_n_cm2() == pytest.approx(8.2)
+    assert flank_v.allowed_curtain_force_n(0.4) == pytest.approx(0.984, abs=0.001) and flank_v.allowed_curtain_force_n(0.05) == pytest.approx(0.123, abs=0.001)
+    assert flank_v.edge_pressure_n_cm2(1.0, 0.4) > flank_v.pressure_limit_n_cm2()
+    assert flank_v.edge_pressure_n_cm2(0.003, 0.05) < flank_v.pressure_limit_n_cm2() / 40

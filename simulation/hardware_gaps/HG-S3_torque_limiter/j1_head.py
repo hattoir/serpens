@@ -62,6 +62,20 @@ def with_added_mass(m_add_g: float, d_add_mm: float) -> tuple[float, float, floa
     return lever, tau, tau / SOFT_CAP_NM
 
 
+def robot_cfg() -> dict:
+    return yaml.safe_load((GAPS.parents[1] / "config" / "robot.yaml").read_text(encoding="utf-8"))
+
+
+def lifted_torque_nm(m_add_g: float = 0.0, d_add_mm: float = 0.0) -> tuple[float, float]:
+    """J7（首のピッチ。Design の J1）が持ち上げる質量による静的トルク（config/robot.yaml の neck_lifted_mass 200 g、重心 104 mm）。
+    m_add を J7 から d_add の位置に足したときの (トルク [N·m]、重心の距離 [mm])。"""
+    b = robot_cfg()["mass_budget_g"]
+    m0, d0 = float(b["neck_lifted_mass"]), float(b["neck_lifted_cog_mm"])
+    m = m0 + m_add_g
+    lever = (m0 * d0 + m_add_g * d_add_mm) / m
+    return m / 1000.0 * G * lever / 1000.0, lever
+
+
 def hood_pitch_tolerance_deg(lever_mm: float, thickness_mm: float, clearance_mm: float = 0.1) -> float:
     """頭を上げたとき、口の前縁が床から thickness を超えないための J1 の上げ角の上限 [°]（前縁が J1 から lever だけ前）。"""
     return math.degrees(math.asin((thickness_mm - clearance_mm) / lever_mm))
@@ -119,6 +133,38 @@ def main() -> None:
     A(f"\n読み: **中空 10〜19 g なら、J1 の静的トルクは最大でも {t1:.3f} N·m（ソフトの上限の {100 * f1:.0f}%）、重心は J1 から {l1:.1f} mm（現行 {com_lever_mm():.1f}）**。"
       f"**中実 55〜65 g だと最大 {t2:.3f} N·m（{100 * f2:.0f}%）、重心は {l2:.1f} mm まで前へ寄る**。どちらもソフトの上限（0.45 N·m）に対して余裕はあるが、"
       "重心が前へ寄るほど、頭を持ち上げる姿勢・人に引かれたとき・頭スキッドで体を支えるときの J1 負荷は増える（動的・引く力は未計算）。**中空前提を推奨**（重心のずれが小さい）。中空の強度・壁の厚みは Design の確認待ち。\n")
+    # ---- 4. robot.yaml の持ち上げ質量での J7 のトルク（3 の訂正）----
+    t0, l0 = lifted_torque_nm()
+    A("## 4. 訂正: robot.yaml の持ち上げ質量（J7）での静的トルクと、質量の合計\n")
+    A(f"**§3 の「J1 静的 0.020 N·m（上限の 4%）」は、Design の design-state の値（頭 93 g の頭だけ）で、`config/robot.yaml` の値と食い違っていた。** Engineering の設定では、J7（首のピッチ = Design の J1）が持ち上げる質量は "
+      f"`neck_lifted_mass` {robot_cfg()['mass_budget_g']['neck_lifted_mass']} g、重心 {robot_cfg()['mass_budget_g']['neck_lifted_cog_mm']} mm で、**静的トルクは {t0:.3f} N·m（ソフトの上限 0.45 N·m の {100 * t0 / SOFT_CAP_NM:.0f}%）**（`docs/safety_limits.md` の 0.20 N·m と同じ）。"
+      "以下は、こちらを基準に取り込み機構の質量を足した表（足す位置 = J7 から頭の先の側、**ASSUMED**）。\n")
+    A("| 足す質量 | 足す位置 [mm] | 重心 J7 からの距離 [mm] | J7 の静的トルク [N·m] | ソフトの上限に対する割合 |\n|---|---|---|---|---|")
+    A(f"| なし（現行） | — | {l0:.1f} | {t0:.3f} | {100 * t0 / SOFT_CAP_NM:.0f}% |")
+    for label, m in (("中空 10 g", 10.0), ("中空 19 g", 19.0), ("中実 55 g", 55.0), ("中実 65 g", 65.0)):
+        for d in (120.0, 150.0, 180.0):
+            t, lv = lifted_torque_nm(m, d)
+            A(f"| {label} | {d:g} | {lv:.1f} | {t:.3f} | {100 * t / SOFT_CAP_NM:.0f}% |")
+    th, _ = lifted_torque_nm(19.0, 180.0)
+    ts, _ = lifted_torque_nm(65.0, 180.0)
+    A(f"\n読み: **中空 10〜19 g なら J7 は最大 {th:.3f} N·m（上限の {100 * th / SOFT_CAP_NM:.0f}%）、中実 55〜65 g だと最大 {ts:.3f} N·m（{100 * ts / SOFT_CAP_NM:.0f}%）**。"
+      "首を持ち上げる加減速・人に引かれる力の余裕は、基準（45%）の時点でもう小さく、中実は 6〜7 割に近づく。**中空前提を推奨（変わらず）**。§3 の割合（5〜16%）は、頭だけの値なので、J7 全体の評価には使わない。\n")
+    add = robot_cfg()["mass_additions_g"]
+    b = robot_cfg()["mass_budget_g"]
+    base = (b["servo_each"] * b["servo_count"] + b["segment_frame_each"] * b["segment_frame_count"] + b["passive_wheels_total"] + b["head_total"] + b["skin_and_wiring"])
+    cap = float(robot_cfg()["safety_limits"]["mass_total_g_max"])
+    kd_s, kd_h = add["knuckle_drum_solid_max"]["total"], add["knuckle_drum_hollow_shell_1p2mm_max"]["total"]
+    fill = add["head_lower_rear_fill_solid"]
+    lo_h, hi_h = add["intake_head_hollow_assumed"]
+    lo_s, hi_s = add["intake_head_solid"]
+    A("### 質量の合計（`mass_total_g_max` 1700 g との比）\n")
+    A("収支 `mass_budget_g` は 1000 g（バッテリ無しのテザー機、仮定値）。追加は `mass_additions_g`（PROPOSED。収支には含めない）。KNUCKLE DRUM は J2〜J5（J7 より尾側）なので、**J7 が持ち上げる質量には加わらない**（総質量と胴の慣性に効く）。\n")
+    A("| 構成 | 追加 [g] | 合計 [g] | 1700 g に対する割合 |\n|---|---|---|---|")
+    A(f"| 収支（現行） | 0 | {base:g} | {100 * base / cap:.1f}% |")
+    A(f"| + KNUCKLE DRUM 中空（上限 {kd_h} g） + 下の埋め物 {fill} g + 取り込み中空 {lo_h:g}〜{hi_h:g} g | {kd_h + fill + lo_h:.1f}〜{kd_h + fill + hi_h:.1f} | {base + kd_h + fill + lo_h:.1f}〜{base + kd_h + fill + hi_h:.1f} | {100 * (base + kd_h + fill + lo_h) / cap:.1f}〜{100 * (base + kd_h + fill + hi_h) / cap:.1f}% |")
+    A(f"| + KNUCKLE DRUM 中実（最大 {kd_s} g） + 埋め物 {fill} g + 取り込み中実 {lo_s:g}〜{hi_s:g} g | {kd_s + fill + lo_s:.1f}〜{kd_s + fill + hi_s:.1f} | {base + kd_s + fill + lo_s:.1f}〜{base + kd_s + fill + hi_s:.1f} | {100 * (base + kd_s + fill + lo_s) / cap:.1f}〜{100 * (base + kd_s + fill + hi_s) / cap:.1f}% |")
+    A(f"\nKNUCKLE DRUM だけでは 1700 g の {100 * kd_s / cap:.1f}%（中実）/ {100 * kd_h / cap:.1f}%（中空）。**どの構成でも 1700 g の上限内**。")
+    A("上限内でも、質量の増加は歩容の慣性・床との摩擦・人の手の持ち上げ負荷に効く（HG-H0 / H1 の再評価が要る。未実施）。実測で置き換える（ASSUMED / PROPOSED）。\n")
     (HERE / "j1_head.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     print("\n".join(L))
 

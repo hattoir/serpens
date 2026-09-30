@@ -67,6 +67,22 @@ def radial_mm(s_mm: float) -> float:
     return math.hypot(R_FLANK_MM, s_mm)
 
 
+def pressure_limit_n_cm2() -> float:
+    y = yaml.safe_load((GAPS / "safety_thresholds.yaml").read_text(encoding="utf-8"))
+    return float(y["pressure_limit_n_per_cm2"]["baseline"])
+
+
+def edge_pressure_n_cm2(force_n_: float, edge_t_mm: float, width_mm: float = 30.0) -> float:
+    """受け身の垂れ布の下端（薄い板の縁）が指に当たるときの圧力 = 力 / (縁の厚み × 幅)。平らな縁が指に線で当たる最悪の見積もり。"""
+    area_cm2 = (edge_t_mm / 10.0) * (width_mm / 10.0)
+    return force_n_ / area_cm2
+
+
+def allowed_curtain_force_n(edge_t_mm: float, width_mm: float = 30.0) -> float:
+    """暫定の圧力限界（8.2 N/cm²）を超えない、縁が指に掛けてよい力。"""
+    return pressure_limit_n_cm2() * (edge_t_mm / 10.0) * (width_mm / 10.0)
+
+
 def main() -> None:
     th = thresholds()
     L: list[str] = []
@@ -131,6 +147,25 @@ def main() -> None:
     A("- 関節 J2〜J5 それぞれ・曲げの角度（9°〜52°）ごとに、**幅 5〜12.5 mm を通る位置の、関節軸からの距離 r と、脇の面の接線点からの距離 s**（動径と腕の両方）。")
     A("- V を作る 2 つの面のうち、どちらが動く面か（脇の直線 / 同心ナックルの円）。")
     A("- 柔らかいカバー（FLANK SKIRT STUDY）の中の挟み込み（蛇腹の内側）の隙間と、カバーの押し込みの力。\n")
+    # ---- E. 受け身の垂れ布のゲートの挟み込みの目安 ----
+    thr, plim = th["hand_finger"], pressure_limit_n_cm2()
+    A("## E. 受け身の TPU 垂れ布のゲートの挟み込みの目安（取り込み機構。`simulation/results/scoop_forms_2026-09-30.md` §8・§12.2）\n")
+    A(f"**PROVISIONAL / SAFETY_UNVERIFIED。** 垂れ布は駆動なし。力は**ばねの閉じる力 F**で頭打ちになる（F = 0.01〜1 N。**ASSUMED**。シミュレーションでは 0.1〜1 N では入らず、成立するのは 3 mN 以下）。"
+      f"暫定しきい値は手・指 {thr} N、圧力 {plim} N/cm²（PROVISIONAL）。TPU の薄板（Design の試験片 B は 0.4〜0.6 mm）の**縁の厚み**が、指に線で当たる面積（縁の厚み × 幅 30 mm）を決める。\n")
+    A("| 縁の厚み [mm] | 圧力限界を超えない力 [N] | F = 0.01 N | 0.03 N | 0.1 N | 0.3 N | 1 N |\n|---|---|---|---|---|---|---|")
+    for t in (0.05, 0.2, 0.4, 0.6):
+        cells = []
+        for F in (0.01, 0.03, 0.1, 0.3, 1.0):
+            pr = edge_pressure_n_cm2(F, t)
+            cells.append(f"{pr:.1f}" + ("" if pr <= plim else " ×"))
+        A(f"| {t:g} | {allowed_curtain_force_n(t):.2f} | " + " | ".join(cells) + " |")
+    A(f"\n（表の値は圧力 [N/cm²]。{plim} を超えるものは ×。）\n")
+    A(f"- **力**: F ≤ 1 N は、手・指の {thr} N の 1/5.7 以下（余裕 4.7 N 以上）。垂れ布の力だけで暫定しきい値を超えることはない。")
+    A(f"- **圧力**: 縁が薄いと、力が小さくても圧力が先に暫定の限界を超える。**縁 0.4 mm（試験片 B）で 1 N が限界（{allowed_curtain_force_n(0.4):.2f} N）**、縁 0.05 mm の極薄では 0.12 N まで。"
+      "シミュレーションで成立する F ≤ 3 mN なら、どの厚みでも圧力は限界の 1/40 以下（縁 0.05 mm でも 0.2 N/cm²）。**縁は丸める（半径 0.5 mm 以上）と、面積が増えて圧力が下がる**（未検証）。")
+    A("- **隙間の帯（User の目安: 5 mm 未満 または 25 mm 以上）**: 閉じた位置の垂れ布と床のすき間は 0.1〜1 mm、壁との隙間は 0（幅を壁から壁までとる）で、**5 mm 未満を満たす**。"
+      "開く途中で、垂れ布と屋根・壁のあいだにできるくさび（垂れ布の長さ 15 mm、開き 0°〜90°）は、垂れ布の先端と屋根のあいだが 15 → 0 mm で、**5〜25 mm の帯を通る（開き 0°〜70° の間）**。これは避けられないので、**力（≤ 1 N）と圧力（縁の厚み）で守る**。短い垂れ布（8 mm）でも、5 mm 以上のくさびは通る（幾何は Design の確認待ち）。")
+    A("- **限界**: 垂れ布は TPU で伸び・たわむ。指が垂れ布の裏に入ったときの力・圧力の実測が要る。**5.7 N・8.2 N/cm² は暫定値で、安全の確定として扱わない**。\n")
     (HERE / "flank_v.md").write_text("\n".join(L) + "\n", encoding="utf-8")
     (HERE / "results").mkdir(exist_ok=True)
     with open(HERE / "results" / "flank_v_wedge.csv", "w", newline="", encoding="utf-8") as f:
