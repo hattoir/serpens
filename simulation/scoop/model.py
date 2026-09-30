@@ -41,10 +41,18 @@ class Shape:
     alpha_deg: float
     side_wall: bool
     width_mm: float
+    ramp_mm: float | None = None      # 斜面に沿った傾斜板の長さ。None = config の scoop.depth_along_slope_mm（30）
 
     @property
     def key(self) -> str:
-        return f"t{self.tip_mm:g}_a{self.alpha_deg:g}_{'cup' if self.side_wall else 'open'}_w{self.width_mm:g}"
+        base = f"t{self.tip_mm:g}_a{self.alpha_deg:g}_{'cup' if self.side_wall else 'open'}_w{self.width_mm:g}"
+        return base if self.ramp_mm is None else f"{base}_r{self.ramp_mm:g}"
+
+
+def short_ramp_shapes(cfg: dict[str, Any]) -> list[Shape]:
+    """短ランプの掃引（config の ramp_sweep）: 先端厚 × ランプ長（斜め角は固定）。空間はランプ終端から始まる。"""
+    r = cfg["ramp_sweep"]
+    return [Shape(t, r["alpha_deg"], False, r["width_mm"], L) for t in r["tip_thickness_mm"] for L in r["ramp_mm"]]
 
 
 def all_shapes(cfg: dict[str, Any]) -> list[Shape]:
@@ -85,6 +93,9 @@ class ModelSpec:
     geom: Geometry
     obj_half_height: float
     obj_radius: float
+    lid_length: float = 0.0
+    lid_open_rad: float = 0.0
+    lid_closed_rad: float = 0.0
     version: str = MODEL_VERSION
 
 
@@ -92,7 +103,7 @@ def geometry_of(cfg: dict[str, Any], shape: Shape, clearance_mm: float | None = 
     a = math.radians(shape.alpha_deg)
     t = shape.tip_mm * MM
     c = (cfg["scoop"]["tip_clearance_mm"] if clearance_mm is None else clearance_mm) * MM
-    L = cfg["scoop"]["depth_along_slope_mm"] * MM
+    L = (cfg["scoop"]["depth_along_slope_mm"] if shape.ramp_mm is None else shape.ramp_mm) * MM
     cv = cfg["cavity"]
     end_x = L * math.cos(a) - t * math.sin(a)
     end_z = c + L * math.sin(a) + t * math.cos(a)
@@ -119,7 +130,8 @@ def _prism(name: str, pts_xz: list[tuple[float, float]], y0: float, y1: float) -
 def build_mjcf(cfg: dict[str, Any], shape: Shape, obj_name: str, floor_name: str, *,
                clearance_mm: float | None = None, scoop_mu: float | None = None, lid_mu: float | None = None,
                rolling_scale: float = 1.0, numerics: dict[str, Any] | None = None,
-               rim_fillet_mm: float | None = None, front_face: str | None = None) -> ModelSpec:
+               rim_fillet_mm: float | None = None, front_face: str | None = None,
+               lid_front_ahead_mm: float | None = None, beak: tuple[float, float] | None = None) -> ModelSpec:
     """1 つの（形 × 対象物 × 床）の MJCF。物の初期位置は qpos で与える（モデルは使い回せる）。"""
     g = geometry_of(cfg, shape, clearance_mm)
     sim = {**cfg["sim"], **(numerics or {})}
@@ -184,7 +196,21 @@ def build_mjcf(cfg: dict[str, Any], shape: Shape, obj_name: str, floor_name: str
     lid_tq = float(lid["torque_limit_nm"])
     lid_open = math.radians(float(lid["open_deg"]))
     lid_mass = float(lid["mass_g"]) / 1000.0
-    lid_i = max(lid_mass * cl * cl / 3.0, 1e-9)
+    # フタの長さ ell。既定は空間の長さ。lid_front_ahead_mm を渡すと、開き（open_deg）のときフタの前縁が
+    # 傾斜板の先端より その分だけ前（−x）に出る長さ: ell = (ヒンジの x + ahead) / cos(open)
+    ell = cl if lid_front_ahead_mm is None else (g.hinge_x + lid_front_ahead_mm * MM) / math.cos(lid_open)
+    lid_i = max(lid_mass * ell * ell / 3.0, 1e-9)
+    # フタの種類。既定 = 奥ヒンジ（User の最初の指定。幾何的に物を奥へ押せないことを確認済み）。
+    # beak = (ヒンジの床からの高さ mm, 腕の長さ mm) を渡すと「巻き込みくちばし」（User 決定 2026-09-29）:
+    #   ヒンジ = ランプ先端（x = 0）の真上。関節角 q = 0 で腕が前（−x）へ水平、q = 90° で真下、q = 180° で奥（+x）向き水平（閉）。
+    if beak is None:
+        lid_pos, lid_axis, lid_rng = (g.hinge_x, g.hinge_z), "0 1 0", f"0 {lid['open_deg']:.6g}"
+        lid_hw, lid_gz, q_open, q_closed = cw + wallc, tl / 2, lid_open, 0.0
+    else:
+        ell = beak[1] * MM
+        lid_i = max(lid_mass * ell * ell / 3.0, 1e-9)
+        lid_pos, lid_axis, lid_rng = (0.0, beak[0] * MM), "0 -1 0", "0 180"
+        lid_hw, lid_gz, q_open, q_closed = cw, 0.0, 0.0, math.pi   # 腕の幅 = 空間の内幅（ASSUMED）。ヒンジは物の通り道の外の側板で支える想定（モデルには入れない）
     head_m = float(hd["mass_g"]) / 1000.0
     cone = "elliptic" if sim.get("cone", "elliptic") == "elliptic" else "pyramidal"
     xml = f"""<mujoco model="scoop_{shape.key}_{obj_name}_{floor_name}">
@@ -207,10 +233,10 @@ def build_mjcf(cfg: dict[str, Any], shape: Shape, obj_name: str, floor_name: str
       <geom name="cav_wr" type="box" size="{_f(cl / 2)} {_f(wallc / 2)} {_f(hh)}" pos="{_f(g.end_x + cl / 2)} {_f(-cw - wallc / 2)} {_f(zwall)}" {common}/>
       <geom name="cav_back" type="box" size="{_f(wallc / 2)} {_f(cw + wallc)} {_f(hh)}" pos="{_f(g.end_x + cl + wallc / 2)} 0 {_f(zwall)}" {common}/>
       {chr(10).join('      ' + s for s in geoms).strip()}
-      <body name="lid" pos="{_f(g.hinge_x)} 0 {_f(g.hinge_z)}">
-        <joint name="hinge" type="hinge" axis="0 1 0" range="0 {lid['open_deg']:.6g}" damping="0" armature="{lid_i:.6g}"/>
-        <inertial pos="{_f(-cl / 2)} 0 0" mass="{lid_mass:.6g}" diaginertia="{lid_i:.6g} {lid_i:.6g} {lid_i:.6g}"/>
-        <geom name="lid_plate" type="box" size="{_f(cl / 2)} {_f(cw + wallc)} {_f(tl / 2)}" pos="{_f(-cl / 2)} 0 {_f(tl / 2)}" {common}/>
+      <body name="lid" pos="{_f(lid_pos[0])} 0 {_f(lid_pos[1])}">
+        <joint name="hinge" type="hinge" axis="{lid_axis}" range="{lid_rng}" damping="0" armature="{lid_i:.6g}"/>
+        <inertial pos="{_f(-ell / 2)} 0 0" mass="{lid_mass:.6g}" diaginertia="{lid_i:.6g} {lid_i:.6g} {lid_i:.6g}"/>
+        <geom name="lid_plate" type="box" size="{_f(ell / 2)} {_f(lid_hw)} {_f(tl / 2)}" pos="{_f(-ell / 2)} 0 {_f(lid_gz)}" {common}/>
       </body>
     </body>
     <body name="obj" pos="-0.1 0 {_f(z0)}">
@@ -227,7 +253,8 @@ def build_mjcf(cfg: dict[str, Any], shape: Shape, obj_name: str, floor_name: str
   </actuator>
 </mujoco>
 """
-    return ModelSpec(xml=xml, geom=g, obj_half_height=half_h, obj_radius=radius)
+    return ModelSpec(xml=xml, geom=g, obj_half_height=half_h, obj_radius=radius, lid_length=ell,
+                     lid_open_rad=q_open, lid_closed_rad=q_closed)
 
 
 def rounded_disc_vertices(radius: float, half_h: float, fillet: float, n_ang: int = 32, n_arc: int = 5) -> list[float]:
