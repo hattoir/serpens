@@ -69,3 +69,15 @@ def test_recommendation_is_minus_4_to_plus_3_and_a_steel_pin_is_needed(o) -> Non
     thin = o.stopper_mc(n=3000, omega=120.0, tpu=True, material="steel", e_mpa=3.0, t_mm=1.0)
     thick = o.stopper_mc(n=3000, omega=120.0, tpu=True, material="steel", e_mpa=3.0, t_mm=6.0)
     assert thick["impact_p95"] < 0.6 * thin["impact_p95"]            # 薄い（1 mm）TPU パッドは硬く、厚さ 6 mm で衝撃が減る
+
+
+def test_floor_watch_range_config_matches_the_optimization_and_keeps_the_existing_j7_limits(o) -> None:
+    import yaml
+    cfg = yaml.safe_load(open(ROOT / "config" / "robot.yaml", encoding="utf-8"))
+    n = cfg["neck"]
+    lo, hi = n["floor_watch_stop_deg"]
+    assert (lo, hi) == (-4.0, 3.0)
+    assert lo <= n["floor_watch_soft_deg"][0] < n["floor_watch_soft_deg"][1] <= hi          # 作業窓は範囲の内側
+    assert n["floor_watch_near_limit_speed_dps"] <= o.speed_cap_dps(hi, "hi", o.control_margin_deg()["max"]) + 3.0
+    j7 = next(j for j in cfg["joints"] if j["name"] == "J7")
+    assert (j7["min_deg"], j7["max_deg"]) == (-8.0, 90.0)                                     # 既存の J7 の範囲は変えていない

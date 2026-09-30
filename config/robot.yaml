@@ -67,6 +67,11 @@ neck:
   look_max_deg: 65.0        # 人を見るときの J7 上限（これ以上倒すと J8 が世界座標で roll になる）
   full_rear_min_deg: 85.0   # 「真上から見下ろすフル鎌首」演出専用の範囲
   full_rear_max_deg: 90.0
+  # Floor Watch の頭（J1 = J7）の作業モードごとの範囲。**PROVISIONAL / 実機で未確認**（`simulation/results/j1_range_opt_2026-09-30.md`、agent/DECISIONS.md 2026-09-30）。
+  # 符号は + = 頭を上げる（実機の確認は ai-shared/HARDWARE_TODO.md HT-001）。既存の J7 の min_deg / max_deg（−8 / 90）は変えない。強制する配線は未実装（REQUESTS R-009）。
+  floor_watch_soft_deg: [-2.0, 1.0]        # 作業窓（Design の提案。すき間 ≤ 40 mm³）
+  floor_watch_stop_deg: [-4.0, 3.0]        # 機械ストッパー（上の輪の覆いあり。覆いなしは下限 −4° で危険体積 約 5 倍）
+  floor_watch_near_limit_speed_dps: 40.0   # 窓の端の手前 2° の区間の速さの上限（余裕 2° − 位置の誤差 1.09° から、減速度 1000 °/s² で減速できる速さ）
 
 # 質量配分（仮定値。実測したら差し替える）
 mass_budget_g:
