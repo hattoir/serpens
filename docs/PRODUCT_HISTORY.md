@@ -25,7 +25,8 @@
 | 頭 E3 | Design の統合版 v2（かわいいデフォルメ）を Fusion に保存。あご −32.7%。**質量は殻でも 137〜234 g で、予算 90 g を超える**（CAD_CONCEPT、Design の課題）|
 | 取り込み機構 | 開放底フード + 漏斗 + ゲート + フード昇降（s = 4 mm、TPU 板ばね耳、上げる力 約 1.2 N（prior））。段差 t ≥ 0.002 mm で 0%（シミュ）。**実物の観察（B2）は印刷待ち** |
 | 試験片・印刷 | `docs/design/print_all/`（P0 B2 → P1 TPU クーポン・ダウエル → P2 覆い・肉球 → P3 KNUCKLE）。**印刷は未実施** |
-| 待ち | 印刷・実機: HT-001 / 007 / 008 / 009 / 012 / 013。Engineering: 頭の質量予算の扱い。User: 印刷と買うものの承認 |
+| 頭のセンサー基板（試作、T4/T6 用） | KiCad の `serpens/head-sensor-board/`（別 git、`github.com/hattoir/head-sensor-board`（private））。**Stage 3（外形 40×25 mm と部品配置、commit 756b482。DRC は未配線以外 0 件、40×25 が下限で余裕ゼロ）まで。配線・ガーバーは未着手（ToF 小基板のピン配置が未確認）**。3V3 だけでは NSSW157T は 80 mA 時の約 30 %（8.5〜38.8 mA）（計算、ENTRY-K-0001）。運用: 3V3 で Wi-Fi 送信・撮影・LED 100 %・ToF ピークを同時にしない（ENTRY-K-0002）|
+| 待ち | 印刷・実機: HT-001 / 007 / 008 / 009 / 012 / 013。Engineering: 頭の質量予算の扱い、ENTRY-K-0001・K-0002（R-020）。User: 印刷と買うものの承認、ToF 小基板の現物のピン配置 |
 
 ## 2. 年表（日ごと）
 
@@ -143,6 +144,7 @@ Fusion: `Serpens_DESIGN_SD01_BEAN_KNUCKLE_RECOVERY_20260929`（元の CONCEPT �
 | あごの実体 | 166,295 mm³ → v1 109,844（−34%）→ v2 111,914（−32.7%）|
 | トルク | 0.45 N·m 上限（C044 の資料値）、レジスタ比 0.287 → 0.167、J3〜J5 許容 約 0.25 N·m（OPEN）、J7 静的 0.204 N·m（訂正）。**5.7 N・0.25 N·m は暫定** |
 | テスト | 463 passed（09-29 の CLAUDE.md）→ 563 passed / 1 skipped（vision-sim、09-29）|
+| 頭のセンサー基板の LED 電流（NSSW157T 1 個、最小/公称/最大）| 3V3・20 Ω: 8.5 / 23.7 / 38.8 mA（Stage 1、Rds(on) 0.05 Ω 仮定）→ **8.5 / 23.6 / 38.8 mA**（Stage 2、Si2302CDS の最大 0.075 Ω）= 80 mA 時の光量の 11 / 30 / 49 %。5V・33 Ω 2010: 45 / 59 / 73 mA（74 %）。3V3 の外部負荷 最大 158 mA。**計算（SIMULATION / ASSUMED を含む）**、ENTRY-K-0001 |
 
 ## 7. 訂正・撤回の記録（間違えたことと直し方）
 
@@ -162,6 +164,12 @@ Fusion: `Serpens_DESIGN_SD01_BEAN_KNUCKLE_RECOVERY_20260929`（元の CONCEPT �
 | 09-30 | Engineering 回答を Design が「確定」と書いた（D-0007/D-0008）| 「Design の見積もり（Engineering 未検証）」に位置づけ直し |
 | 09-30 | REQUESTS の行の壊れ（`\1` の制御文字）、番号の重複 | 直した（統合した）|
 | 09-29 | ENTRY 番号の重複（0004 / 0005 / 0013 / 0023 …）| ENTRY-D-xxxx / ENTRY-E-xxxx の付け方へ（ENTRY-0022、D-0001、E-0001）|
+| 09-30 | Engineering の「+3° で体積が 13.7 倍に跳ねる（膝）」 | Design の +4° = 151 mm³ で訂正。膝ではなく拘束で決める（E-0011 → E-0012）|
+| 09-30 | Engineering: 床接触モデルの遅れの符号、ENC_MOTOR は負荷信号が要る、モンテカルロ表 | 符号修正、負荷信号を要件化、信頼できない表を削除（H1 `j1_floor_contact`）|
+| 09-30 | Engineering: J7 の静的トルク 0.020 N·m | 0.204 N·m（robot.yaml の持ち上げ質量から）（E-0007）|
+| 09-30 | Engineering: 「ファームのコンパイルは未確認」と書いた | arduino-cli で成功（ガード OFF/ON とも）。ENTRY / docs を訂正（E-0013）|
+| 09-30 | 幅広 J7 のテストが強制オン化と競合 | `neck.floor_watch_enforce` False でピン留め（他の 1 件は全件通過）|
+| 09-29 | 合成画像の採点が原因の誤検出を検出器の不具合と見た | 「回帰テストは修正なしで落ちることを確認する／まず合成の採点を疑う」を lessons に |
 
 ## 8. 成果物の地図（主なもの）
 
@@ -182,3 +190,36 @@ Fusion: `Serpens_DESIGN_SD01_BEAN_KNUCKLE_RECOVERY_20260929`（元の CONCEPT �
 - 待ち: 印刷・実機（HT-001 / 007 / 008 / 009 / 012 / 013）。
 
 （ここから下に、新しい節を追記する）
+
+### 2026-10-01 — Engineering 側の追記（軌跡の二重化の解消）
+- 同じ User の依頼（「軌跡を事細かに」「これからもそうして」）を Engineering も受けていて、`agent/HISTORY.md` を作りかけていた。**年表が二重にならないよう、この文書を正本とする。** Engineering は git に入る自動台帳 `agent/HISTORY.md`（`python tools/update_history.py`。全コミット・ブランチの地図・DECISIONS の見出し・ENTRY の索引）だけを持ち、手書きはここへ足す。
+- §7 に Engineering 側の訂正 6 件を追記（膝の主張、床接触モデル、J7 静的トルク、ファームのコンパイルの記述、幅広 J7 テストのピン留め、合成採点の教訓）。
+- 別件: KiCad `snake-main-board`（`serpens/snake-main-board/`、入れ子の別 git。`origin` = `github.com/hattoir/snake-main-board`（private））。回路図は R1/R2 並列（0603）、基板は Edge.Cuts 20 × 12 mm・F.Cu 0.25 mm のトラック 2 本（pcbnew で作成。`.kicad_pcb` は手書きしない）。DRC（`--schematic-parity`）違反 0 / 未接続 0 / パリティ 0。コミット 156117b・50509da（User）、bfff9d7（Claude）。**push と BoardRepo MCP の認可は User 待ち**。BoardRepo 上の表示は未検証。
+- 待ち: HT-001〜004 / 007〜013（実機・印刷）、R-013（HT-001 一致でガードを有効化）。
+
+### 2026-10-01 01:00〜02:40 — 頭のセンサー基板 head-sensor-board（KiCad Agent）Stage 1・Stage 2
+- **先頭の注意（変更なし。この節は電子系の試作基板の話）**: KNUCKLE DRUM 後も、まっすぐ比で約 20 倍のすき間が残る。5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）。安全・合格の語は使わない。
+- 依頼（User、2 回）: ①「Floor Watch の頭のセンサー基板（試作用）を作る。`serpens\head-sensor-board` を新規リポジトリにし、GitHub に非公開 `hattoir/head-sensor-board` として push。**4 段階（仕様・部品表 → 回路図 + ERC → 外形・配置案 → 配線・DRC・ガーバー）で、各段階の終わりで止まって確認を待つ**」。②（Stage 1 の確認事項への回答）外形 40×25 mm・ToF はジャンパー線・6 mm 制限は LED だけ・ToF のピン配置は現物まで未確定・LED の電源を半田ジャンパーで 3V3/5V・3V3 総電流を Wi-Fi/カメラ込みで再計算・GPIO 割り当て承認・追加購入承認。
+- Stage 1（commit 90ef2b9）: 仕様・部品表・GPIO 案・LED の電流計算（`docs/spec.md`、`tools/led_budget.py`）。**NSSW157T は 80 mA 級（VF 2.8〜3.4 V @80 mA）で、3.3 V では 8.5〜38.8 mA（公称 約 30 %）しか流せない**ことを原本（Nichia STS-DA1-1913）で確認。出典: Nichia・ST DS12385・Seeed wiki / 図面・Espressif。
+- Stage 2（commit 85a61fe）: 回路図（KiCad 10、A3、40 部品）を生成。XIAO ESP32S3（2×7 ソケット）、VL53L1X ヘッダ ×2（ジャンパー線）、LED チャンネル ×2（NSSW157T + AO3400A、PWM、外付けヘッダ J3/J4、半田ジャンパー SJ で 3V3（20 Ω 0603）/ 5V（33 Ω 2010））、プルアップ（XSHUT 実装・I2C DNP）、TP ×8、デカップリング、M2 穴。**ERC 0 件（厳格版も 0 件）、ネットリスト 25/25 一致、全ピンがフットプリントのパッドに存在**。自作ライブラリ 5 点（`libs/`）。BOM（`docs/bom.md`）、BoardRepo 用 zip（User が手動アップロード）。
+- 数値（出典）: LED 3V3 で 8.5 / 23.6 / 38.8 mA、5V で 45 / 59 / 73 mA（計算。VF(10 mA) はグラフの目視 = 参考値、Vcc は仮定）。3V3 の外部負荷 最大 158 mA。Webcam 撮影ピーク 366 mA（Seeed wiki）を足して 524 mA（700 mA の 75 %）。**Seeed のカメラ表 MAX ≒ 0.65 A（条件の記載なし = 未確認）なら 808 mA（115 %）**。5V 合計 493 mA（USB 2.0 の 500 mA 以内）。MOSFET: AO3400A VGS(th) 最大 1.45 V / RDS(on) < 48 mΩ @2.5 V、Si2302CDS 0.85 V / < 75 mΩ（原本）。ESP32-S3 Wi-Fi 送信ピーク 340 mA、GPIO IOH 40 / IOL 28 mA（DS v2.2）。
+- 訂正・仮定の更新: LED 公称電流 23.7 → 23.6 mA（MOSFET の Rds(on) 仮定を 0.05 → 0.075 Ω）。5V 側の抵抗は最初 24 Ω/2010 を考えたが、USB 2.0 の 500 mA に収まらない（5V 合計 536 mA）ので **33 Ω/2010** にした。Stage 1 の「5V ピンは接続しない」は、User の「5V も選べる」に合わせて「半田ジャンパーの 5V パッドにだけつながる（既定は開放）」と解釈した（User に報告）。自分のミス 2 件を直した: `justify center`（KiCad に無い値）で回路図が読めなかった、シンボルライブラリの形式番号を回路図と同じ 20260306 にして読めなかった（標準は 20251024）。
+- 決めたこと（誰が）: User: 外形 40×25 mm（変数）、ToF はジャンパー線、6 mm は LED のみ、GPIO 割り当て、追加購入。KiCad Agent: R_LED 20 Ω（3V3）/ 33 Ω 2010（5V）、MOSFET 候補 AO3400A / Si2302CDS、ゲート 220 Ω + 100 kΩ、電流検出 1 Ω。
+- 出したファイル: `serpens/head-sensor-board/`（別 git。`docs/spec.md`・`bom.md`・`erc_report*.txt`・回路図 PDF、`libs/`、`tools/`）、ENTRY-K-0001、REQUESTS R-020。`serpens/.git/info/exclude` に `head-sensor-board/` を追加（親で追跡しない）。
+- 待ち: User: Stage 2 の確認、BoardRepo のアップロード（`C:\2026\Serpens_Home AI\head-sensor-board_upload.zip`）、ToF 小基板の現物のピン配置。Engineering: ENTRY-K-0001 の (a)〜(c)。Stage 3（外形・配置案）は User の確認後。
+
+### 2026-10-01 02:45〜03:15 — 頭のセンサー基板 head-sensor-board Stage 3（KiCad Agent）
+- **先頭の注意（変更なし。この節は電子系の試作基板の話）**: KNUCKLE DRUM 後も、まっすぐ比で約 20 倍のすき間が残る。5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）。安全・合格の語は使わない。
+- 依頼（User）: Stage 2（回路図・BOM）を確認済み。5V ピンは「SJ の 5V 側パッドだけ・既定は開放」の解釈でよい。ToF のピン配置は現物まで未確定（ガーバーは出さない）。BoardRepo は User が zip を上げる。**Stage 3 = 外形 40×25 mm（角 R1・M2 穴 2・変数）と部品配置案（配線なし）**。LED と J3/J4 は縁、ToF ヘッダは引き出しやすい縁、USB-C は外向き、TP は測定しやすい側。**注意 2 点（5V は試験用・493 mA は 500 mA ぎりぎり / 3V3 は Wi-Fi・撮影・LED 100 %・ToF ピークを同時にしない）を README と回路図の注記に残す**。
+- やったこと（commit 756b482）: `tools/gen_pcb.py`（KiCad 同梱の Python）で基板を生成。外形・穴を変数化、フットプリントを回路図のネットリストから読み込み（ネット・フィールド・回路図とのリンク）、配置図 PNG（`docs/placement_annotated.png`、KiCad の上面・裏面の描画）。配置: USB-C 左 / LED と J3・J4 右寄りの縁 / ToF ヘッダ 上下の長辺 / TP は上面（ILED と GND を 1 か所）/ XIAO の下に高さ 0.9 mm 以下の 0603・2010 / 裏面は部品なし。**DRC（回路図との対応つき）は未配線 64 以外 0 件。40×25 が下限（39.5×25・40×24.8 で重なる）= 余裕ゼロ**。自作ライブラリに TP（輪なし）を追加、XIAO のコートヤードをピン列の帯だけに変更。
+- 数値（出典）: 面積は DRC のコートヤード重なりで確認（計算）。LED の高さ 0.52 mm（Nichia データシート ✅）。XIAO の下の部品の高さ制限 0.9 mm とソケット 8.5 mm は仮定（🔴）。
+- 訂正・自分のミス: 最初の配置は M2 穴の禁止範囲と ToF ヘッダが重なり、TP の銀色の輪が名前の刻印と重なった → 穴を右の 2 角へ、TP を輪なしに。`pcbnew.FootprintLoad` が `board.Remove()` のあとで壊れる（SWIG）ので、空の雛形から作り直す方式にした。スクリプトに `\n` を含む文字列をシェルから流し込むと改行に化けて壊れることが 3 回あった（以後、ファイル編集ツールで書く）。
+- 決めたこと（誰が）: User: 配置の方針（縁の使い方）、運用上の注意。KiCad Agent: 下半分 = L チャンネル（XIAO の D0〜D6 の列に近い側）、TP2（GND）を ILED の TP の隣に置く、M2 穴の位置。
+- 出したファイル: `serpens/head-sensor-board/`（`docs/placement_*.png`・`drc_report.txt`・`spec.md` §6・§7、`tools/gen_pcb.py` ほか）、ENTRY-K-0002、`C:\2026\Serpens_Home AI\head-sensor-board_upload.zip`（基板は配置つき・配線なし）。
+- 待ち: User: Stage 3 の確認、zip のアップロード結果、ToF 小基板のピン配置。Engineering: ENTRY-K-0001・K-0002。Stage 4（配線・DRC・ガーバー）は User の確認後、ガーバーは ToF のピン配置の確認後。
+
+### 2026-10-01 02:55 — KNUCKLE 試験片を User が印刷（Design が確認手順を作成）
+- 依頼（User）: `docs/design/knuckle_test` のものを印刷した（P3 の任意枠を先に印刷）。
+- やったこと: 確認手順 `knuckle_test/KNUCKLE_TEST_PROCEDURE.md` と記録表 `KNUCKLE_TEST_LOG_template.csv`（R46 / R34 × 角度 0・±25・±50° × 上中下 = 30 行）、HARDWARE_TODO に **HT-014** を追記。何がわかるか: 円柱と椀のすき間が実物でも約 4 mm のままか、5〜12 mm の帯が無いか、端 ±52° の止まり、見た目（User の判断）。**約 20 倍のうち背板の層は確かめられない**ことも明記。
+- 決まったこと: P3 を先に印刷したので、P0（B2）は未印刷のまま。B2 の優先は変えない。
+- 待ち: User の実測（HT-014）、B2 の印刷（P0）。
