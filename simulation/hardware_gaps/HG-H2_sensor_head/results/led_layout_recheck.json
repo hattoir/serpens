@@ -1,0 +1,112 @@
+{
+ "before_design_2x2": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.8920454545454546,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.84375,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.2318577557109034,
+  "diameter_rel_err_median": 0.19202178705761347,
+  "loc_err_median_mm": 5.749448348413385
+ },
+ "front_corner": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.8977272727272727,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.78125,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.4665213903191887,
+  "diameter_rel_err_median": 0.28031340661129067,
+  "loc_err_median_mm": 5.650428843949706
+ },
+ "runner_front_z6": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.9488636363636364,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.875,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.8157243308120607,
+  "diameter_rel_err_median": 0.27388981930014533,
+  "loc_err_median_mm": 5.664682008695134
+ },
+ "runner_front_z4": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.9488636363636364,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.875,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 2.1071345928901497,
+  "diameter_rel_err_median": 0.22361000265706893,
+  "loc_err_median_mm": 5.818307219937679
+ },
+ "runner_front_z9": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.6420454545454546,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.875,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.4775250872182548,
+  "diameter_rel_err_median": 0.27388981930014533,
+  "loc_err_median_mm": 5.544515742461856
+ },
+ "runner_front_z6_raking_x0.5": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.8920454545454546,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.78125,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.4894243926374902,
+  "diameter_rel_err_median": 0.28123111916752785,
+  "loc_err_median_mm": 6.950448277241653
+ },
+ "runner_front_z6_raking_x0.25": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.36363636363636365,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.671875,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.0042838931230902,
+  "diameter_rel_err_median": 0.3660924996868472,
+  "loc_err_median_mm": 8.226551021869378
+ },
+ "current_pos_with_hood_approx_x0.12": {
+  "n_pos": 176,
+  "n_neg": 48,
+  "patrol_recall": 0.017045454545454544,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.859375,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 0.9687554186934273,
+  "diameter_rel_err_median": 0.429065704863425,
+  "loc_err_median_mm": 5.161836672147516
+ },
+ "_meta": {
+  "reps": 16,
+  "seed": 40000,
+  "n_targets": 11,
+  "label": "SYNTHETIC_VISION_SIM"
+ }
+}
