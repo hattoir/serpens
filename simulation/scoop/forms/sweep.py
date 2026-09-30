@@ -39,6 +39,8 @@ def seed_of(cfg: dict[str, Any], obj: str, offset: float, trial: int, offsets: l
 
 
 def offsets_for(cfg: dict[str, Any], form: str) -> list[float]:
+    if form == "cloche":
+        return list(cfg["forms"]["cloche"]["offsets_mm"])
     return list(cfg["forms"]["cup"]["offsets_mm"]) if form == "cup" else list(cfg["placement"]["lateral_offsets_mm"])
 
 

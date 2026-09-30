@@ -57,3 +57,22 @@
 - 推奨案の比較表（§8）: カップはすき間 0〜1 mm に強い（各 64/64）。J1 でカップを昇降すると −8〜−13.5°（暫定 −5…+10° の外）→ 昇降は別の駆動。
 - ENTRY-E-0006 に J1 静的トルクの訂正（0.204 N·m = 上限の 45%）を追記済み。
 - 次: 試験片 B の実測（面一が実現できるか。面取り・粗さで救われるか）。
+
+---
+
+## 進行中（2026-09-30 夜。User の「次の指示」A → B → C。途中経過。セッションが切れたらここから再開）
+
+**方針**: 今後 2 日間は User が B2 を印刷中。結果は待たない。実物の観察が要る項目は「印刷待ち」。B2 が出たら、シミュとの比較を報告書に別の節で足す。
+
+- ✅ **B の 2（薄いフィルムの縁）**: `python tools/scoop_forms_sweep.py film` 済み（2,304 回。`scoop_forms_film_{designs,cells}.csv`）。**垂直の縁（面取りなし）は、t = 0.01〜0.05 mm・粗さ ±0〜0.1・すき間 0.1 / 0.3 のどれも保持 0/48**。許容できる厚みは無い（0.002 mm でも 0）。
+- ✅ **A（J1・ToF・LED の確認）**: ブランチ `agent/engineering-h1-j1`（`agent/engineering-vision-sim` から分岐。worktree `scratchpad/serpens-h1-wt`）。`hardware/prototypes/H1_joint/j1_head_pitch.md`、`HG-H1_actuator/j1_floor_contact.py`・`j1_head_pitch_check.py`、`HG-H2_sensor_head/tof_cliff.md`・`tof_cliff_budget.py`・`led_layout_recheck.py`、`tests/test_j1_head_pitch.py`。LED の追試は Design と一致（巡回 0.95）。
+- 🔄 **B の 1・3（フード昇降 cloche）**: `simulation/scoop/forms/cloche.py` を追加（動作確認 N=1 済み）。掃引 `cloche`（72 設計、平らな床）→ `cloche2`（床の粗さ ±0.1 / 凹凸 ±0.5）を実行中（`scratchpad/run_cloche.sh`）。
+- 🔄 **C（安全の枠組み）**: `agent/engineering-floor-watch` の `flank_v.md` §F と `hood_lift.py`（書いた。未コミット）。
+- ⏳ 残り: 報告書 §13、ENTRY-E-0008、DECISIONS / verification_status §4.14、テスト、commit・push（3 ブランチ）。
+
+### 更新（B・C 完了）
+
+- ✅ **B の 1・3（フード昇降）**: `cloche` / `cloche2` / `cloche3`（合計 4,096 回）済み。報告書 **§13**。位置ずれ 0・5 mm は 100%、1 円玉・CR2032 は ±5 mm が限界。覆う・運ぶ（ゲートあり）とも成立、ゲートなしの後退は 0/32。
+- ✅ **C**: `agent/engineering-floor-watch`（`f12dc4e`）の `flank_v.md` §F・`hood_lift.py`。
+- ✅ **A**: `agent/engineering-h1-j1`（`03ddfc8`）。ENTRY-E-0008 は `ai-shared/integration-log.md`（git 管理外）。
+- ⏳ **B2 の実物の観察が出たら**、シミュレーション（t = 0.05 で 0%、c 0〜1 で差なし）との比較を報告書に別の節で足す（**印刷待ち**）。

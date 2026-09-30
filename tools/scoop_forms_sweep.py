@@ -166,14 +166,14 @@ def load_rank(name: str) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "resummarize"])
+    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "resummarize"])
     ap.add_argument("--n-cell", type=int, default=2)
     ap.add_argument("--workers", type=int, default=14)
     args = ap.parse_args()
     cfg = load_config()
     t0 = time.time()
     if args.stage == "resummarize":
-        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic"):
+        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3"):
             p = OUT / f"scoop_forms_{name}_rows.csv"
             if p.exists():
                 rows = [{k: _typed(v) for k, v in r.items()} for r in csv.DictReader(open(p, encoding="utf-8"))]
@@ -223,6 +223,27 @@ def main() -> None:
         for t, ang in itertools.product((0.002, 0.005, 0.01, 0.02), (10, 45)):
             designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.0, "plate": t,
                                      "plate_chamfer_deg": ang, "plate_round_mm": 0.1}, 10.0, True))
+    elif args.stage == "film":                       # 薄いフィルムの縁（PET / シム。垂直の縁、面取りなし）。t × 床の粗さ × すき間 c
+        designs, n_cell = [], 3
+        for t, amp, c in itertools.product((0.01, 0.02, 0.03, 0.05), (0.0, 0.03, 0.05, 0.1), (0.1, 0.3)):
+            d = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": c, "plate": t}
+            if amp:
+                d["rough_mm"] = amp
+            designs.append(("hood", d, 10.0, True))
+    elif args.stage == "cloche":                     # フード昇降（平らな床）: 上げる高さ × すき間 c × 落とす速さ × 覆うだけ / 後退で運ぶ / 前進で運ぶ
+        designs, n_cell = [], 1
+        for lift, c, dv, rt in itertools.product((3.0, 5.0, 8.0, 10.0), (0.0, 0.3, 1.0), (5.0, 20.0), (0, 30, -30)):
+            designs.append(("cloche", {"lift_mm": lift, "clearance_mm": c, "drop_speed_mm_s": dv, "retreat": rt, "backstop": None}, 10.0, True))
+    elif args.stage == "cloche2":                    # フード昇降 + 絨毯の代用（床の粗さ ±0.1 / 凹凸 ±0.5）
+        designs, n_cell = [], 1
+        for fl, lift, c, rt in itertools.product(({"rough_mm": 0.1}, {"bump_mm": 0.5}), (3.0, 5.0, 10.0), (0.0, 1.0), (0, 30, -30)):
+            designs.append(("cloche", {"lift_mm": lift, "clearance_mm": c, "drop_speed_mm_s": 20.0, "retreat": rt, "backstop": None, **fl}, 10.0, True))
+    elif args.stage == "cloche3":                    # 対照: ゲートなしで運ぶ / 落とす力の上限（0.15 N = 自重に近い、〜 5 N）
+        designs, n_cell = [], 1
+        for gate, rt, c in itertools.product((True, False), (0, 30, -30), (0.0, 1.0)):
+            designs.append(("cloche", {"lift_mm": 5.0, "clearance_mm": c, "drop_speed_mm_s": 20.0, "retreat": rt, "gate": gate, "backstop": None}, 10.0, True))
+        for fN, dv in itertools.product((0.15, 0.5, 2.8, 5.0), (10.0, 20.0)):
+            designs.append(("cloche", {"lift_mm": 5.0, "clearance_mm": 0.0, "drop_speed_mm_s": dv, "retreat": 0, "drop_force_n": fN, "backstop": None}, 10.0, True))
     elif args.stage == "rough":                      # 床の粗さ（細かい高さ場）× 垂直の段差 0.002〜0.1 mm
         designs, n_cell = [], 2
         for amp, t in itertools.product((0.01, 0.03, 0.1), (0.0, 0.002, 0.005, 0.01, 0.03, 0.1)):
@@ -297,7 +318,7 @@ def main() -> None:
     rows = run_fcases(cases, workers=args.workers)
     write_rows(args.stage, rows)
     rank = design_table(rows, args.stage)
-    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic"):
+    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3"):
         cell_table(rows, args.stage)
     print(f"done in {time.time() - t0:.0f} s", flush=True)
     for x in rank[:25]:

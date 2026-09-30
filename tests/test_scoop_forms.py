@@ -171,3 +171,25 @@ def test_floor_roughness_does_not_rescue_a_vertical_step(cfg: dict) -> None:
     base = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, "rough_mm": 0.1}
     assert run_form_episode(cfg, "hood", base, "crumb_cube", "flooring", 10.0, 0.0, 1).success
     assert not run_form_episode(cfg, "hood", {**base, "plate": 0.002}, "crumb_cube", "flooring", 10.0, 0.0, 1).success
+
+
+def test_thin_film_edge_without_chamfer_still_blocks(cfg: dict) -> None:
+    """薄いフィルム（0.02 mm、垂直の縁、粗さ ±0.1）でも、保持にならない（§13.1）。"""
+    p = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, "plate": 0.02, "rough_mm": 0.1}
+    assert not run_form_episode(cfg, "hood", p, "coin_1yen", "flooring", 10.0, 0.0, 1).success
+
+
+def test_cloche_covers_carries_and_needs_the_gate_only_when_retreating(cfg: dict) -> None:
+    """フード昇降: 落として被せれば、その場で覆う・30 mm 前進・30 mm 後退（ゲートあり）で物が残る。ゲートなしの後退は物を置いていく（§13.3）。"""
+    base = {"lift_mm": 5.0, "drop_speed_mm_s": 20.0, "clearance_mm": 0.1, "backstop": None}
+    for rt in (0, 30, -30):
+        assert run_form_episode(cfg, "cloche", {**base, "retreat": rt}, "crumb_cube", "flooring", 10.0, 0.0, 1).success
+    r = run_form_episode(cfg, "cloche", {**base, "retreat": 30, "gate": False}, "crumb_cube", "flooring", 10.0, 0.0, 1)
+    assert not r.success
+
+
+def test_cloche_lands_on_a_coin_that_is_10_mm_off_centre(cfg: dict) -> None:
+    """1 円玉（半径 10）は中心が壁の内側の面（±15）まで 5 mm しか余裕が無い。10 mm ずれると、落としたフードの壁の下端が縁に乗って挟まる。"""
+    base = {"lift_mm": 5.0, "drop_speed_mm_s": 20.0, "clearance_mm": 0.1, "retreat": 0, "backstop": None}
+    assert run_form_episode(cfg, "cloche", base, "coin_1yen", "flooring", 10.0, 5.0, 1).success
+    assert run_form_episode(cfg, "cloche", base, "coin_1yen", "flooring", 10.0, 10.0, 1).outcome == "pinched"

@@ -30,7 +30,7 @@ except ImportError:  # pragma: no cover
 SOURCE = "MUJOCO_SIM"
 OUTCOMES = ("success", "knocked_in", "escaped", "pinched", "pushed_ahead", "not_entered")
 REGISTRY = {"hood": ("passive", "Passive"), "sweeper": ("sweeper", "Sweeper"), "belt": ("belt", "Belt"),
-            "brush": ("brush", "Brush"), "cup": ("cup", "Cup"), "hook": ("hook", "Hook")}
+            "brush": ("brush", "Brush"), "cup": ("cup", "Cup"), "hook": ("hook", "Hook"), "cloche": ("cloche", "Cloche")}
 
 
 def make_form(cfg: dict[str, Any], name: str, params: dict[str, Any], obj: str, floor: str) -> Form:
@@ -152,7 +152,8 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
     abort_push = float(fc["abort_push_mm"]) * MM
     travel_max = (-x_obj0) + float(fc["travel_extra_mm"]) * MM
     close_tol = 0.0005
-    retreat = float(params.get("retreat", 0.0)) * MM      # 閉じ終わりの後、頭がこの距離だけ後退する（ゲートの効果の切り分け。0 = 後退しない）
+    retreat = float(params.get("retreat", 0.0)) * MM      # 閉じ終わりの後、頭がこの距離だけ後退する（ゲートの効果の切り分け。0 = 後退しない。負 = 前進 = 引きずる）
+    rdir, rdist = (1.0 if retreat > 0.0 else -1.0), abs(retreat)
     retreat_x0 = None
     retreat_t = None
     wall_contact = False
@@ -206,6 +207,10 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
         if mech_started and not mech_done:
             if form.mech_step(model, data, t - mech_t0, rel):
                 mech_done, mech_done_t = True, t
+        if mech_done and form.jammed(model, data):                 # フードが物の上に乗って下りきれない
+            t_end = t
+            pinched_nogate = True
+            break
         # ゲート
         if form.has_gate and gate_t0 is None:
             full = form.fully_inside(rel, margin)
@@ -243,16 +248,16 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
                 break
         if closed_t is not None:
             held = held and inside
-            if retreat > 0.0 and retreat_t is None:                  # 閉じ終わりの後、頭を後退させる
+            if retreat != 0.0 and retreat_t is None:                 # 閉じ終わりの後、頭を後退（+）/ 前進（−）させる
                 if retreat_x0 is None:
                     retreat_x0 = head_x
-                data.ctrl[act_vel] = +v
-                if head_x - retreat_x0 >= retreat:
+                data.ctrl[act_vel] = rdir * v
+                if rdir * (head_x - retreat_x0) >= rdist:
                     retreat_t = t
                     data.ctrl[act_vel] = 0.0
-            elif retreat > 0.0:
+            elif retreat != 0.0:
                 data.ctrl[act_vel] = 0.0
-            hold_from = closed_t if retreat <= 0.0 else retreat_t
+            hold_from = closed_t if retreat == 0.0 else retreat_t
             if hold_from is not None and t >= hold_from + hold_s:
                 t_end = t
                 break

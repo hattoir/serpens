@@ -119,6 +119,10 @@ class Form:
 
     stops_head_on_mech = False      # 機構が始まったら頭を止める案（フックなど）
 
+    def jammed(self, model: Any, data: Any) -> bool:
+        """離散的な機構が物の上に乗って、下りきれなかった（フード昇降）。"""
+        return False
+
     # --- 空間の判定（D のカップは上書き） ---
     def inside(self, rel: tuple[float, float, float]) -> bool:
         rx, ry, rz = rel
