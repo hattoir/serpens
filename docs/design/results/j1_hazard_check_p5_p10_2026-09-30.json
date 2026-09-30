@@ -1,0 +1,18 @@
+{
+ "cover": "A",
+ "volume_mm3": 870,
+ "poses": {
+  "p27": {
+   "theta_E": 5.0,
+   "hazard_with_cover": 601,
+   "cover_head_overlap_mm3": 0.0,
+   "hazard_without": 601
+  },
+  "p26": {
+   "theta_E": 10.0,
+   "hazard_with_cover": 1562,
+   "cover_head_overlap_mm3": 0.0,
+   "hazard_without": 1562
+  }
+ }
+}

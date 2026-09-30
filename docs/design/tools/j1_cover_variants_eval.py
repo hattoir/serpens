@@ -10,7 +10,8 @@ import numpy as np
 import gap_check as g
 SCR = Path("C:/Users/Public/serpens_gapcheck"); TF = SCR / "transforms_r003.json"; L = SCR / "local3"
 BOX = (-250.0, -110.0, -60.0, 60.0, 0.0, 100.0)
-POSES = {"p20": -4, "p15": -3, "p14": -2, "p16": -5, "p0": 0, "p21": 4}
+import os
+POSES = {k: float(v) for k, v in (x.split(":") for x in os.environ.get("POSES", "p20:-4,p15:-3,p14:-2,p16:-5,p0:0,p21:4").split(","))}
 out, name, stl = sys.argv[1], sys.argv[2], Path(sys.argv[3])
 cov = g.read_stl(stl)
 g.X0, g.X1, g.Y0, g.Y1, g.Z0, g.Z1 = BOX; g.DX = g.DY = g.DZ = 0.5
