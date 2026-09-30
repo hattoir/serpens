@@ -229,3 +229,7 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - R-005: フード昇降は s = 4、推奨 L2（TPU 板ばね耳 1.2 N、prior）
 - Fusion: `HEAD E3 INTEGRATED v2`（あご −32.7%）ほか追加。v1・元は残し非表示。HARDWARE_TODO に HT-008〜011 追記
 - **待機の条件**: User の覆いの判断（R-011）と Engineering の返信（R-012）が来たら再開。B2 は印刷待ち
+
+## 更新（2026-09-30 夜）覆いは案 A に決定（ENTRY-D-0013）
+
+- User が案 A（8° の殻）を採用。`J1 COVER A ADOPTED`（Fusion、STL あり）。次: 襟への接合の設計、Head Yaw との干渉、B2 の印刷待ち
