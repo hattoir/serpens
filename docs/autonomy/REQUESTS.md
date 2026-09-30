@@ -16,6 +16,5 @@
 | R-008 | P2 | Engineering → Design | 鋼ダウエル φ3・TPU 緩衝を入れるストッパーの形 | E-0009 | R-003 に統合（E-0011） |
 | R-009 | P1 | Engineering（自分） | `neck.floor_watch_*`（作業窓・ストッパー・窓の端の手前の速さ）を firmware / executor で強制する配線（今は設定の値だけ） | E-0011 | 未（次の周。上限の強制は機体側でも行う原則に従う） |
 | R-010 | P2 | Engineering（自分） | HT-001〜004 の実測が来たら、`assumptions.yaml` に D・B・J・k・e を入れて `j1_range_opt_report.py` を回し直す | E-0011 | 待機（User の測定待ち） |
-
-**完了（2026-09-30）: User が案 A を採用**（ENTRY-D-0013） |
+| R-011 | P1 | Design → User | 上の輪の覆い（襟が前へ 7 mm 伸びる）を採るか（見た目。案 A / B / C / なし） | D-0012 | **完了（2026-09-30）: User が案 A を採用**（ENTRY-D-0013） |
 | R-012 | P1 | Design → Engineering | TPU パッドの材質（E 3 MPa 級 = 柔らかい TPU。95A では衝撃が減らない）の確認、窓の端面（PLA 2 mm）の支圧、ダウエルの取り付け | D-0012 | 未 |
