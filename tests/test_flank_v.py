@@ -49,3 +49,36 @@ def test_wedge_geometry_follows_designs_formula() -> None:
         assert 4.0 + s0 * t == pytest.approx(5.0) and 4.0 + s1 * t == pytest.approx(12.5)
         assert flank_v.radial_mm(s0) >= 46.0
     assert flank_v.wedge_s_range_mm(25.0)[1] - flank_v.wedge_s_range_mm(25.0)[0] == pytest.approx(7.5 / math.tan(math.radians(25.0)))
+
+
+def _j1_head():
+    spec = importlib.util.spec_from_file_location("j1_head", ROOT / "simulation" / "hardware_gaps" / "HG-S3_torque_limiter" / "j1_head.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_j3_j5_allowed_torque_is_about_0_25_and_below_the_soft_cap() -> None:
+    """Design の r = 44.4〜49.8 mm（J3〜J5）で、5.7 N の暫定値の許容トルクは約 0.25 N·m。ソフトの上限 0.45 N·m と窓 0.7〜1.0 N·m は上回る（OPEN の不一致）。暫定値であり安全の確定ではない。"""
+    m = _j1_head()
+    lo, hi = m.allowed_nm(5.7, 44.4), m.allowed_nm(5.7, 49.8)
+    assert lo == pytest.approx(0.253, abs=1e-3) and hi == pytest.approx(0.284, abs=1e-3)
+    assert m.SOFT_CAP_NM > hi and m.WINDOW_NM[0] > hi
+    assert m.force_n(m.SOFT_CAP_NM, 49.8) > 5.7
+
+
+def test_j1_lowering_side_cannot_be_protected_by_a_force_limit_alone() -> None:
+    """J1 の下げる側 r = 5〜44 mm: 許容トルクは 0.029〜0.25 N·m で、ソフトの上限（0.45）を大きく下回る。"""
+    m = _j1_head()
+    assert m.allowed_nm(5.7, 5.0) == pytest.approx(0.0285, abs=1e-4)
+    assert m.allowed_nm(5.7, 44.0) < m.SOFT_CAP_NM
+
+
+def test_hollow_added_mass_keeps_the_head_com_close_to_j1() -> None:
+    """中空 10 g 台なら重心と J1 の静的トルクの増え方は小さい（現行 21.9 mm / 0.020 N·m）。中実 55〜65 g は大きい。"""
+    m = _j1_head()
+    assert m.com_lever_mm() == pytest.approx(21.9, abs=0.1)
+    lever_h, tau_h, _ = m.with_added_mass(19.0, 80.0)
+    lever_s, tau_s, _ = m.with_added_mass(65.0, 80.0)
+    assert lever_h < 35.0 and tau_h < 0.04 and lever_s > 40.0 and tau_s > tau_h
+    assert tau_s < m.SOFT_CAP_NM

@@ -63,6 +63,9 @@ flank_v:
   contact_radius_from_design: pending    # ENTRY-E-0005 で依頼。届いたら flank_v.py を回し直す
   open_discrepancy: "機械式リミッターの窓 0.7〜1.0 N·m は、r = 46 mm の許容トルク 0.26 N·m を上回る（DECISIONS.md 2026-09-30、OQ-0116）"
   computed_in: simulation/hardware_gaps/HG-S3_torque_limiter/flank_v.md
+  contact_radius_from_design: {j3_j5_mm_p5_p95: [44.4, 49.8], j3_j5_mm_all: [42.5, 50.0], j2_mm_p5_p95: [30.5, 38.0], j1_lowering_mm: [5.0, 44.0], j1_raising_mm: [43.0, 52.0], source: "Design ENTRY-D-0004（CAD_CONCEPT、SAFETY_UNVERIFIED）"}
+  allowed_torque_nm_hand_5_7n: {j3_j5: [0.253, 0.284], j1_lowering: [0.029, 0.251], note: "暫定値（5.7 N・r とも実測・規格確認なし）。ソフトの上限 0.45 N·m と不一致 = OPEN（OQ-0117）"}
+  j1_pitch_range_deg_proposed: {min: -5.0, max: 10.0, sign: "Design の CAD: 負 = 頭を下げる", status: PROPOSED_PROVISIONAL, note: "取り込み機構の頭下げの要否の結果を見て再判断。robot.yaml は未変更"}
 
 # --- 形の規則（力ではなく幾何で守る。**いずれも規格本文は未確認**）--------------------------------------
 geometry_rules:
