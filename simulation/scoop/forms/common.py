@@ -79,6 +79,9 @@ class Form:
         self.mj = mujoco
         self.model = model
         self.gate_joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "gate_z") if self.has_gate else -1
+        # 口の壁・漏斗・段差の geom（物が口の前の縁に当たったかの判定に使う）
+        ids = {mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, n) for n in ("wall_l", "wall_r", "fwall_l", "fwall_r", "cavplate")}
+        self.wall_ids = ids - {-1}
         self.gate_act = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "gate_act") if self.has_gate else -1
 
     def reset(self, model: Any, data: Any) -> None:
@@ -125,7 +128,7 @@ class Form:
         return None
 
 
-def hood(f: Form, funnel: bool = False, zb: float = 0.0, x_front: float | None = None) -> Parts:
+def hood(f: Form, funnel: bool = False, zb: float = 0.0, x_front: float | None = None, gate: bool = True) -> Parts:
     """開放底のフード（両脇の壁・屋根・奥の壁・ゲート）。funnel なら口が 60 → 奥で 30 に狭まる（G）。
     x_front を渡すと、壁を口の面から前へ x_front だけ延ばす（ベルトのランプの脇）。"""
     fc = f.fc
@@ -164,6 +167,10 @@ def hood(f: Form, funnel: bool = False, zb: float = 0.0, x_front: float | None =
     p.head_geoms.append(f'<geom name="back" type="box" size="{_f(t / 2)} {_f(W2 + t)} {_f((z1 - z0) / 2)}" '
                         f'pos="{_f(D + t / 2)} 0 {_f((z0 + z1) / 2)}" {CLS}/>')
     p.obj_pairs += [("roof", f.mu_wall), ("back", f.mu_wall)]
+    f.zb = zb
+    if not gate:                                  # ゲートなし（ゲートの効果を切り分ける対照）
+        p.info.update(gate_open=Hc + 0.003)
+        return p
     # ゲート（口の面のすぐ前に立つ板。上から降りる）
     gm = float(fc["gate"]["mass_g"]) / 1000.0
     gh = zb + Hc - (zb + c)                     # 板の高さ（床 / 空間の床から屋根の下まで）

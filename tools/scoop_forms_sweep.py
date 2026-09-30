@@ -3,6 +3,8 @@
     python tools/scoop_forms_sweep.py screen           各案の有望なパラメータを絞る（N は 1 設計 × 対象物あたり 12。全体 1 万回未満）
     python tools/scoop_forms_sweep.py combos           A / B / C の上位設計 × F（壁・脚）× G（漏斗）× 前進速度 2 / 10
     python tools/scoop_forms_sweep.py stage3           上位 3 設計だけを 1 設計 × 対象物あたり N = 30（両方の速度・停止して閉じる / 前進しながら閉じる も別に）
+    python tools/scoop_forms_sweep.py baseline         受け身のフードの基準（N = 30）: 漏斗の有無 × ゲートの有無 × 閉じ終わり後の後退（0 / 30 mm）× 頭の速度 2 / 10、
+                                                       と、口の床の段差（0.1〜1.5 mm）を足した対照。物 × 床 × 速度 × 位置ずれの内訳の CSV も出す
     python tools/scoop_forms_sweep.py resummarize      output/ の 1 エピソード 1 行の CSV から集計を作り直す
 
 1 設計 × 1 対象物あたりの試行数 = 床 2 × 位置ずれ（0 / 5 / 10。カップは 0 / 3 / 6 / 10）× n-cell（既定 2）。
@@ -93,6 +95,26 @@ def design_table(rows: list[dict], name: str) -> list[dict]:
     return sorted(rank, key=lambda x: (-x["success"], -x["min_obj"], -x["enter"], x["tag"]))
 
 
+def cell_table(rows: list[dict]) -> None:
+    """設計 × 物 × 床 × 位置ずれの内訳（受け身のフードの基準。報告書の内訳表と「またぐ」の分類に使う）。"""
+    g: dict[tuple, list[dict]] = {}
+    for r in rows:
+        g.setdefault((r["tag"], r["obj"], r["floor"], r["offset"]), []).append(r)
+    RES.mkdir(parents=True, exist_ok=True)
+    with open(RES / "scoop_forms_baseline_cells.csv", "w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["tag", "obj", "floor", "offset", "n", "success", "knocked_in", "escaped", "pushed_ahead", "not_entered", "pinched",
+                    "entered", "wall_contact", "entered_nowall", "entered_wall", "fire_x_mean_mm", "fire_absy_mean_mm"])
+        for (tag, obj, floor, off), rs in sorted(g.items()):
+            oc = lambda k: sum(r["outcome"] == k for r in rs)
+            ent = [r for r in rs if r["entered_ever"]]
+            fx = [r["fire_rel_x_mm"] for r in rs if r["fire_rel_x_mm"] == r["fire_rel_x_mm"]]
+            fy = [abs(r["fire_y_mm"]) for r in rs if r["fire_y_mm"] == r["fire_y_mm"]]
+            w.writerow([tag, obj, floor, off, len(rs), oc("success"), oc("knocked_in"), oc("escaped"), oc("pushed_ahead"), oc("not_entered"), oc("pinched"),
+                        len(ent), sum(bool(r["wall_contact"]) for r in rs), sum(not r["wall_contact"] for r in ent), sum(bool(r["wall_contact"]) for r in ent),
+                        f"{sum(fx) / len(fx):.2f}" if fx else "", f"{sum(fy) / len(fy):.2f}" if fy else ""])
+
+
 def parse_tag(tag: str) -> tuple[str, dict, float, bool]:
     form, body, v, mode = tag.split("|")
     params = {}
@@ -140,14 +162,14 @@ def load_rank(name: str) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["screen", "combos", "stage3", "resummarize"])
+    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "resummarize"])
     ap.add_argument("--n-cell", type=int, default=2)
     ap.add_argument("--workers", type=int, default=14)
     args = ap.parse_args()
     cfg = load_config()
     t0 = time.time()
     if args.stage == "resummarize":
-        for name in ("screen", "combos", "stage3"):
+        for name in ("screen", "combos", "stage3", "baseline"):
             p = OUT / f"scoop_forms_{name}_rows.csv"
             if p.exists():
                 rows = [{k: _typed(v) for k, v in r.items()} for r in csv.DictReader(open(p, encoding="utf-8"))]
@@ -156,6 +178,12 @@ def main() -> None:
         return
     if args.stage == "screen":
         designs, n_cell = screen_designs(), args.n_cell
+    elif args.stage == "baseline":
+        designs, n_cell = [], 5
+        for funnel, gate, retreat, v in itertools.product((False, True), (True, False), (0, 30), (2.0, 10.0)):
+            designs.append(("hood", {"funnel": funnel, "gate": gate, "retreat": retreat, "backstop": None}, v, True))
+        for plate in (0.1, 0.3, 0.6, 1.0, 1.5):                       # 口の床の段差（前回のスコップの「先端の厚み」に当たる）を足した対照
+            designs.append(("hood", {"funnel": False, "gate": True, "retreat": 0, "backstop": None, "plate": plate}, 10.0, True))
     elif args.stage == "combos":
         top = top_per_form(load_rank("screen"), ("sweeper", "belt", "brush"))
         designs, n_cell = [], args.n_cell
@@ -166,13 +194,15 @@ def main() -> None:
     else:
         rank = load_rank("screen") + [r for r in (load_rank("combos") if (RES / "scoop_forms_combos_designs.csv").exists() else [])]
         rank = sorted(rank, key=lambda x: (-x["success"], -x["min_obj"], -x["enter"], x["tag"]))
+        # 上位 3 案 = 異なる機構（A〜E）の中で、最良の設計を 1 つずつ。同点の設計が多いので、下の順（保持率の対象物平均 → 最悪の対象物 → 入る率 → 名前）の先頭を使う（同点は報告に書く）
         top3, seen = [], set()
         for x in rank:
             f_, p_, _, _ = parse_tag(x["tag"])
-            key = (f_, tuple(sorted(p_.items(), key=lambda kv: kv[0])))          # 速度・閉じ方の違いは同じ設計として数える
-            if f_ != "hood" and key not in seen and len(top3) < 3:
-                seen.add(key)
+            if f_ != "hood" and f_ not in seen and len(top3) < 3:
+                seen.add(f_)
                 top3.append(x)
+        hood_ref = next(x for x in rank if x["form"] == "hood")                  # 受け身のフード（基準）の最良の設計も同じ N で
+        top3 = top3 + [hood_ref]
         designs, n_cell = [], 5
         for x in top3:
             form, params, v, stop = parse_tag(x["tag"])
@@ -188,6 +218,8 @@ def main() -> None:
     rows = run_fcases(cases, workers=args.workers)
     write_rows(args.stage, rows)
     rank = design_table(rows, args.stage)
+    if args.stage == "baseline":
+        cell_table(rows)
     print(f"done in {time.time() - t0:.0f} s", flush=True)
     for x in rank[:25]:
         print(f"{x['success']:.3f} min_obj {x['min_obj']:.2f} enter {x['enter']:.2f} launched {x['launched']:.2f}  {x['tag']}")

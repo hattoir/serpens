@@ -58,6 +58,9 @@ class FormResult:
     moved_mm: float                 # 物が最初の位置から動いた距離（平面）
     obj_speed_max_mm_s: float
     head_edge_lift_max_mm: float
+    wall_contact: bool              # 物の中心が口の面に届く前に、壁の前の縁・漏斗・段差に触れた（またいで入ったか、当たって誘導 / 押されたかの分類に使う）
+    fire_rel_x_mm: float            # ゲートを閉じ始めた（合図の）とき、物の中心の口の面からの位置
+    fire_y_mm: float
     rel_x_mm: float
     y_mm: float
     t_end_s: float
@@ -149,6 +152,11 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
     abort_push = float(fc["abort_push_mm"]) * MM
     travel_max = (-x_obj0) + float(fc["travel_extra_mm"]) * MM
     close_tol = 0.0005
+    retreat = float(params.get("retreat", 0.0)) * MM      # 閉じ終わりの後、頭がこの距離だけ後退する（ゲートの効果の切り分け。0 = 後退しない）
+    retreat_x0 = None
+    retreat_t = None
+    wall_contact = False
+    fire_rel = (float("nan"), float("nan"), float("nan"))
 
     t, step = 0.0, 0
     stopped = not form.head_moves
@@ -180,6 +188,12 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
         inside = form.inside(rel)
         if inside:
             entered = True
+        if not wall_contact and rel[0] < 0.0 and form.wall_ids:
+            for k in range(data.ncon):
+                c = data.contact[k]
+                if (c.geom1 == ids.obj_geom and c.geom2 in form.wall_ids) or (c.geom2 == ids.obj_geom and c.geom1 in form.wall_ids):
+                    wall_contact = True
+                    break
         if trace is not None:
             trace.append((t, travel / MM, rel[0] / MM, rel[1] / MM, rel[2] / MM, speed_max / MM))
         data.ctrl[act_vel] = 0.0 if stopped else -v * min(1.0, t / ramp_up)
@@ -199,7 +213,16 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
             if full or late:
                 gate_t0 = t
                 stopped = True
-        if gate_t0 is not None:
+                fire_rel = rel
+        # ゲートなしで頭が動く案: 同じ合図で止まり、ゲートが閉じ終わるのと同じ時間だけ待って「閉じ終わり」とする（時間を揃える）
+        if (not form.has_gate) and form.head_moves and not form.discrete and gate_t0 is None and form.fully_inside(rel, margin):
+            gate_t0 = t
+            stopped = True
+            fire_rel = rel
+        if (not form.has_gate) and gate_t0 is not None and closed_t is None and form.head_moves and t >= gate_t0 + gate_time:
+            closed_t = t
+            inside_at_close = inside
+        if form.has_gate and gate_t0 is not None:
             frac = _smoothstep((t - gate_t0) / gate_time)
             data.ctrl[form.gate_act] = (Hc + 0.003) * (1.0 - frac)
             q = float(data.qpos[gate_adr])
@@ -220,7 +243,17 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
                 break
         if closed_t is not None:
             held = held and inside
-            if t >= closed_t + hold_s:
+            if retreat > 0.0 and retreat_t is None:                  # 閉じ終わりの後、頭を後退させる
+                if retreat_x0 is None:
+                    retreat_x0 = head_x
+                data.ctrl[act_vel] = +v
+                if head_x - retreat_x0 >= retreat:
+                    retreat_t = t
+                    data.ctrl[act_vel] = 0.0
+            elif retreat > 0.0:
+                data.ctrl[act_vel] = 0.0
+            hold_from = closed_t if retreat <= 0.0 else retreat_t
+            if hold_from is not None and t >= hold_from + hold_s:
                 t_end = t
                 break
         # 打ち切り
@@ -253,4 +286,4 @@ def run_form_episode(cfg: dict[str, Any], name: str, params: dict[str, Any], obj
                       launched=launched, rode_ever=rode, entered_ever=entered, inside_at_close=inside_at_close, held=held, closed=closed,
                       mech_fired=mech_started, gate_fired=gate_t0 is not None, escape_mm=form.escape(rel) / MM,
                       forward_disp_mm=max(0.0, x_obj0 - ox) / MM, moved_mm=math.hypot(ox - x_obj0, oy - y_obj0) / MM, obj_speed_max_mm_s=speed_max / MM,
-                      head_edge_lift_max_mm=lift_max / MM, rel_x_mm=rel[0] / MM, y_mm=rel[1] / MM, t_end_s=t_end or t)
+                      head_edge_lift_max_mm=lift_max / MM, wall_contact=wall_contact, fire_rel_x_mm=fire_rel[0] / MM, fire_y_mm=fire_rel[1] / MM, rel_x_mm=rel[0] / MM, y_mm=rel[1] / MM, t_end_s=t_end or t)
