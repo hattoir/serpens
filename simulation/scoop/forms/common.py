@@ -37,6 +37,7 @@ class Parts:
     obj_pairs: list[tuple[str, float]] = field(default_factory=list)   # (geom 名, 物との μ)
     raw_pairs: list[str] = field(default_factory=list)
     world: list[str] = field(default_factory=list)            # 頭に付かない静的な幾何・body
+    floor: str | None = None                                  # 床の geom を差し替える（凹凸の高さ場）。None = 平面
     info: dict[str, Any] = field(default_factory=dict)
 
 
@@ -80,7 +81,7 @@ class Form:
         self.model = model
         self.gate_joint = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_JOINT, "gate_z") if self.has_gate else -1
         # 口の壁・漏斗・段差の geom（物が口の前の縁に当たったかの判定に使う）
-        ids = {mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, n) for n in ("wall_l", "wall_r", "fwall_l", "fwall_r", "cavplate")}
+        ids = {mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, n) for n in ("wall_l", "wall_r", "fwall_l", "fwall_r", "cavplate", "skl", "skr", "skfl", "skfr", "skb", "curtain_g")}
         self.wall_ids = ids - {-1}
         self.gate_act = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_ACTUATOR, "gate_act") if self.has_gate else -1
 
@@ -128,14 +129,15 @@ class Form:
         return None
 
 
-def hood(f: Form, funnel: bool = False, zb: float = 0.0, x_front: float | None = None, gate: bool = True) -> Parts:
+def hood(f: Form, funnel: bool = False, zb: float = 0.0, x_front: float | None = None, gate: bool = True,
+         wall_bottom: float | None = None, gate_force_n: float | None = None) -> Parts:
     """開放底のフード（両脇の壁・屋根・奥の壁・ゲート）。funnel なら口が 60 → 奥で 30 に狭まる（G）。
     x_front を渡すと、壁を口の面から前へ x_front だけ延ばす（ベルトのランプの脇）。"""
     fc = f.fc
     c, t, rt = f.clear, f.wall, f.roof
     D, W2, Hc = f.depth, f.half_w, f.height
     p = Parts()
-    z0, z1 = c, zb + Hc + rt
+    z0, z1 = (c if wall_bottom is None else wall_bottom), zb + Hc + rt        # wall_bottom = スカートを付けるとき、壁の下端の高さ
     lf = fc["funnel"]["length_mm"] * MM if funnel else 0.0
     wf2 = fc["funnel"]["front_width_mm"] * MM / 2.0 if funnel else W2
     front = max(lf, x_front or 0.0)
@@ -179,9 +181,10 @@ def hood(f: Form, funnel: bool = False, zb: float = 0.0, x_front: float | None =
         f'<inertial pos="0 0 0" mass="{gm:.6g}" diaginertia="1e-7 1e-7 1e-7"/>'
         f'<geom name="gate_plate" type="box" size="{_f(t / 2)} {_f(W2 + t / 2)} {_f(gh / 2)}" pos="{_f(-t / 2)} 0 {_f(zb + c + gh / 2)}" {CLS}/></body>')
     p.obj_pairs.append(("gate_plate", f.mu_wall))
-    kp = float(fc["gate"]["force_n"]) / 0.0005
+    gf = float(fc["gate"]["force_n"] if gate_force_n is None else gate_force_n)      # ゲートの力の上限 [N]
+    kp = gf / 0.0005
     p.actuators.append(f'<position name="gate_act" joint="gate_z" kp="{kp:.6g}" kv="{2 * math.sqrt(kp * gm):.6g}" '
-                       f'forcerange="{-fc["gate"]["force_n"]:.6g} {fc["gate"]["force_n"]:.6g}"/>')
+                       f'forcerange="{-gf:.6g} {gf:.6g}"/>')
     f.zb = zb
     p.info.update(gate_open=Hc + 0.003)
     return p
@@ -246,7 +249,7 @@ def assemble(f: Form, parts: Parts) -> str:
     {nl.join('    ' + s for s in assets).strip()}
   </asset>
   <worldbody>
-    <geom name="floor" type="plane" size="2 2 0.1" contype="0" conaffinity="0" rgba="0.8 0.75 0.6 1"/>
+    {parts.floor or '<geom name="floor" type="plane" size="2 2 0.1" contype="0" conaffinity="0" rgba="0.8 0.75 0.6 1"/>'}
     {nl.join('    ' + s for s in parts.world).strip()}
     <body name="head" pos="0 0 0">
       <joint name="slide" type="slide" axis="1 0 0" damping="0"/>
