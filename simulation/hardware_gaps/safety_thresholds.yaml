@@ -53,6 +53,17 @@ pressure_limit_n_per_cm2:
   baseline: 8.2                 # 子どもの痛み閾値 mean−1SD（母指球）。縁・角の小さな接触面積では 力 = 圧力 × 面積 の方が先に効く
   iso15066_adult_hand: [190, 300]   # 成人の値。**転用しない**
 
+# --- 脇の V（曲げた姿勢で胴の脇にできるくさび）の扱い（User 2026-09-30）。**しきい値の値は変えていない**（5.7 N は暫定のまま）---
+flank_v:
+  status: OPEN
+  policy: "カバーで塞ぐを主とし、閉じるトルクの上限は補助。5.7 N は暫定で、実測・規格確認なしに安全の確定として扱わない"
+  primary: soft_cover                    # Design の FLANK SKIRT STUDY。蛇腹の中の挟み込みは未検証
+  torque_limit_role: auxiliary           # ソフトの故障時に力を下げる・歯車の保護。V の保護の主ではない
+  allowed_torque_rule: "τ_allow = 5.7 N × r（r = 幅 5〜12 mm の位置の、Design が出す接触点の距離）。r が 46 mm より小さければさらに下がる"
+  contact_radius_from_design: pending    # ENTRY-E-0005 で依頼。届いたら flank_v.py を回し直す
+  open_discrepancy: "機械式リミッターの窓 0.7〜1.0 N·m は、r = 46 mm の許容トルク 0.26 N·m を上回る（DECISIONS.md 2026-09-30、OQ-0116）"
+  computed_in: simulation/hardware_gaps/HG-S3_torque_limiter/flank_v.md
+
 # --- 形の規則（力ではなく幾何で守る。**いずれも規格本文は未確認**）--------------------------------------
 geometry_rules:
   accessible_gap_forbidden_mm: [5.0, 12.0]
