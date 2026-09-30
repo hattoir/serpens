@@ -1,0 +1,496 @@
+{
+ "stroke": {
+  "0": {
+   "dz_mm": 0,
+   "dx_rearward_mm(L=20)": 0.0,
+   "envelope_mm3": 42501,
+   "material_mm3": 8751,
+   "sweep_envelope_mm3": 42501,
+   "sweep_into_head_all_mm3": 31106,
+   "extra_dig_vs_s0_mm3": 0,
+   "hood_material_at_up_into_head_mm3": 6084,
+   "by_ref_box_sweep_mm3": {
+    "camera XIAO Sense": 0.0,
+    "ToF front": 0.0,
+    "ToF down": 648.0,
+    "raking LED L": 140.0,
+    "raking LED R": 140.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 5379.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+   },
+   "by_ref_box_extra_vs_s0_mm3": {
+    "camera XIAO Sense": 0.0,
+    "ToF front": 0.0,
+    "ToF down": 0.0,
+    "raking LED L": 0.0,
+    "raking LED R": 0.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 0.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+   },
+   "by_head_body_sweep_mm3": {
+    "HEADV__00": 31106
+   },
+   "by_head_body_extra_vs_s0_mm3": {},
+   "roof_top_z": 16.6
+  },
+  "3": {
+   "dz_mm": 3,
+   "dx_rearward_mm(L=20)": 0.23,
+   "envelope_mm3": 43037,
+   "material_mm3": 9287,
+   "sweep_envelope_mm3": 51536,
+   "sweep_into_head_all_mm3": 39498,
+   "extra_dig_vs_s0_mm3": 8392,
+   "hood_material_at_up_into_head_mm3": 7729,
+   "by_ref_box_sweep_mm3": {
+    "camera XIAO Sense": 0.0,
+    "ToF front": 0.0,
+    "ToF down": 648.0,
+    "raking LED L": 140.0,
+    "raking LED R": 140.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 5400.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+   },
+   "by_ref_box_extra_vs_s0_mm3": {
+    "camera XIAO Sense": 0.0,
+    "ToF front": 0.0,
+    "ToF down": 0.0,
+    "raking LED L": 0.0,
+    "raking LED R": 0.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 21.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+   },
+   "by_head_body_sweep_mm3": {
+    "HEADV__00": 39498
+   },
+   "by_head_body_extra_vs_s0_mm3": {
+    "HEADV__00": 8392
+   },
+   "roof_top_z": 19.6
+  },
+  "5": {
+   "dz_mm": 5,
+   "dx_rearward_mm(L=20)": 0.64,
+   "envelope_mm3": 42501,
+   "material_mm3": 8751,
+   "sweep_envelope_mm3": 57196,
+   "sweep_into_head_all_mm3": 44974,
+   "extra_dig_vs_s0_mm3": 13868,
+   "hood_material_at_up_into_head_mm3": 8077,
+   "by_ref_box_sweep_mm3": {
+    "camera XIAO Sense": 0.0,
+    "ToF front": 0.0,
+    "ToF down": 648.0,
+    "raking LED L": 140.0,
+    "raking LED R": 140.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 5400.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 792.0
+   },
+   "by_ref_box_extra_vs_s0_mm3": {
+    "camera XIAO Sense": 0.0,
+    "ToF front": 0.0,
+    "ToF down": 0.0,
+    "raking LED L": 0.0,
+    "raking LED R": 0.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 21.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 792.0
+   },
+   "by_head_body_sweep_mm3": {
+    "HEADV__00": 44974
+   },
+   "by_head_body_extra_vs_s0_mm3": {
+    "HEADV__00": 13868
+   },
+   "roof_top_z": 21.6
+  },
+  "8": {
+   "dz_mm": 8,
+   "dx_rearward_mm(L=20)": 1.67,
+   "envelope_mm3": 42782,
+   "material_mm3": 9032,
+   "sweep_envelope_mm3": 66960,
+   "sweep_into_head_all_mm3": 53310,
+   "extra_dig_vs_s0_mm3": 22204,
+   "hood_material_at_up_into_head_mm3": 8062,
+   "by_ref_box_sweep_mm3": {
+    "camera XIAO Sense": 787.5,
+    "ToF front": 0.0,
+    "ToF down": 648.0,
+    "raking LED L": 140.0,
+    "raking LED R": 140.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 5400.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 2598.8
+   },
+   "by_ref_box_extra_vs_s0_mm3": {
+    "camera XIAO Sense": 787.5,
+    "ToF front": 0.0,
+    "ToF down": 0.0,
+    "raking LED L": 0.0,
+    "raking LED R": 0.0,
+    "IR LED": 0.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 21.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 2598.8
+   },
+   "by_head_body_sweep_mm3": {
+    "HEADV__00": 53310
+   },
+   "by_head_body_extra_vs_s0_mm3": {
+    "HEADV__00": 22204
+   },
+   "roof_top_z": 24.6
+  },
+  "10": {
+   "dz_mm": 10,
+   "dx_rearward_mm(L=20)": 2.68,
+   "envelope_mm3": 42975,
+   "material_mm3": 9225,
+   "sweep_envelope_mm3": 73813,
+   "sweep_into_head_all_mm3": 58438,
+   "extra_dig_vs_s0_mm3": 27332,
+   "hood_material_at_up_into_head_mm3": 7831,
+   "by_ref_box_sweep_mm3": {
+    "camera XIAO Sense": 1417.5,
+    "ToF front": 0.0,
+    "ToF down": 648.0,
+    "raking LED L": 140.0,
+    "raking LED R": 140.0,
+    "IR LED": 36.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 5400.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 3968.2
+   },
+   "by_ref_box_extra_vs_s0_mm3": {
+    "camera XIAO Sense": 1417.5,
+    "ToF front": 0.0,
+    "ToF down": 0.0,
+    "raking LED L": 0.0,
+    "raking LED R": 0.0,
+    "IR LED": 36.0,
+    "line light": 0.0,
+    "WS2812B x2": 0.0,
+    "skid TPU": 21.0,
+    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 3968.2
+   },
+   "by_head_body_sweep_mm3": {
+    "HEADV__00": 58438
+   },
+   "by_head_body_extra_vs_s0_mm3": {
+    "HEADV__00": 27332
+   },
+   "roof_top_z": 26.6
+  }
+ },
+ "head_bodies": {
+  "HEADV__00": {
+   "volume_mm3_in_box": 166221,
+   "x": [
+    -235.8,
+    -162.2
+   ],
+   "z": [
+    3.2,
+    39.8
+   ]
+  },
+  "HEADV__01": {
+   "volume_mm3_in_box": 8587,
+   "x": [
+    -224.2,
+    -199.2
+   ],
+   "z": [
+    48.2,
+    69.8
+   ]
+  },
+  "HEADV__02": {
+   "volume_mm3_in_box": 57,
+   "x": [
+    -223.2,
+    -219.2
+   ],
+   "z": [
+    65.2,
+    69.8
+   ]
+  },
+  "HEADV__03": {
+   "volume_mm3_in_box": 8587,
+   "x": [
+    -224.2,
+    -199.2
+   ],
+   "z": [
+    48.2,
+    69.8
+   ]
+  },
+  "HEADV__04": {
+   "volume_mm3_in_box": 57,
+   "x": [
+    -223.2,
+    -219.2
+   ],
+   "z": [
+    65.2,
+    69.8
+   ]
+  },
+  "HEADV__05": {
+   "volume_mm3_in_box": 406,
+   "x": [
+    -236.8,
+    -235.2
+   ],
+   "z": [
+    22.2,
+    37.8
+   ]
+  },
+  "HEADV__06": {
+   "volume_mm3_in_box": 158,
+   "x": [
+    -236.8,
+    -235.2
+   ],
+   "z": [
+    25.2,
+    34.8
+   ]
+  },
+  "HEADV__07": {
+   "volume_mm3_in_box": 20,
+   "x": [
+    -236.8,
+    -234.8
+   ],
+   "z": [
+    48.8,
+    51.2
+   ]
+  },
+  "HEADV__08": {
+   "volume_mm3_in_box": 20,
+   "x": [
+    -236.8,
+    -234.8
+   ],
+   "z": [
+    48.8,
+    51.2
+   ]
+  },
+  "HEADV__09": {
+   "volume_mm3_in_box": 288,
+   "x": [
+    -232.8,
+    -229.2
+   ],
+   "z": [
+    64.2,
+    67.8
+   ]
+  },
+  "HEADV__10": {
+   "volume_mm3_in_box": 45428,
+   "x": [
+    -235.8,
+    -162.2
+   ],
+   "z": [
+    40.2,
+    69.8
+   ]
+  },
+  "HEADV__11": {
+   "volume_mm3_in_box": 45430,
+   "x": [
+    -235.8,
+    -162.2
+   ],
+   "z": [
+    40.2,
+    69.8
+   ]
+  },
+  "HEADV__12": {
+   "volume_mm3_in_box": 4050,
+   "x": [
+    -235.8,
+    -226.2
+   ],
+   "z": [
+    40.2,
+    68.8
+   ]
+  },
+  "HEADV__13": {
+   "volume_mm3_in_box": 3008,
+   "x": [
+    -225.8,
+    -208.8
+   ],
+   "z": [
+    46.2,
+    69.8
+   ]
+  },
+  "HEADV__14": {
+   "volume_mm3_in_box": 5348,
+   "x": [
+    -229.8,
+    -208.8
+   ],
+   "z": [
+    32.8,
+    69.8
+   ]
+  },
+  "HEADV__99": {
+   "volume_mm3_in_box": 558,
+   "x": [
+    -161.8,
+    -160.2
+   ],
+   "z": [
+    9.8,
+    17.2
+   ]
+  }
+ },
+ "ref_boxes": {
+  "camera XIAO Sense": [
+   -232.0,
+   -217.0,
+   -10.5,
+   10.5,
+   22.0,
+   38.0
+  ],
+  "ToF front": [
+   -232.0,
+   -230.0,
+   -9.0,
+   9.0,
+   42.0,
+   55.0
+  ],
+  "ToF down": [
+   -200.0,
+   -182.0,
+   -9.0,
+   9.0,
+   5.0,
+   7.0
+  ],
+  "raking LED L": [
+   -232.0,
+   -227.0,
+   -22.0,
+   -15.0,
+   5.0,
+   9.0
+  ],
+  "raking LED R": [
+   -232.0,
+   -227.0,
+   15.0,
+   22.0,
+   5.0,
+   9.0
+  ],
+  "IR LED": [
+   -232.0,
+   -228.0,
+   11.0,
+   17.0,
+   25.0,
+   31.0
+  ],
+  "line light": [
+   -232.0,
+   -224.0,
+   -8.0,
+   8.0,
+   62.0,
+   70.0
+  ],
+  "WS2812B x2": [
+   -200.0,
+   -190.0,
+   -16.0,
+   -8.0,
+   70.0,
+   73.0
+  ],
+  "skid TPU": [
+   -230.0,
+   -200.0,
+   -18.0,
+   18.0,
+   0.0,
+   5.0
+  ],
+  "J1 servo (REF, y 幅は ASSUMED ±22.6)": [
+   -190.0,
+   -145.0,
+   -22.6,
+   22.6,
+   20.0,
+   45.0
+  ]
+ },
+ "kinematics_assumed": {
+  "5": {
+   "crank_r_mm(2r=stroke)": 2.5,
+   "SG90_stall_Nm(ASSUMED 0.12 @4.8V)": 0.12,
+   "peak_force_N_at_crank_pin": 48.0,
+   "hood_weight_N": 0.112,
+   "free_fall_speed_m_per_s": 0.31,
+   "free_fall_energy_mJ": 0.56,
+   "drive_speed_mm_s(0.5 s)": 10.0
+  },
+  "8": {
+   "crank_r_mm(2r=stroke)": 4.0,
+   "SG90_stall_Nm(ASSUMED 0.12 @4.8V)": 0.12,
+   "peak_force_N_at_crank_pin": 30.0,
+   "hood_weight_N": 0.112,
+   "free_fall_speed_m_per_s": 0.4,
+   "free_fall_energy_mJ": 0.89,
+   "drive_speed_mm_s(0.5 s)": 16.0
+  },
+  "10": {
+   "crank_r_mm(2r=stroke)": 5.0,
+   "SG90_stall_Nm(ASSUMED 0.12 @4.8V)": 0.12,
+   "peak_force_N_at_crank_pin": 24.0,
+   "hood_weight_N": 0.112,
+   "free_fall_speed_m_per_s": 0.44,
+   "free_fall_energy_mJ": 1.12,
+   "drive_speed_mm_s(0.5 s)": 20.0
+  }
+ }
+}
