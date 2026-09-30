@@ -77,3 +77,14 @@ def test_tof_cliff_overhang_is_dominated_by_the_10_5_mm_lead(budget) -> None:
     assert budget.overhang_mm(0.0, 0.033, 1) == pytest.approx(10.5)
     assert budget.overhang_mm(80.0, 0.033, 1) == pytest.approx(10.5 + 80 * (0.033 + 0.005 + 0.010))
     assert budget.overhang_mm(80.0, 0.033, 3) > budget.overhang_mm(80.0, 0.033, 1) > budget.overhang_mm(30.0, 0.033, 1)
+
+
+def test_stopper_load_is_dominated_by_impact_and_a_pla_pin_is_marginal(chk) -> None:
+    o = chk.stopper_loads()
+    assert o["static_working_cap_prior_n"][1] < 1.0                                   # 作業中の上限（8/1000）では 1 N 未満
+    assert o["static_default_cap_nominal_n"][1] == pytest.approx(12.5, abs=0.1)        # 既定の上限 0.449 N·m ÷ 36 mm（Design の「10 N 級」）
+    assert o["static_limiter_ineffective_n"][1] > 80.0                                 # レジスタが効かない場合（ストール ÷ 腕）
+    assert o["impact_n"]["120 deg/s（robot.yaml の J7 の最高） / PLA 100 N/mm"][1] > o["static_default_cap_prior_n"][1]   # 衝撃は上限で抑えられない
+    assert o["impact_n"]["120 deg/s（robot.yaml の J7 の最高） / TPU 緩衝 5 N/mm"][1] < o["impact_n"]["120 deg/s（robot.yaml の J7 の最高） / PLA 100 N/mm"][0]
+    assert o["pin_capacity_n"]["PLA 35 MPa（20〜50）"] == pytest.approx(20.6, abs=0.2)
+    assert o["pin_capacity_n"]["鋼 250 MPa"] > o["static_limiter_ineffective_n"][1]

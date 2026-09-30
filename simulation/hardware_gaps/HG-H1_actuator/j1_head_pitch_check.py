@@ -60,6 +60,36 @@ def main() -> dict:
     return out
 
 
+def stopper_loads() -> dict:
+    """機械ストッパー（Design: 首の芯の半径方向のピン φ3、r 44〜48.5、フードの窓の端に当たる。`docs/design/j1_cover_stopper_2026-09-30.md`）にかかる荷重の見積もり [N]。
+    ACTUATOR_MODEL_SIM。**すべて prior・仮定（ASSUMED）**。5.7 N・0.25 N·m とは無関係の、機械の強度の見積もり。
+      静的: 上限トルク ÷ 腕（腕 = ピンの半径 44〜48.5 mm。Design の記述 36〜47 mm も含めて 36〜48.5 mm で見る）
+      衝撃: F = ω √(J k)（HG-H1 と同じ式。**トルク上限では抑えられない**）。k = ストッパーの剛性（PLA 同士 100 N/mm / TPU の緩衝 5 N/mm、ASSUMED）
+      ピンの曲げ: 片持ち梁、長さ L = 4.5 mm、直径 3 mm。許容応力 PLA 35 MPa（FDM の積層方向でばらつく。20〜50、ASSUMED）/ 鋼 250 MPa（ASSUMED）
+    """
+    stall = A["servo"]["stall_torque_nm_at_7v4"]
+    e = A["control"]["cap_model_error"]
+    arm = (0.036, 0.0485)
+    cap_lo, cap_hi = 0.167 * stall[0] * (1 + min(e)), 0.167 * stall[1] * (1 + max(e))
+    out = {"arm_m": arm}
+    out["static_default_cap_nominal_n"] = (0.449 / arm[1], 0.449 / arm[0])
+    out["static_default_cap_prior_n"] = (cap_lo / arm[1], cap_hi / arm[0])
+    w_lo, w_hi = 8 / 1000 * stall[0] * (1 + min(e)), 8 / 1000 * stall[1] * (1 + max(e))
+    out["static_working_cap_prior_n"] = (w_lo / arm[1], w_hi / arm[0])
+    out["static_limiter_ineffective_n"] = (stall[0] / arm[1], stall[1] / arm[0])        # レジスタが効かない（解釈違い・設定漏れ）= ストール
+    j = A["servo"]["reflected_inertia_kgm2"]
+    imp = {}
+    for label, dps in (("120 deg/s（robot.yaml の J7 の最高）", 120.0), ("30 deg/s", 30.0)):
+        w = math.radians(dps)
+        for kname, k in (("PLA 100 N/mm", 1.0e5), ("TPU 緩衝 5 N/mm", 5.0e3)):
+            imp[f"{label} / {kname}"] = (w * math.sqrt(j[0] * k), w * math.sqrt(j[1] * k))
+    out["impact_n"] = imp
+    d, L = 3.0, 4.5
+    S = math.pi * d ** 3 / 32.0                          # 断面係数 mm³
+    out["pin_capacity_n"] = {"PLA 35 MPa（20〜50）": 35.0 * S / L, "PLA 20 MPa": 20.0 * S / L, "鋼 250 MPa": 250.0 * S / L}
+    return out
+
+
 if __name__ == "__main__":
     for k, v in main().items():
         print(k, v)
