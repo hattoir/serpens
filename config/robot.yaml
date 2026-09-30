@@ -72,6 +72,8 @@ neck:
   floor_watch_soft_deg: [-2.0, 1.0]        # 作業窓（Design の提案。すき間 ≤ 40 mm³）
   floor_watch_stop_deg: [-4.0, 3.0]        # 機械ストッパー（上の輪の覆いあり。覆いなしは下限 −4° で危険体積 約 5 倍）
   floor_watch_near_limit_speed_dps: 40.0   # 窓の端の手前 2° の区間の速さの上限（余裕 2° − 位置の誤差 1.09° から、減速度 1000 °/s² で減速できる速さ）
+  floor_watch_decel_dps2: 1000.0           # 窓の端の手前へ近づくときの減速の傾き（保守的な仮定。最大 2233。J1 の実測で確認）
+  floor_watch_enforce: false               # **既定オフ**。HT-001（J1-0: 実機の符号の確認）が済むまで有効にしない。有効にすると、機体側（device / ファーム）で範囲外の HEAD を拒否し、速さを制限する
 
 # 質量配分（仮定値。実測したら差し替える）
 mass_budget_g:
