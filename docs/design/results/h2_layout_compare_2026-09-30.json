@@ -1,0 +1,80 @@
+{
+ "before_design_2x2": {
+  "n_pos": 88,
+  "n_neg": 24,
+  "patrol_recall": 0.8181818181818182,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.90625,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.4281756592426333,
+  "diameter_rel_err_median": 0.10333545260113305,
+  "loc_err_median_mm": 6.058401570904639
+ },
+ "after_front_corner": {
+  "n_pos": 88,
+  "n_neg": 24,
+  "patrol_recall": 0.8863636363636364,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.84375,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.4949180193302478,
+  "diameter_rel_err_median": 0.22504618462411702,
+  "loc_err_median_mm": 5.5817396882017665
+ },
+ "current_pos_with_hood_approx": {
+  "n_pos": 88,
+  "n_neg": 24,
+  "patrol_recall": 0.0,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.90625,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 0.9242258961502419,
+  "diameter_rel_err_median": 0.425258838285843,
+  "loc_err_median_mm": 5.122836707164488
+ },
+ "after_front_corner_z9": {
+  "n_pos": 88,
+  "n_neg": 24,
+  "patrol_recall": 0.45454545454545453,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.84375,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.2421176744478792,
+  "diameter_rel_err_median": 0.22504618462411702,
+  "loc_err_median_mm": 5.842047424400894
+ },
+ "after_front_corner_z4": {
+  "n_pos": 88,
+  "n_neg": 24,
+  "patrol_recall": 0.9318181818181818,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.84375,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 2.104514486244497,
+  "diameter_rel_err_median": 0.1618285592275422,
+  "loc_err_median_mm": 5.837720989861948
+ },
+ "after_runner_front": {
+  "n_pos": 88,
+  "n_neg": 24,
+  "patrol_recall": 0.9431818181818182,
+  "inspect_recall": 1.0,
+  "critical_inspect_recall": 1.0,
+  "specular_critical_flagged": 0.84375,
+  "false_alarm_patrol": 0.0,
+  "false_alarm_inspect": 0.0,
+  "height_abs_err_median_mm": 1.7047120461966978,
+  "diameter_rel_err_median": 0.15842531774453716,
+  "loc_err_median_mm": 5.579304117608263
+ }
+}
