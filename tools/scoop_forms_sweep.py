@@ -166,14 +166,14 @@ def load_rank(name: str) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "intake_c", "resummarize"])
+    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "intake_c", "cover_intake", "resummarize"])
     ap.add_argument("--n-cell", type=int, default=2)
     ap.add_argument("--workers", type=int, default=14)
     args = ap.parse_args()
     cfg = load_config()
     t0 = time.time()
     if args.stage == "resummarize":
-        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "intake_c"):
+        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "intake_c", "cover_intake"):
             p = OUT / f"scoop_forms_{name}_rows.csv"
             if p.exists():
                 rows = [{k: _typed(v) for k, v in r.items()} for r in csv.DictReader(open(p, encoding="utf-8"))]
@@ -250,6 +250,14 @@ def main() -> None:
             designs.append(("hood", {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "clearance_mm": c, "mu_wall_scale": mw, "mu_floor_scale": mf}, 10.0, True))
         for c in (0.0, 0.1, 0.3, 0.6, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0):
             designs.append(("hood", {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "clearance_mm": c, "bump_mm": 0.5}, 10.0, True))
+    elif args.stage == "cover_intake":              # 上の輪の覆い（襟が前へ 7 mm、約 1.1 g）の有無で、取り込みが変わるか: 頭の質量 80 / 81.1 g × c × 段差 t × 床（平ら 2 種 + 凹凸 ±0.5）
+        designs, n_cell = [], 1
+        for hm, c, t in itertools.product((80.0, 81.1), (0.0, 0.1, 0.3, 0.6, 1.0), (0.0, 0.002)):
+            base = {"funnel": True, "gate": True, "retreat": 30, "backstop": None, "clearance_mm": c, "head_mass_g": hm}
+            if t:
+                base["plate"] = t
+            designs.append(("hood", base, 10.0, True))
+            designs.append(("hood", {**base, "bump_mm": 0.5}, 10.0, True))
     elif args.stage == "rough":                      # 床の粗さ（細かい高さ場）× 垂直の段差 0.002〜0.1 mm
         designs, n_cell = [], 2
         for amp, t in itertools.product((0.01, 0.03, 0.1), (0.0, 0.002, 0.005, 0.01, 0.03, 0.1)):
@@ -324,7 +332,7 @@ def main() -> None:
     rows = run_fcases(cases, workers=args.workers)
     write_rows(args.stage, rows)
     rank = design_table(rows, args.stage)
-    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "intake_c"):
+    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "film", "cloche", "cloche2", "cloche3", "intake_c", "cover_intake"):
         cell_table(rows, args.stage)
     print(f"done in {time.time() - t0:.0f} s", flush=True)
     for x in rank[:25]:

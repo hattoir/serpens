@@ -273,7 +273,7 @@ def assemble(f: Form, parts: Parts) -> str:
     {nl.join('    ' + s for s in parts.world).strip()}
     <body name="head" pos="0 0 0">
       <joint name="slide" type="slide" axis="1 0 0" damping="0"/>
-      <inertial pos="{_f(f.depth / 2)} 0 0.01" mass="{float(cfg['head']['mass_g']) / 1000.0:.6g}" diaginertia="2e-5 2e-5 2e-5"/>
+      <inertial pos="{_f(f.depth / 2)} 0 0.01" mass="{float(f.p.get('head_mass_g', cfg['head']['mass_g'])) / 1000.0:.6g}" diaginertia="2e-5 2e-5 2e-5"/>
       {nl.join('      ' + s for s in parts.head_geoms).strip()}
       {nl.join('      ' + s for s in parts.children).strip()}
     </body>

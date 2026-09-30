@@ -106,6 +106,15 @@ close と、別スレッドの announce / tick の間の判定と送信の隙間
 
 ---
 
+## 2026-09-30 — 覆い（襟が前へ 5〜7 mm、+1.1 g）は取り込みを変えない / B2 の観察の受け渡しと比較スクリプト
+
+**Decision**（R-002 の続き。ENTRY-E-0012）: (1) 上の輪の覆いの有無（頭の質量 80 / 81.1 g）で、取り込みが変わるかを MUJOCO_SIM で確かめた（`tools/scoop_forms_sweep.py cover_intake`、960 回）。**変わらない**: 平らな床・凹凸 ±0.5 mm の床とも、壁下すき間 c 0〜1.0 mm で 16/16 ずつ、段差 t = 0.002 mm（垂直）は c によらず 0/16。覆いは口から約 90 mm 後ろ・床から 44 mm 上の襟で、口・壁の下端・カメラの見通しに掛からない（幾何）ので、効きうるのは質量だけ。**段差 c + t の掃引で意味を持つのは t = 0 のみ**。(2) B2 の実物の観察の受け渡し: `ai-shared/B2_test_log_template.csv`（Design の v2 の列 + measured_t_mm / measured_c_mm / hood_sanded / push_speed_mm_s_est / offset_mm / tester / date）、User の記録は `ai-shared/b2_results/` に置く。`python tools/b2_compare.py <csv>` が、条件（t, c, 物, 床）ごとに観察の入る率（Wilson 90%）とシミュレーションの保持率を比べ、`simulation/results/b2_vs_sim.md` を作る（**一致 / 実物が良い / 実物が悪い**。シミュレーションに無い t は最も近い t を使い外挿と印）。
+**Why**: 覆いを採るかは Design の見た目（User）で、取り込みの理由では決まらないことを示す。B2 の比較は、モデルの後付けの調整をしないため、不一致の原因を表から探して DECISIONS に書く形にした。
+**注意（モデルの限界）**: 凹凸の床（世界座標の高さ場 ±0.5 mm）に段差の板（世界座標に固定）を足すと、床の山が板より高い所で板が隠れて保持が出る（t = 0.002 mm で 12〜15/16）。**板が床に沿わないモデルの人工物**で、結論に使っていない。
+**Context**: `simulation/results/scoop_forms_cover_intake_*.csv`、`simulation/results/j1_range_opt_2026-09-30.md` §5c（agent/engineering-h1-j1）、`tests/test_b2_compare.py`。**HARDWARE_VERIFIED ではない。B2 の実物は印刷待ち。**
+
+---
+
 ## 2026-09-30 — 段差に強い機構: 薄いフィルムの縁は 0%、フード昇降（cloche）は段差を避けて成立（位置合わせ ±5 mm）。推奨の比較表を更新
 
 **Decision**（User の依頼 2026-09-30 夜 B）: 「段差はほぼゼロが必須」を受けて、(1) 薄いフィルムの縁（垂直、面取りなし、0.01〜0.05 mm、粗さ ±0〜0.1、c 0.1 / 0.3）と、(2) フード昇降（cloche drop。`simulation/scoop/forms/cloche.py`、Design の概念 `hood_lift_2026-09-30.md`）を試し、(3) 「その場で覆う」と「運ぶ」を分けて評価した（報告書 §13）。推奨案の 4 列比較（駆動数・印刷しやすさ・段差への強さ・絨毯の懸念）を §13.6 に書いた。**HARDWARE_VERIFIED ではない。B2 の実物の観察（User が印刷中）は待っていない。観察が出たら、シミュレーションとの比較を別の節に足す（印刷待ち）**。
