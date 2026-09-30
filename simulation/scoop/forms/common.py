@@ -76,7 +76,7 @@ class Form:
         ob = cfg["objects"][obj_name]
         rf = self.p.get("rim_fillet_mm")                                   # 円柱（1 円玉・CR2032）の縁の丸み [mm]。既定は直角（悲観側）
         self.obj_geom_xml, self.obj_half_h, self.r_bound, self.obj_asset = _object_geom(ob, None if rf is None else float(rf))
-        self.mu_wall = float(self.fc["friction_wall"])
+        self.mu_wall = float(self.fc["friction_wall"]) * float(self.p.get("mu_wall_scale", 1.0))          # 摩擦の prior の幅（モンテカルロ用。既定 1）
 
     # --- ビルド ---
     def build(self) -> Parts:  # pragma: no cover - 各案で実装
@@ -243,7 +243,7 @@ def assemble(f: Form, parts: Parts) -> str:
     solref = f"{float(sim['solref_time_const_s']):.6g} 1"
     solimp = " ".join(f"{float(x):.6g}" for x in sim["solimp"])
     ob = cfg["objects"][f.obj_name]
-    mu_floor = float(ob.get("friction_floor", cfg["floors"][f.floor_name]["friction"]))
+    mu_floor = float(ob.get("friction_floor", cfg["floors"][f.floor_name]["friction"])) * float(f.p.get("mu_floor_scale", 1.0))
     rolling = float(ob.get("rolling_friction_m", 1.0e-4))
     condim = 6 if ob["shape"] == "sphere" else 3
     pairs = []
