@@ -55,6 +55,15 @@ class Form:
     def __init__(self, cfg: dict[str, Any], params: dict[str, Any], obj_name: str, floor_name: str) -> None:
         self.cfg, self.p, self.obj_name, self.floor_name = cfg, dict(params), obj_name, floor_name
         self.fc = cfg["forms"]
+        ov: dict[str, Any] = {}                                          # 接触の設定の上書き（solref / 時間刻み / solimp の幅）。既定は config
+        if "solref_s" in self.p:
+            ov["solref_time_const_s"] = float(self.p["solref_s"])
+        if "timestep_s" in self.p:
+            ov["timestep_s"] = float(self.p["timestep_s"])
+        if "solimp_width_mm" in self.p:
+            ov["solimp"] = [*cfg["sim"]["solimp"][:2], float(self.p["solimp_width_mm"]) * MM]
+        if ov:
+            self.cfg = {**cfg, "sim": {**cfg["sim"], **ov}}
         cv = self.fc["cavity"]
         self.depth = cv["depth_mm"] * MM
         self.half_w = cv["width_mm"] * MM / 2.0
@@ -234,9 +243,11 @@ def assemble(f: Form, parts: Parts) -> str:
     rolling = float(ob.get("rolling_friction_m", 1.0e-4))
     condim = 6 if ob["shape"] == "sphere" else 3
     pairs = []
+    mg = float(f.p.get("margin_mm", 0.0)) * 1.0e-3
+    marg = f' margin="{mg:.6g}" gap="0"' if mg > 0 else ""
     for gname, mu in [("floor", mu_floor)] + parts.obj_pairs:
         pairs.append(f'<pair geom1="obj_geom" geom2="{gname}" condim="{condim}" friction="{mu:.6g} {mu:.6g} 1e-4 {rolling:.6g} {rolling:.6g}" '
-                     f'solref="{solref}" solimp="{solimp}"/>')
+                     f'solref="{solref}" solimp="{solimp}"{marg}/>')
     for r in parts.raw_pairs:
         pairs.append(r.replace("SOLREF", solref).replace("SOLIMP", solimp))
     assets = list(parts.assets)

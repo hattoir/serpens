@@ -134,3 +134,40 @@ def test_tolerance_expectation_is_bounded_by_the_grid_not_interpolated() -> None
     import numpy as np
     lo, hi = m.expected_bounds([0.0, 0.002, 0.1], np.array([1.0, 0.0, 0.0]))
     assert lo == pytest.approx(0.0) and hi == pytest.approx(0.002 / 0.3)
+
+
+def test_chamfer_polygon_is_a_convex_ramp_from_the_floor() -> None:
+    """面取りの板: 斜面は床（z = c）から始まり、上面（z = c + t）までを角 θ で上がる。凸で、丸めても凸のまま。"""
+    from simulation.scoop.forms.passive import plate_polygon
+    for ang, R in ((5, 0.0), (10, 0.1), (45, 0.3), (90, 0.1)):
+        poly = plate_polygon(0.0, 0.2e-3, 30e-3, ang, R)
+        cr = []
+        for i in range(len(poly)):
+            a, b, c = poly[i], poly[(i + 1) % len(poly)], poly[(i + 2) % len(poly)]
+            cr.append((b[0] - a[0]) * (c[1] - b[1]) - (b[1] - a[1]) * (c[0] - b[0]))
+        assert all(x >= -1e-15 for x in cr) or all(x <= 1e-15 for x in cr)
+        assert min(z for _, z in poly) == pytest.approx(0.0) and max(z for _, z in poly) == pytest.approx(0.2e-3)
+
+
+def test_chamfer_lets_a_cube_ride_in_but_does_not_make_the_hood_hold_it(cfg: dict) -> None:
+    """面取りで戻るのは「入る」（乗れる物）だけで、保持ではない。段差 0.2 mm・面取り 10° で、立方体は入るが保持にならず、1 円玉は入らない。"""
+    p = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.0, "plate": 0.2, "plate_chamfer_deg": 10, "plate_round_mm": 0.1}
+    cube = run_form_episode(cfg, "hood", p, "crumb_cube", "flooring", 10.0, 0.0, 1)
+    coin = run_form_episode(cfg, "hood", p, "coin_1yen", "flooring", 10.0, 0.0, 1)
+    assert cube.entered_ever and not cube.success
+    assert not coin.entered_ever and not coin.success
+
+
+def test_zero_percent_at_a_2_micron_step_does_not_depend_on_the_contact_solver_settings(cfg: dict) -> None:
+    """接触のやわらかさ（solref 5 倍）・時間刻み（1/4）を変えても、段差 0.002 mm は保持にならず、段差なしは保持になる（設定が壊れていない）。"""
+    base = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1}
+    for v in ({"solref_s": 0.01}, {"timestep_s": 5.0e-5}):
+        assert run_form_episode(cfg, "hood", {**base, **v}, "coin_1yen", "flooring", 10.0, 0.0, 1).success
+        assert not run_form_episode(cfg, "hood", {**base, **v, "plate": 0.002}, "coin_1yen", "flooring", 10.0, 0.0, 1).success
+
+
+def test_floor_roughness_does_not_rescue_a_vertical_step(cfg: dict) -> None:
+    """床の粗さ ±0.1 mm でも、垂直の段差 0.002 mm は保持にならない。板なしなら粗さがあっても保持になる。"""
+    base = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, "rough_mm": 0.1}
+    assert run_form_episode(cfg, "hood", base, "crumb_cube", "flooring", 10.0, 0.0, 1).success
+    assert not run_form_episode(cfg, "hood", {**base, "plate": 0.002}, "crumb_cube", "flooring", 10.0, 0.0, 1).success

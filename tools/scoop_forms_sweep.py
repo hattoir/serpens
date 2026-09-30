@@ -166,14 +166,14 @@ def load_rank(name: str) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "resummarize"])
+    ap.add_argument("stage", choices=["screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic", "resummarize"])
     ap.add_argument("--n-cell", type=int, default=2)
     ap.add_argument("--workers", type=int, default=14)
     args = ap.parse_args()
     cfg = load_config()
     t0 = time.time()
     if args.stage == "resummarize":
-        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce"):
+        for name in ("screen", "combos", "stage3", "baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic"):
             p = OUT / f"scoop_forms_{name}_rows.csv"
             if p.exists():
                 rows = [{k: _typed(v) for k, v in r.items()} for r in csv.DictReader(open(p, encoding="utf-8"))]
@@ -213,6 +213,39 @@ def main() -> None:
             if fillet:
                 d["rim_fillet_mm"] = fillet
             designs.append(("hood", d, 10.0, True))
+    elif args.stage == "chamfer":                    # 段差の縁の面取り・丸め（すき間 0 = 斜面が床から始まる）。t × 面取り角 × 丸み R
+        designs, n_cell = [], 3
+        for t, ang, R in itertools.product((0.05, 0.1, 0.2, 0.5), (5, 10, 20, 45, 90), (0.0, 0.1, 0.3)):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.0, "plate": t,
+                                     "plate_chamfer_deg": ang, "plate_round_mm": R}, 10.0, True))
+    elif args.stage == "chamfer2":                   # 面取りのある段差の、ごく小さい t（0.002〜0.02 mm）
+        designs, n_cell = [], 3
+        for t, ang in itertools.product((0.002, 0.005, 0.01, 0.02), (10, 45)):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.0, "plate": t,
+                                     "plate_chamfer_deg": ang, "plate_round_mm": 0.1}, 10.0, True))
+    elif args.stage == "rough":                      # 床の粗さ（細かい高さ場）× 垂直の段差 0.002〜0.1 mm
+        designs, n_cell = [], 2
+        for amp, t in itertools.product((0.01, 0.03, 0.1), (0.0, 0.002, 0.005, 0.01, 0.03, 0.1)):
+            d = {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, "rough_mm": amp}
+            if t:
+                d["plate"] = t
+            designs.append(("hood", d, 10.0, True))
+    elif args.stage == "solver":                     # 段差 0.002 mm の 0% が、接触の設定（solref・時間刻み・solimp・margin）に依存しないか
+        designs, n_cell = [], 2
+        variants = [{}, {"solref_s": 0.001}, {"solref_s": 0.004}, {"solref_s": 0.01}, {"timestep_s": 1.0e-4}, {"timestep_s": 5.0e-5},
+                    {"solimp_width_mm": 0.0001}, {"solimp_width_mm": 0.005}, {"margin_mm": 0.05}, {"margin_mm": 0.2}]
+        for v, t in itertools.product(variants, (0.002, 0.1)):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, "plate": t, **v}, 10.0, True))
+        for v in ({"solref_s": 0.01}, {"timestep_s": 5.0e-5}):        # 段差なしが、極端な設定でも成り立つか（設定が壊れていない確認）
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.1, **v}, 10.0, True))
+    elif args.stage == "realistic":                  # 実物に近い: 面取りあり + 粗さあり（+ 物の縁の丸み 0.3 mm）
+        designs, n_cell = [], 2
+        for ang, t, amp in itertools.product((10, 20), (0.05, 0.1, 0.2, 0.5), (0.03, 0.1)):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.0, "plate": t,
+                                     "plate_chamfer_deg": ang, "plate_round_mm": 0.1, "rough_mm": amp}, 10.0, True))
+        for t, amp in itertools.product((0.05, 0.1, 0.2, 0.5), (0.03, 0.1)):
+            designs.append(("hood", {"funnel": True, "gate": True, "retreat": 0, "backstop": None, "clearance_mm": 0.0, "plate": t,
+                                     "plate_chamfer_deg": 10, "plate_round_mm": 0.1, "rough_mm": amp, "rim_fillet_mm": 0.3}, 10.0, True))
     elif args.stage == "curtain2":                   # 垂れ布の追加の対照: 力をさらに下げる、垂れ布を短くして物の後ろへ落ちられるようにする
         designs, n_cell = [], 5
         for F, retreat in itertools.product((0.001, 0.003), (0, 30)):
@@ -264,7 +297,7 @@ def main() -> None:
     rows = run_fcases(cases, workers=args.workers)
     write_rows(args.stage, rows)
     rank = design_table(rows, args.stage)
-    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce"):
+    if args.stage in ("baseline", "tolerance", "tolerance2", "tolerance3", "curtain", "curtain2", "skirt", "gateforce", "chamfer", "chamfer2", "rough", "solver", "realistic"):
         cell_table(rows, args.stage)
     print(f"done in {time.time() - t0:.0f} s", flush=True)
     for x in rank[:25]:
