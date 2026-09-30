@@ -152,3 +152,10 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - 145° = Body Curvature Budget。Head Yaw は合計に入れないが独立した Safety Axis。3D enclosure / entrapment check は必須（Engineering）
 - Design 側の sweep（ENTRY-0026）: **Design の提案は Head Yaw ±30°**（J3 の補助つきで CSAR の視線を満たす最小。眠りの見た目のために広げない）
 - OPEN-SERPENS-DESIGN-011 は解決
+
+## 更新（2026-09-30）HEAD INTAKE STUDY 01（User の依頼）
+
+- 依頼: 巻き込みくちばし（TPU のランプ ＋ 11.5 mm の腕 ＋ 30×30×15 の空間）の試験片 A と頭部レイアウト。報告 `docs/design/intake_study/HEAD_INTAKE_STUDY01_report.md`、STL 6 点、Fusion `Serpens_FW02_HEAD_INTAKE_STUDY01_NOT_FOR_PRINT`（FW02 v5 の複製、元は未変更）
+- 主な所見: 卵の頭には入らない（空間の 42〜66 % が外）/ Bean 頭なら 約 92 % 入る / hinge_h 12.0 だと腕がランプを削る（12.2〜12.4 以上で解消）/ 閉じた腕は入口の 2 mm の帯しか塞がない / スキッド・下向き ToF と衝突
+- 安全・範囲の注意（User 判断）: PRODUCT.md「やらないこと: 物を拾う・回収する」（OPEN-012）、挟み込みの力（SAFETY_UNVERIFIED）、CSAR との整合。Design は PRODUCT.md を変えていない
+- ENTRY-D-0002、OPEN-SERPENS-DESIGN-012 / 013

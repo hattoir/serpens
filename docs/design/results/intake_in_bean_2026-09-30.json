@@ -1,0 +1,32 @@
+[
+  {
+    "tip_x": -232,
+    "space_inside_bean_pct": 93.2,
+    "sg90_inside_bean_pct": 53.7
+  },
+  {
+    "tip_x": -226,
+    "space_inside_bean_pct": 93.3,
+    "sg90_inside_bean_pct": 71.1
+  },
+  {
+    "tip_x": -222,
+    "space_inside_bean_pct": 92.9,
+    "sg90_inside_bean_pct": 75.5
+  },
+  {
+    "tip_x": -219,
+    "space_inside_bean_pct": 92.2,
+    "sg90_inside_bean_pct": 77.8
+  },
+  {
+    "tip_x": -215,
+    "space_inside_bean_pct": 91.3,
+    "sg90_inside_bean_pct": 79.9
+  },
+  {
+    "tip_x": -210,
+    "space_inside_bean_pct": 89.8,
+    "sg90_inside_bean_pct": 80.7
+  }
+]

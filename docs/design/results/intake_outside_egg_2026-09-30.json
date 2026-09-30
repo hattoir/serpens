@@ -1,0 +1,72 @@
+[
+  {
+    "body": "SPACE 30x30x15 (from tip_x -219)",
+    "volume_mm3": 13500,
+    "outside_egg_mm3": 5651,
+    "in_wall_zone_mm3": 1933,
+    "outside_pct": 41.9
+  },
+  {
+    "body": "RAMP L10 W30",
+    "volume_mm3": 441,
+    "outside_egg_mm3": 441,
+    "in_wall_zone_mm3": 0,
+    "outside_pct": 100.0
+  },
+  {
+    "body": "BEAK ARM open pose (forward)",
+    "volume_mm3": 644,
+    "outside_egg_mm3": 484,
+    "in_wall_zone_mm3": 140,
+    "outside_pct": 75.2
+  },
+  {
+    "body": "BEAK ARM closed pose (rearward)",
+    "volume_mm3": 644,
+    "outside_egg_mm3": 2,
+    "in_wall_zone_mm3": 69,
+    "outside_pct": 0.3
+  },
+  {
+    "body": "SG90 REF (+Y side)",
+    "volume_mm3": 6075,
+    "outside_egg_mm3": 5176,
+    "in_wall_zone_mm3": 439,
+    "outside_pct": 85.2
+  },
+  {
+    "body": "SPACE @tip_x=-232",
+    "volume_mm3": 13500,
+    "outside_egg_mm3": 8864,
+    "in_wall_zone_mm3": 1480,
+    "outside_pct": 65.7
+  },
+  {
+    "body": "SPACE @tip_x=-226",
+    "volume_mm3": 13500,
+    "outside_egg_mm3": 7074,
+    "in_wall_zone_mm3": 1850,
+    "outside_pct": 52.4
+  },
+  {
+    "body": "SPACE @tip_x=-219",
+    "volume_mm3": 13500,
+    "outside_egg_mm3": 5651,
+    "in_wall_zone_mm3": 1933,
+    "outside_pct": 41.9
+  },
+  {
+    "body": "SPACE @tip_x=-212",
+    "volume_mm3": 13500,
+    "outside_egg_mm3": 5557,
+    "in_wall_zone_mm3": 1926,
+    "outside_pct": 41.2
+  },
+  {
+    "body": "SPACE @tip_x=-205",
+    "volume_mm3": 13500,
+    "outside_egg_mm3": 6796,
+    "in_wall_zone_mm3": 1899,
+    "outside_pct": 50.3
+  }
+]
