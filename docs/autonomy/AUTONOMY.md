@@ -21,6 +21,7 @@ Engineering 側の詳細は各 checkout の `CLAUDE.md`（末尾「自律運用�
 3. **実行**する（シミュレーション・CAD・文書・テスト）。
 4. **`integration-log.md` に ENTRY を書く**（ENTRY-D-xxxx / ENTRY-E-xxxx。`From / To / Area / Change / Reason / Impact / Needs response / Status`）。
 5. **自分の state を更新**（Design = `design-state.md`、Engineering = `engineering-state.md`。相手の state は書き換えない）。
+5b. **`ai-shared/PRODUCT_HISTORY.md`（軌跡）の §9 に、この周の 1 節を足し、§1（現在地）・§6（数値の推移）・§7（訂正・撤回）を最新にする**（日時・依頼・やったこと・数値と出典・訂正・決定・ファイル・コミット・待ち。2026-10-01 に User が指示。Design / Engineering の両方が追記する）
 6. **相手宛ての依頼・訂正があれば `To:` を相手にして書く**。`REQUESTS.md` に 1 行足す（依頼元・優先度・状態）。
 7. 次の項目へ。**未処理の自分宛てが空で、収束基準（下の 6）を満たしたら、state に「待機」と書いて止まる。**
 

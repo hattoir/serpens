@@ -248,3 +248,7 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 
 - `docs/design/print_all/PRINT_LIST_ALL_2026-10-01.md`（P0 B2 → P1 HT-008/009 → P2 HT-010/011 → P3 KNUCKLE 任意）。ToF 基板の長さ 18 mm に CAD を訂正、ポケット上開き
 - 待機: 印刷・実機待ち
+
+## 更新（2026-10-01）軌跡の文書を作成（ENTRY-D-0017）
+
+- `ai-shared/PRODUCT_HISTORY.md`（以後 ENTRY ごとに §9 へ追記）。待機: 印刷・実機待ち
