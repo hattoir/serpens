@@ -90,6 +90,24 @@ def stopper_loads() -> dict:
     return out
 
 
+def head_cog_y_effects(y_mm: float, m_kg: float = 0.097, half_span_mm: float = 40.0, k_floor_n_mm: float = 1.0) -> dict:
+    """頭の重心の左右（y）の偏りの影響（Design の頭 E3 v2: SG90 が +y 側のみで約 +2.8 mm）。**すべて仮定（ASSUMED）。実測ではない。**
+      - J1（ピッチ軸）: 重心の y の偏りは、ピッチの静的トルク（x–z 面）に効かない。左右の傾き（ロール）のモーメント m g y が軸にかかるだけ（軸受の径方向の荷重）。
+      - 横スキッド（|y| 36〜44 の中心 ±40 mm）の荷重の左右差: ΔN = m g y / (2 × 半スパン)（横スキッドだけで支える上限。後ろのスキッドが分担すれば小さい）。
+      - 床（スキッドの押し込み剛性 k_floor [N/mm]）のたわみの左右差 = ΔN / k_floor。壁の下端の左右の高さの差になり、c₀ = 0.1 mm の半分（0.05 mm）以下に収める。
+    """
+    g = 9.81
+    weight = m_kg * g
+    d_n = weight * (y_mm * 1e-3) / (2.0 * half_span_mm * 1e-3)
+    return {"roll_moment_mn_m": weight * y_mm, "skid_asymmetry_ratio": y_mm / half_span_mm, "delta_n": d_n, "delta_deflection_mm": d_n / k_floor_n_mm}
+
+
+def head_cog_y_limit_mm(k_floor_n_mm: float, m_kg: float = 0.097, half_span_mm: float = 40.0, max_delta_mm: float = 0.05) -> float:
+    """左右のたわみの差を max_delta（既定 0.05 mm = c₀ の半分）以下にできる重心 y の偏りの上限 [mm]。"""
+    weight = m_kg * 9.81
+    return max_delta_mm * k_floor_n_mm * 2.0 * half_span_mm / weight
+
+
 if __name__ == "__main__":
     for k, v in main().items():
         print(k, v)

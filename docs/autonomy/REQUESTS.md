@@ -17,11 +17,12 @@
 | R-009 | P1 | Engineering（自分） | `neck.floor_watch_*`（作業窓・ストッパー・窓の端の手前の速さ）を firmware / executor で強制する配線（今は設定の値だけ） | E-0011 | **完了（E-0012、2026-09-30）**: 機体側 + PC 側 + ファームの写し。**既定オフ**。HT-001 の後に有効化（R-013） |
 | R-010 | P2 | Engineering（自分） | HT-001〜004 の実測が来たら、`assumptions.yaml` に D・B・J・k・e を入れて `j1_range_opt_report.py` を回し直す | E-0011 | 待機（User の測定待ち） |
 | R-011 | P1 | Design → User | 上の輪の覆い（襟が前へ 7 mm 伸びる）を採るか（見た目。案 A / B / C / なし） | D-0012 | **完了（2026-09-30）: User が案 A を採用**（ENTRY-D-0013） |
-| R-012 | P1 | Design → Engineering | TPU パッドの材質（E 3 MPa 級 = 柔らかい TPU。95A では衝撃が減らない）の確認、窓の端面（PLA 2 mm）の支圧、ダウエルの取り付け | D-0012 | **回答済み（E-0012）**: E 10 MPa 級・厚さ 4〜6 mm または板ばね（E 3 MPa は底付き）。窓の端面の支圧は約 8〜10 MPa（未検査 = HT-009） |
+| R-012 | P1 | Design → Engineering | TPU パッドの材質（E 3 MPa 級 = 柔らかい TPU。95A では衝撃が減らない）の確認、窓の端面（PLA 2 mm）の支圧、ダウエルの取り付け | D-0012 | **回答済み（E-0014）**: 材質は P1（95A 級 E 20〜30 MPa・t 3 mm）か P2（E ≈ 10 MPa・t 4〜6 mm）。E 3 MPa 級は底付き。窓の端面の支圧 8〜12 MPa（SF 1.7〜3.6、HT-009 で確認、要ならスリーブ）。重心 y の許容は ≤ 4 mm（v2 の +2.8 mm は許容内、ダミー質量は不要） |
 | R-013 | P1 | Engineering（自分） | HT-001（符号）が一致したら `neck.floor_watch_enforce: true` と `FW_PITCH_GUARD_ENABLED = true` を別コミットで有効化（DECISIONS に HT-001 の結果を書く） | E-0012 | 待機（User の HT-001 待ち） |
 | R-014 | P1 | Engineering → Design | 頭 E3 統合版の質量・重心（Fusion の物理特性）と、殻の強度の荷重条件への回答（E-0012 (8)） | E-0012 / D-0011 | 依頼済み（Design の回答待ち） |
 | R-015 | P2 | Engineering → Design | +6〜+9° と −7.5°（覆いあり）の危険体積（補間の点。急がない）、ストッパーのパッド仕様（E 10 MPa 級・厚さ 4〜6 mm または板ばね） | E-0012 | 依頼済み |
 | R-016 | P1 | Engineering（自分） | B2 の記録（`ai-shared/b2_results/`）が来たら `tools/b2_compare.py` を回して比較を `simulation/results/b2_vs_sim.md` に出し、不一致の原因を DECISIONS に書く | E-0012 | 待機（印刷待ち） |
 | R-017 | P1 | Engineering → Design | フードが下がりきった 1 ビットの手段（スイッチ / ホール / スキッド接触）。ゲートを閉じる合図はその後。昇降の指令から 0.6 s で立たなければ保持・前進停止・記録 | E-0013 | 依頼済み（Design の回答待ち） |
 | R-018 | P2 | Engineering → Design | J1 サーボ箱の y 方向の寸法（STS3215 参照値 45.23 × 24.73 × 35。REF 箱 y ±18 と不一致）の確認 | E-0013 / R-004 | 依頼済み |
+| R-019 | P2 | Engineering（自分） | HT-012（マットのスキッドの押し込み剛性 k の実測）が来たら、重心 y の許容（4.2 mm × k）を更新 | E-0014 | 待機（実機待ち） |
 

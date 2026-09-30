@@ -17,6 +17,15 @@
 
 ---
 
+## 2026-09-30 — R-012（TPU パッドは P1: 95A 級 E 20〜30 MPa・t 3 mm / P2: E ≈ 10 MPa・t 4〜6 mm）と頭の重心 y の許容（≤ 4 mm）（ENTRY-E-0014）
+
+**Decision**: パッドは E 3 MPa 級を選ばない（底付き）。**P1（窓を 14.8 mm に保つ）= 95A 級・t 3 mm で SF p05 2.5〜2.9、P2（衝撃を下げる）= E ≈ 10 MPa・t 4〜6 mm で SF p05 4.0〜4.6**（鋼ダウエル φ3 前提、120°/s の衝突・減速なし。パッドなしは 2.0）。選ぶ基準は Shore でなく実測の E（HT-008）。窓の端面の支圧は 8〜12 MPa（PLA 20〜30 MPa で SF 1.7〜3.6。未検査 = HT-009。要ならスリーブ）。**頭の重心 y の許容は |y| ≤ 4 mm**（マットの k ≥ 1 N/mm を仮定。許容 y = 4.2 mm × k。ASSUMED）。Design の v2 の +2.8 mm は許容内でダミー質量は不要。J1 のピッチの静的トルクに y は効かない（ロールのモーメント 2.7 mN·m）。
+**Why**: Design の パッド断面（7.2 mm²）で、E と厚さの組み合わせのひずみと衝撃・SF を掃引した結果（`j1_range_opt_2026-09-30.md` §4b）。重心 y は、左右の横スキッドの荷重差（y / 40 = 7%）が床のたわみの左右差になり、c₀ = 0.1 mm の半分（0.05 mm）以下に収める条件で決めた。**マット・TPU の E・PLA の圧縮強度は仮定。5.7 N・0.25 N·m は暫定で使っていない。安全の確定ではない。HARDWARE_VERIFIED ではない。**
+**戻し方**: 文書と関数（`head_cog_y_effects` / `head_cog_y_limit_mm`）のみ。設定の変更なし。
+**Context**: `simulation/hardware_gaps/HG-H1_actuator/j1_head_pitch_check.py`、`ai-shared/HARDWARE_TODO.md` HT-008 / HT-009 / HT-012。
+
+---
+
 ## 2026-09-30 — R-009: Floor Watch の頭（J7）の範囲・速さの強制（既定オフ）を機体側（device_motion / ファーム）と PC 側に入れた。ENTRY-E-0011 の 2 点を訂正（膝・TPU パッド）
 
 **Decision**（User の指示 2026-09-30 夜。ENTRY-E-0012）: (1) **`serpens/motion/pitch_guard.py`** を新設し、`neck.floor_watch_*` を強制する。**範囲 [−4°, +3°] の外の明示の HEAD 指令は機体側で拒否**（NACK OUT_OF_RANGE、状態を変えない。`device_motion.head_ok`）、**姿勢プリセット（POSE）・呼吸・内部の目標は範囲へクランプ**（`set_pose`・`step`・`output`）、**窓 [−2°, +1°] の外（窓の端 〜 ストッパー）は速さを 40 °/s へ頭打ち**（窓の内側から入るときは、窓の端で 40 °/s に一致する傾き（減速度 1,000 °/s²）で減速）。拒否・クランプ・速度制限はすべて `events` と `logging`（`serpens.pitch_guard`）に記録。PC 側（`LinkClient.head`）は先に同じ検査（範囲外はクランプ + 記録）を行うが、**機体側は PC を信頼せず独立に検査する**（PC のガードを外しても NACK で拒否。試験済み）。(2) ファーム（`config.h` / `.ino`）に**同じ判断の写し**を入れた。定数は `FW_PITCH_*`（`robot.yaml` と一致を試験）。(3) **既定はオフ**（`neck.floor_watch_enforce: false`、ファームの `FW_PITCH_GUARD_ENABLED = false`）。**HT-001（J1-0: 実機の符号の確認）が済むまで有効にしない**。(4) `robot.yaml` の J7（−8 / 90）は変えていない。**Floor Watch の頭に限る**追加の制限。

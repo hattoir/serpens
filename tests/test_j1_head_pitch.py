@@ -88,3 +88,11 @@ def test_stopper_load_is_dominated_by_impact_and_a_pla_pin_is_marginal(chk) -> N
     assert o["impact_n"]["120 deg/s（robot.yaml の J7 の最高） / TPU 緩衝 5 N/mm"][1] < o["impact_n"]["120 deg/s（robot.yaml の J7 の最高） / PLA 100 N/mm"][0]
     assert o["pin_capacity_n"]["PLA 35 MPa（20〜50）"] == pytest.approx(20.6, abs=0.2)
     assert o["pin_capacity_n"]["鋼 250 MPa"] > o["static_limiter_ineffective_n"][1]
+
+
+def test_head_cog_y_offset_is_harmless_for_pitch_and_bounded_by_the_floor_stiffness(chk) -> None:
+    e = chk.head_cog_y_effects(2.8)
+    assert e["roll_moment_mn_m"] == pytest.approx(2.66, abs=0.05)               # 97 g × 2.8 mm ≈ 2.7 mN·m（J1 の上限 0.45 N·m の 0.6%）
+    assert e["skid_asymmetry_ratio"] == pytest.approx(0.07) and e["delta_n"] == pytest.approx(0.033, abs=0.003)
+    assert chk.head_cog_y_effects(2.8, k_floor_n_mm=1.0)["delta_deflection_mm"] < 0.05                 # マット（k ≥ 1 N/mm を仮定）でも c₀ の半分以下
+    assert chk.head_cog_y_limit_mm(1.0) == pytest.approx(4.2, abs=0.1) and chk.head_cog_y_limit_mm(5.0) > 20.0
