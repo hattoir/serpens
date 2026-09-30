@@ -188,3 +188,9 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - `test_piece_b/B2/`（t と c を独立）、`head_intake_e3/REPORT.md`、`plate_layer_2026-09-30.md`（(a) DRUM-FULL / (b) 同心ドーム、J2〜J5 は p1 で 1373 → 52 / 71）、`j1_pitch_2026-09-30.md`（作業窓 −2〜+1°）
 - Fusion: Recovery 複製に `HEAD INTAKE on E3 STUDY`、`PLATE VARIANT A/B`。FW02 intake 複製に `TEST PIECE B2`。元は未変更
 - ENTRY-D-0006
+
+## 更新（2026-09-30 深夜）口の前の配置・ENTRY-D-0006 への回答
+
+- **先頭の注意**: 現行 CAD（KNUCKLE DRUM のみ）は、まっすぐ比で約 20 倍のすき間が残る。背板は未解決、J1 は範囲の確認待ち
+- `mouth_front_layout_2026-09-30.md`: 口の前の禁止域に入る部品 15,290 mm³ → 案 0。c は床から（シミュのコード）。B2 の板は訂正（`B2/CORRECTION_2026-09-30.md`）。J1 の取り込み窓 −0.1〜+0.9°。照明: 斜めを口の前の角へ移すと 15 → 35 倍
+- **Fusion 切断のため CAD 未変更**（スキッド・ToF・LED の移動は次回）。ENTRY-D-0007

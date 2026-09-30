@@ -1,0 +1,321 @@
+{
+  "source": "GEOMETRY_SIM（箱の重なり）",
+  "forbidden_zone": {
+    "x": [
+      -240.0,
+      -174.4
+    ],
+    "abs_y_max": 34.0,
+    "z_max": 16.6
+  },
+  "current": [
+    {
+      "name": "REF 頭のスキッド（Engineering PROVISIONAL）",
+      "source": "REF",
+      "x": [
+        -230,
+        -200
+      ],
+      "abs_y": [
+        0,
+        18
+      ],
+      "z": [
+        0,
+        5
+      ],
+      "intrusion_mm3": 5400,
+      "z_min_mm": 0,
+      "verdict": "禁止域に入る"
+    },
+    {
+      "name": "双子スキッド（Design LIGHT+SKID）",
+      "source": "Design",
+      "x": [
+        -232,
+        -172
+      ],
+      "abs_y": [
+        30,
+        40
+      ],
+      "z": [
+        0,
+        12
+      ],
+      "intrusion_mm3": 5529.6,
+      "z_min_mm": 0,
+      "verdict": "禁止域に入る"
+    },
+    {
+      "name": "顎板 2 枚（Design CHIN SHIELD）",
+      "source": "Design",
+      "x": [
+        -232,
+        -180
+      ],
+      "abs_y": [
+        20,
+        31
+      ],
+      "z": [
+        1,
+        4
+      ],
+      "intrusion_mm3": 3432,
+      "z_min_mm": 1,
+      "verdict": "禁止域に入る"
+    },
+    {
+      "name": "REF ToF 下向き",
+      "source": "REF",
+      "x": [
+        -200,
+        -182
+      ],
+      "abs_y": [
+        0,
+        9
+      ],
+      "z": [
+        5,
+        7
+      ],
+      "intrusion_mm3": 648,
+      "z_min_mm": 5,
+      "verdict": "禁止域に入る"
+    },
+    {
+      "name": "REF 斜めの LED（FW03 位置）",
+      "source": "REF",
+      "x": [
+        -232,
+        -227
+      ],
+      "abs_y": [
+        15,
+        22
+      ],
+      "z": [
+        5,
+        9
+      ],
+      "intrusion_mm3": 280,
+      "z_min_mm": 5,
+      "verdict": "禁止域に入る"
+    },
+    {
+      "name": "頬の下の LED（Design E3）",
+      "source": "Design",
+      "x": [
+        -215,
+        -210
+      ],
+      "abs_y": [
+        38,
+        42
+      ],
+      "z": [
+        5,
+        10
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 5,
+      "verdict": "外側（許容）"
+    },
+    {
+      "name": "鼻のカメラ窓の枠（D14）",
+      "source": "Design",
+      "x": [
+        -237,
+        -235
+      ],
+      "abs_y": [
+        0,
+        7
+      ],
+      "z": [
+        23,
+        37
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 23,
+      "verdict": "屋根より上（許容）"
+    },
+    {
+      "name": "口の線（Design E3）",
+      "source": "Design",
+      "x": [
+        -236,
+        -207
+      ],
+      "abs_y": [
+        27,
+        47
+      ],
+      "z": [
+        20,
+        23
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 20,
+      "verdict": "屋根より上（許容）"
+    },
+    {
+      "name": "REF IR LED",
+      "source": "REF",
+      "x": [
+        -232,
+        -228
+      ],
+      "abs_y": [
+        11,
+        17
+      ],
+      "z": [
+        25,
+        31
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 25,
+      "verdict": "屋根より上（許容）"
+    }
+  ],
+  "proposed": [
+    {
+      "name": "横のスキッド（口の左右の外側）",
+      "source": "案",
+      "x": [
+        -226,
+        -178
+      ],
+      "abs_y": [
+        36,
+        44
+      ],
+      "z": [
+        0,
+        10
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 0,
+      "verdict": "外側（許容）"
+    },
+    {
+      "name": "後ろのスキッド 2 つ（奥の壁の後ろ）",
+      "source": "案",
+      "x": [
+        -172,
+        -164
+      ],
+      "abs_y": [
+        14,
+        22
+      ],
+      "z": [
+        0,
+        7
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 0,
+      "verdict": "外側（許容）"
+    },
+    {
+      "name": "ToF 下向き（奥の壁の後ろ、2 つのスキッドの間）",
+      "source": "案",
+      "x": [
+        -172,
+        -165
+      ],
+      "abs_y": [
+        0,
+        7
+      ],
+      "z": [
+        7,
+        9
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 7,
+      "verdict": "外側（許容）"
+    },
+    {
+      "name": "斜めの LED（口の前の外側の角）",
+      "source": "案",
+      "x": [
+        -237,
+        -233
+      ],
+      "abs_y": [
+        36,
+        38
+      ],
+      "z": [
+        4,
+        8
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 4,
+      "verdict": "外側（許容）"
+    },
+    {
+      "name": "鼻のカメラ窓の枠（D14、変更なし）",
+      "source": "Design",
+      "x": [
+        -237,
+        -235
+      ],
+      "abs_y": [
+        0,
+        7
+      ],
+      "z": [
+        23,
+        37
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 23,
+      "verdict": "屋根より上（許容）"
+    },
+    {
+      "name": "口の線（Design E3、変更なし）",
+      "source": "Design",
+      "x": [
+        -236,
+        -207
+      ],
+      "abs_y": [
+        27,
+        47
+      ],
+      "z": [
+        20,
+        23
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 20,
+      "verdict": "屋根より上（許容）"
+    },
+    {
+      "name": "REF IR LED（変更なし）",
+      "source": "REF",
+      "x": [
+        -232,
+        -228
+      ],
+      "abs_y": [
+        11,
+        17
+      ],
+      "z": [
+        25,
+        31
+      ],
+      "intrusion_mm3": 0.0,
+      "z_min_mm": 25,
+      "verdict": "屋根より上（許容）"
+    }
+  ],
+  "current_total_intrusion_mm3": 15289.6,
+  "proposed_total_intrusion_mm3": 0.0
+}
