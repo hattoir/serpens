@@ -43,3 +43,11 @@ def test_up_stroke_torque_must_be_limited_far_below_an_sg90_stall(hl) -> None:
 
 def test_gap_band(hl) -> None:
     assert hl.gap_band_ok(4.0) and not hl.gap_band_ok(5.0) and not hl.gap_band_ok(8.0)
+
+
+def test_l2_leaf_ear_keeps_the_up_force_below_the_limit_over_the_e_prior(hl) -> None:
+    """Design の案 L2（TPU 95A の板ばね耳 12 × 1.4 × 9、4 mm）: E = 26 MPa で 1.2 N、E が 2 倍でも 2.8 N 以下。E の上限は約 62 MPa。"""
+    assert hl.leaf_ear_force_n(26.0) == pytest.approx(1.17, abs=0.02)
+    assert hl.leaf_ear_force_n(52.0) < hl.F_LIMIT_N
+    assert hl.max_e_for_force_mpa() == pytest.approx(62.0, abs=1.0)
+    assert hl.leaf_ear_stress_mpa(26.0) == pytest.approx(2.7, abs=0.1)

@@ -56,6 +56,22 @@ def gap_band_ok(stroke_mm: float) -> bool:
     return stroke_mm < 5.0
 
 
+def leaf_ear_force_n(e_mpa: float, b_mm: float = 12.0, t_mm: float = 1.4, l_mm: float = 9.0, deflection_mm: float = 4.0) -> float:
+    """Design の案 L2（TPU の板ばね耳、幅 b × 厚さ t × 長さ L の片持ち）が、先端を δ たわませたときの力。F = 3 E I δ / L³、I = b t³ / 12。"""
+    i = b_mm * t_mm ** 3 / 12.0
+    return 3.0 * e_mpa * i * deflection_mm / l_mm ** 3
+
+
+def leaf_ear_stress_mpa(e_mpa: float, t_mm: float = 1.4, l_mm: float = 9.0, deflection_mm: float = 4.0) -> float:
+    """根元の曲げ応力 σ = 3 E t δ / (2 L²)。"""
+    return 3.0 * e_mpa * t_mm * deflection_mm / (2.0 * l_mm ** 2)
+
+
+def max_e_for_force_mpa(f_limit_n: float = F_LIMIT_N) -> float:
+    """上げる側の力が f_limit 以下に収まる TPU の E の上限。"""
+    return f_limit_n / leaf_ear_force_n(1.0)
+
+
 def main() -> dict:
     out: dict = {"weight_n": weight_n()}
     rows = []
