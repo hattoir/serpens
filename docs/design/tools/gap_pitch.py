@@ -11,7 +11,7 @@ import gap_check as g
 TF = Path("C:/Users/Public/serpens_gapcheck/transforms.json")
 OUT = Path(__file__).resolve().parents[1] / "results"
 J1 = (-181.8, 32.4)
-ANG = {"p0": 0, "p7": -5, "p6": -10, "p5": -22, "p4": -45, "p8": 10, "p9": 22}
+ANG = {"p0": 0, "p7": -5, "p6": -10, "p5": -22, "p4": -45, "p8": 10, "p9": 22, "p10": -1, "p11": -2, "p12": -3, "p13": 1, "p14": 2, "p15": 3, "p16": 5, "p17": 7.5}
 folder, prefix, poses = Path(sys.argv[1]), sys.argv[2], sys.argv[3:]
 rows = {}
 for pose in poses:

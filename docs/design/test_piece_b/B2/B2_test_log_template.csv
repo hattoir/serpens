@@ -1,0 +1,11 @@
+condition_t_mm,condition_c_mm,object,floor,result(enter/return/underrun/pushed_away/pinched),notes
+0,0,1yen,floor,,
+0,0,CR2032,floor,,
+0,0,bead,floor,,
+0,0,cube,floor,,
+0.1,0,1yen,floor,,
+0.2,0,1yen,floor,,
+0.5,0,1yen,floor,,
+1.0,0,1yen,floor,,
+0,0.3,1yen,floor,,
+0,1.0,1yen,floor,,

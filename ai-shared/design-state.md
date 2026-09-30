@@ -181,3 +181,10 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - 円柱肩の試験片 R46 / R34（`docs/design/knuckle_test/`）、質量は中実（最大）61.1 g / 中空 55.8 g（`mass_addendum_2026-09-30.md`）
 - 試験片 B（`docs/design/test_piece_b/`）: 漏斗つきフード ほか。**段差の解釈は Design の仮定**
 - Fusion: Recovery 複製に `KNUCKLE TEST R46/R34 …`、FW02 intake の複製に `TEST PIECE B1 …`（元は未変更）
+
+## 更新（2026-09-30 夜）試験片 B2・頭への統合・背板 2 案・J1 範囲
+
+- **先頭の注意**: 現行 CAD（KNUCKLE DRUM のみ）は、まっすぐ比で約 20 倍のすき間の体積が残る。背板は現行 CAD では未解決のまま（案は別コンポーネント）。J1 は範囲の確認待ち
+- `test_piece_b/B2/`（t と c を独立）、`head_intake_e3/REPORT.md`、`plate_layer_2026-09-30.md`（(a) DRUM-FULL / (b) 同心ドーム、J2〜J5 は p1 で 1373 → 52 / 71）、`j1_pitch_2026-09-30.md`（作業窓 −2〜+1°）
+- Fusion: Recovery 複製に `HEAD INTAKE on E3 STUDY`、`PLATE VARIANT A/B`。FW02 intake 複製に `TEST PIECE B2`。元は未変更
+- ENTRY-D-0006

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="73.6mm" height="96.0mm" viewBox="0 0 73.600 96.050">
+<title>B2 STEP SHEET outline 1:1 mm (PET 0.1/0.2, masking tape). Front edge (left) = mouth plane</title>
+<polygon points="5.000,5.000 35.850,20.425 68.600,20.425 68.600,57.625 35.850,57.625 5.000,73.050" fill="none" stroke="black" stroke-width="0.2"/>
+<line x1="5" y1="2" x2="5" y2="86.04984471899925" stroke="red" stroke-width="0.15" stroke-dasharray="1,1"/>
+<text x="6" y="91.04984471899925" font-size="3" font-family="sans-serif">FRONT EDGE = MOUTH PLANE (step t is this edge). Outline 63.6 x 68 mm. Print at 100 percent scale.</text>
+</svg>

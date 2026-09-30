@@ -1,0 +1,28 @@
+{
+ "B_delta_cm3": {
+  "LINK1": 13.39,
+  "LINK2": -2.6,
+  "LINK3": -2.58,
+  "TAIL": -15.5
+ },
+ "A": {
+  "J3": {
+   "added_cm3": 19.3,
+   "solid_g": 24.0,
+   "outer_area_cm2": 74.1,
+   "hollow_g": 11.0
+  },
+  "J4": {
+   "added_cm3": 19.3,
+   "solid_g": 24.0,
+   "outer_area_cm2": 74.1,
+   "hollow_g": 11.0
+  },
+  "J5": {
+   "added_cm3": 25.7,
+   "solid_g": 31.8,
+   "outer_area_cm2": 140.3,
+   "hollow_g": 20.9
+  }
+ }
+}
