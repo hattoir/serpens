@@ -51,7 +51,7 @@ def paw_skid(sg):
     paw = box(-222, -210, y0, y1, 0, 10); union(paw, cyl_z(-222, yc, 0, 10, 7.8)); union(paw, cyl_z(-210, yc, 0, 10, 7.8))
     n0, n1 = (36.0, 44.0) if sg > 0 else (-44.0, -36.0)
     sk = box(-206, -182, n0, n1, 0, 10); union(sk, cyl_z(-182, sg * 40.0, 0, 10, 4.0)); union(paw, sk)
-    pocket = box(-224.0, -207.0, min(sg*37.6, sg*50.0), max(sg*37.6, sg*50.0), 2.9, 6.3)
+    pocket = box(-225.0, -206.6, min(sg*37.6, sg*50.0), max(sg*37.6, sg*50.0), 2.9, 10.5)
     window = box(-221.0, -213.0, min(sg*40.8, sg*46.8), max(sg*40.8, sg*46.8), -0.5, 3.0)
     return diff(diff(paw, pocket), window)
 def run(_context: str):
@@ -81,7 +81,7 @@ def run(_context: str):
     add(t, 'JAW dug v2 (hood s=4 envelope, SG90, leaf/crank zone, link slots; no rear ToF window)', jaw_src.appearance)
     for sg, tg in ((1, 'L (+y)'), (-1, 'R (-y)')):
         add(paw_skid(sg), 'SIDE SKID+PAW %s: paw round r7.8 |y|36-51.6 x-229.8..-202.2 + skid to x-178, pocket+window for ToF board [A]' % tg, A('SD01v2 sage'))
-        add(box(-223.5, -207.5, min(sg*37.8, sg*49.8), max(sg*37.8, sg*49.8), 3.0, 6.2), 'ToF BOARD %s 12x18x3.2 in paw (window down) [ASSUMED length]' % tg, A('SD01v2 ref blue'))
+        add(box(-224.7, -206.7, min(sg*37.8, sg*49.8), max(sg*37.8, sg*49.8), 3.0, 6.2), 'ToF BOARD %s 12x18x3.2 in paw (window down) [ASSUMED length]' % tg, A('SD01v2 ref blue'))
         add(cyl_x(40.0 * sg, 4.5, -230.4, -227.5, 2.0), 'CHEEK LED LENS %s d4 at paw front y%+d z4.5 pink [B]' % (tg, 40 * sg), A('SD01v2 blush pink'))
     for b in hl.bRepBodies:
         add(tbm.copy(b), b.name, A('SD01v2 blush pink') if b.name.startswith('TPU LEAF') else A('SD01v2 ref blue'))

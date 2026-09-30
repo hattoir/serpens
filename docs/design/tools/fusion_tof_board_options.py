@@ -27,11 +27,11 @@ def run(_context: str):
         y0, y1 = (36.0, 51.6) if sg > 0 else (-51.6, -36.0); yc = sg * 43.8
         paw = box(-222, -210, y0, y1, 0, 10); union(paw, cyl_z(-222, yc, 0, 10, 7.8)); union(paw, cyl_z(-210, yc, 0, 10, 7.8))
         # つま先の反り R6 は前端で、上から見て円（半径 10）にする。ポケットと窓を抜く
-        pocket = box(-224.0, -207.0, min(sg*37.6, sg*50.0), max(sg*37.6, sg*50.0), 2.9, 6.3)   # 基板 12.4 x 17 の余裕つき（y 40〜52.4）
+        pocket = box(-225.0, -206.6, min(sg*37.6, sg*50.0), max(sg*37.6, sg*50.0), 2.9, 10.5)   # 基板 12.4 x 17 の余裕つき（y 40〜52.4）
         window = box(-221.0, -213.0, min(sg*40.8, sg*46.8), max(sg*40.8, sg*46.8), -0.5, 3.0)
         paw = diff(diff(paw, pocket), window)
         specs.append(('S2 paw: widened skid nose (round r7.8) |y|36-51.6 x-229.8..-202.2 z0..10 with board pocket + window %s [A]' % ('L' if sg > 0 else 'R'), paw))
-        specs.append(('S2 paw: ToF board 12x18x3.2 in pocket y37.8-49.8 z3.0-6.2 %s [ASSUMED length]' % ('L' if sg > 0 else 'R'), box(-223.5, -207.5, min(sg*37.8, sg*49.8), max(sg*37.8, sg*49.8), 3.0, 6.2)))
+        specs.append(('S2 paw: ToF board 12x18x3.2 (x-224.7..-206.7) in pocket y37.8-49.8 z3.0-6.2 %s [ASSUMED length]' % ('L' if sg > 0 else 'R'), box(-224.7, -206.7, min(sg*37.8, sg*49.8), max(sg*37.8, sg*49.8), 3.0, 6.2)))
     bf = c.features.baseFeatures.add(); bf.startEdit()
     for n, tb in specs: c.bRepBodies.add(tb, bf)
     bf.finishEdit()
