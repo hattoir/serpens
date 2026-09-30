@@ -464,12 +464,13 @@ def analyse_fine(folder: Path, pose: str, transforms: Path, box: tuple[float, fl
 #   → 鈍角の V の入口（浅い）は入らず、平行な深い溝は入る。
 # ---------------------------------------------------------------------------
 def analyse_crevices(folder: Path, pose: str, transforms: Path, box: tuple[float, float, float, float, float, float], cell: float = 0.5,
-                     lo: float = 5.0, hi: float = 12.0, depth_min: float = 8.0) -> dict:
+                     lo: float = 5.0, hi: float = 12.0, depth_min: float = 8.0, extra_meshes: list | None = None, return_mask: bool = False) -> dict:
+    """extra_meshes: 姿勢の変換を掛けない追加の三角形メッシュ（(n,3,3)、mm。姿勢ごとに作ったカバーなど）。return_mask: 結果に hazard の bool 配列と W を入れる。"""
     global X0, X1, Y0, Y1, Z0, Z1, DX, DY, DZ
     saved = (X0, X1, Y0, Y1, Z0, Z1, DX, DY, DZ)
     X0, X1, Y0, Y1, Z0, Z1 = box; DX = DY = DZ = cell
     try:
-        occ = occupancy(load_posed(folder, pose, transforms))
+        occ = occupancy(load_posed(folder, pose, transforms) + list(extra_meshes or []))
     finally:
         X0, X1, Y0, Y1, Z0, Z1, DX, DY, DZ = saved
     empty = ~occ
@@ -520,5 +521,8 @@ def analyse_crevices(folder: Path, pose: str, transforms: Path, box: tuple[float
             out.append({"volume_mm3": round(len(p) * cell ** 3), "x_mm": [round(box[0] + mn[2] * cell), round(box[0] + (mx_[2] + 1) * cell)], "y_mm": [round(box[2] + mn[1] * cell), round(box[2] + (mx_[1] + 1) * cell)], "z_mm": [round(box[4] + mn[0] * cell), round(box[4] + (mx_[0] + 1) * cell)], "width_mm": [round(float(W[tuple(p.T)].min()), 1), round(float(W[tuple(p.T)].max()), 1)], "max_depth_mm": round(float(depth[tuple(p.T)].max()) * cell, 1)})
         out.sort(key=lambda d: -d["volume_mm3"])
         return out
-    return {"pose": pose, "cell_mm": cell, "box": list(box), "crevice_mm3": round(float(crev.sum()) * cell ** 3), "hazard_mm3": round(float(haz.sum()) * cell ** 3),
-            "hazard_clusters": clusters(haz, max(1, int(30 / cell ** 3))), "max_depth_in_crevices_mm": round(float(depth.max()) * cell, 1)}
+    out = {"pose": pose, "cell_mm": cell, "box": list(box), "crevice_mm3": round(float(crev.sum()) * cell ** 3), "hazard_mm3": round(float(haz.sum()) * cell ** 3),
+           "hazard_clusters": clusters(haz, max(1, int(30 / cell ** 3))), "max_depth_in_crevices_mm": round(float(depth.max()) * cell, 1)}
+    if return_mask:
+        out["_haz"] = haz; out["_W"] = W; out["_depth"] = depth
+    return out
