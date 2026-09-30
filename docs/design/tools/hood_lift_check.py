@@ -113,7 +113,7 @@ def main():
             info[k] = {"volume_mm3_in_box": round(float(o.sum() * cell)), "x": [round(float(xs[idx[:, 2].min()]), 1), round(float(xs[idx[:, 2].max()]), 1)],
                        "z": [round(float(zs[idx[:, 0].min()]), 1), round(float(zs[idx[:, 0].max()]), 1)]}
     SENS = dict(cg.SENSORS)
-    SENS["J1 servo (REF, y 幅は ASSUMED ±22.6)"] = (-190.0, -145.0, -22.6, 22.6, 20.0, 45.0)
+    SENS["J1 servo (REF, Fusion の REF 箱 y ±18)"] = (-190.0, -145.0, -18.0, 18.0, 20.0, 45.0)
 
     def box_mask(b):
         m = np.zeros_like(head_all)

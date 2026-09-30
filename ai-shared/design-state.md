@@ -214,3 +214,8 @@ ENTRY-0005〜0011（`integration-log.md`）: 首幅 68 の収まり / ライン�
 - **J1 の符号**: CAD のラベルは + が頭を下げる。Engineering の符号では、範囲の端は −5° = 401、+10° = 1562 mm³、作業窓 −2〜+1° は最大 40 mm³（`j1_sign_correction_2026-09-30.md`）
 - 上の輪の覆い（別コンポーネント、STL あり）で −5° 401 → 29。下のくさびは形で埋まらない（+3° に狭める / 動く覆い）
 - Fusion に別コンポーネントを追加（`MOUTH FRONT LAYOUT STUDY 01`、`HOOD LIFT STUDY 01`、`J1 COVER + STOPPER STUDY 01`）。既存は未変更、保存済み
+
+## 更新（2026-09-30 夜）頭 E3 の統合版（ENTRY-D-0011）
+
+- **先頭の注意**: KNUCKLE DRUM 後も、まっすぐ比で約 20 倍（18〜24 倍）のすき間が残る。背板は現行 CAD では未解決のまま。5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）。安全・合格の語は使わない
+- User の許可（組み替えてよい、デフォルメ調でかわいく）で `HEAD E3 INTEGRATED v1 - cute deformed` を別コンポーネントで作成（元は残す）。あご −56.5 cm³（−34 %）は Engineering の確認待ち

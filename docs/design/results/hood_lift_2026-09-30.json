@@ -19,7 +19,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 5379.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 0.0
    },
    "by_ref_box_extra_vs_s0_mm3": {
     "camera XIAO Sense": 0.0,
@@ -31,7 +31,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 0.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 0.0
    },
    "by_head_body_sweep_mm3": {
     "HEADV__00": 31106
@@ -58,7 +58,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 5400.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 0.0
    },
    "by_ref_box_extra_vs_s0_mm3": {
     "camera XIAO Sense": 0.0,
@@ -70,7 +70,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 21.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 0.0
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 0.0
    },
    "by_head_body_sweep_mm3": {
     "HEADV__00": 39498
@@ -99,7 +99,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 5400.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 792.0
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 792.0
    },
    "by_ref_box_extra_vs_s0_mm3": {
     "camera XIAO Sense": 0.0,
@@ -111,7 +111,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 21.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 792.0
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 792.0
    },
    "by_head_body_sweep_mm3": {
     "HEADV__00": 44974
@@ -140,7 +140,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 5400.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 2598.8
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 2598.8
    },
    "by_ref_box_extra_vs_s0_mm3": {
     "camera XIAO Sense": 787.5,
@@ -152,7 +152,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 21.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 2598.8
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 2598.8
    },
    "by_head_body_sweep_mm3": {
     "HEADV__00": 53310
@@ -181,7 +181,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 5400.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 3968.2
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 3968.2
    },
    "by_ref_box_extra_vs_s0_mm3": {
     "camera XIAO Sense": 1417.5,
@@ -193,7 +193,7 @@
     "line light": 0.0,
     "WS2812B x2": 0.0,
     "skid TPU": 21.0,
-    "J1 servo (REF, y 幅は ASSUMED ±22.6)": 3968.2
+    "J1 servo (REF, Fusion の REF 箱 y ±18)": 3968.2
    },
    "by_head_body_sweep_mm3": {
     "HEADV__00": 58438
@@ -455,11 +455,11 @@
    0.0,
    5.0
   ],
-  "J1 servo (REF, y 幅は ASSUMED ±22.6)": [
+  "J1 servo (REF, Fusion の REF 箱 y ±18)": [
    -190.0,
    -145.0,
-   -22.6,
-   22.6,
+   -18.0,
+   18.0,
    20.0,
    45.0
   ]
