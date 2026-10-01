@@ -114,3 +114,16 @@ def test_curtain_edge_pressure_limits_the_force_before_the_force_threshold_does(
     assert flank_v.allowed_curtain_force_n(0.4) == pytest.approx(0.984, abs=0.001) and flank_v.allowed_curtain_force_n(0.05) == pytest.approx(0.123, abs=0.001)
     assert flank_v.edge_pressure_n_cm2(1.0, 0.4) > flank_v.pressure_limit_n_cm2()
     assert flank_v.edge_pressure_n_cm2(0.003, 0.05) < flank_v.pressure_limit_n_cm2() / 40
+
+
+def test_s_sweep_boundary_torque_limit_cannot_protect_the_wedge_for_any_s_in_the_design_band() -> None:
+    """LB-E-011 / B2: s（法線力の腕）が来るまでの暫定の範囲計算。0.45 N·m を許容するのに要る腕は約 79 mm で、
+    幅 5〜12.5 mm を通る s の最大（φ = 9° で約 54 mm）を超える = s がどの値でもトルクの制限だけでは 5.7 N を守れない。"""
+    th = flank_v.thresholds()["hand_finger"]
+    assert flank_v.s_needed_mm(0.45, th) == pytest.approx(78.95, abs=0.01)
+    s_band_max = max(flank_v.wedge_s_range_mm(phi)[1] for phi in flank_v.PHIS_DEG)
+    assert s_band_max == pytest.approx(53.7, abs=0.1)
+    for tau in (0.45, 0.70, 1.00):
+        assert flank_v.s_needed_mm(tau, th) > s_band_max
+    assert flank_v.s_needed_mm(0.26, th) < s_band_max                  # Design の 0.26 N·m は、s が十分大きい位置でだけ許容
+    assert flank_v.allowed_torque_nm(th, flank_v.s_needed_mm(0.45, th)) == pytest.approx(0.45)
