@@ -17,7 +17,9 @@ r"""囲い込み・挟まり（entrapment）検査: 胴 + 頭ヨーの曲げで�
 from __future__ import annotations
 
 import itertools
+import json
 import math
+from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 import cv2
@@ -145,14 +147,20 @@ def pocket(pts: np.ndarray, radii=RADII_MM) -> dict | None:
     return {"mouth_mm": max(ds[0] - FINE["step"], 0.0), "d_in_mm": ds[-1], "trap_range_mm": (ds[0], ds[-1])}
 
 
-def body_configs(step_deg: float = 25.0) -> list[tuple[float, ...]]:
-    vals = np.arange(-BODY_YAW_SOFT_DEG, BODY_YAW_SOFT_DEG + 1e-9, step_deg)
+GRID_DEG = (-50.0, -45.0, -36.25, -25.0, 0.0, 25.0, 36.25, 45.0, 50.0)      # 36.25 = 145 / 4（4 軸が同じ向きに 145° ちょうど）、45 + 50 + 50 = 145
+WRAP_MIN_DEG = 100.0                                                       # 袋小路は大きく囲む形にしかできない。囲む角（胴 + 頭ヨー）がこれ未満の形は走査しない（小さい形は含まれる）
+
+
+def body_configs(step_deg: float | None = None) -> list[tuple[float, ...]]:
+    """胴ヨー 4 本の格子（連続した和の最大 ≤ 145°）。step_deg を渡すと等間隔の格子（試験用）、なければ 145° ちょうどを含む格子 GRID_DEG。"""
+    vals = GRID_DEG if step_deg is None else tuple(float(x) for x in np.arange(-BODY_YAW_SOFT_DEG, BODY_YAW_SOFT_DEG + 1e-9, step_deg))
     return [tuple(float(x) for x in c) for c in itertools.product(vals, repeat=4) if max_contiguous_sum(c) <= BODY_SUM_MAX_DEG + 1e-9]
 
 
 def sweep(head_yaw_deg: float, cfgs=None) -> dict:
     """ある頭ヨー角で、胴の形ごとに走査する（粗い走査で候補 → 見つかった形だけ細かい走査）。"""
     cfgs = cfgs if cfgs is not None else body_configs()
+    cfgs = [c for c in cfgs if max_contiguous_sum(list(c) + [head_yaw_deg]) >= WRAP_MIN_DEG]
     wrap_max, clr, clr_h, overlap = 0.0, math.inf, math.inf, 0
     pockets = []
     for c in cfgs:
@@ -166,6 +174,11 @@ def sweep(head_yaw_deg: float, cfgs=None) -> dict:
             if pk:
                 pockets.append({"body": c, "head_yaw": head_yaw_deg, **pk, "gap_head_body": k["min_head_to_body"], "wrap": max_contiguous_sum(list(c) + [head_yaw_deg])})
     return {"n": len(cfgs), "wrap_max_deg": wrap_max, "min_nonadjacent_mm": clr, "min_head_to_body_mm": clr_h, "self_overlap": overlap, "pockets": pockets}
+
+
+def sweep_signed(head_yaw_deg: float) -> dict:
+    """並列実行用（プロセスごとに格子を作る）。"""
+    return sweep(head_yaw_deg, body_configs())
 
 
 def parts_trapped(pk: dict) -> list[str]:
@@ -204,7 +217,7 @@ def main() -> None:
     A = L.append
     A("# 囲い込み・挟まり（entrapment）検査: 胴 + 頭ヨーの曲げ（2026-10-01）\n")
     A("**GEOMETRY_SIM（平面・剛体・CAD_CONCEPT の寸法）。実物・実機で未確認（HARDWARE_VERIFIED = 0）。5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）で、ここでは使わない。安全・合格の語は使わない。** 再現: `simulation/hardware_gaps/HG-S1_contact_safety/entrapment_check.py`。\n")
-    A(f"形: 胴ヨー 4 本（J5, J4, J3, J2）を {{−50, −25, 0, 25, 50}}° の格子、連続した和の最大 ≤ {BODY_SUM_MAX_DEG:g}°（USER-DEC-0004: 頭ヨーは 145° に含めない独立の軸）で {len(cfgs)} 通り × 頭ヨー ±0 / 15 / 30 / 45 / 60°（左右）。"
+    A(f"形: 胴ヨー 4 本（J5, J4, J3, J2）を {{−50, −45, −36.25, −25, 0, 25, 36.25, 45, 50}}° の格子（**145° ちょうどの形を含む**。囲む角 100° 以上の形だけ走査）、連続した和の最大 ≤ {BODY_SUM_MAX_DEG:g}°（USER-DEC-0004: 頭ヨーは 145° に含めない独立の軸）で {len(cfgs)} 通り × 頭ヨー ±0 / 15 / 30 / 45 / 60°（左右）。"
       "「抜けなくなる」= 直径 d の円が体に触れずに置けて、平面内で外へ出られない領域がある。**袋小路 = 口の幅 m より太く、内側の最大の円 D_in 以下の太さ**。"
       "部位の太さ（Snyder 1977 の生データ。2 歳未満は出典なし）: 指 8.3〜12.7、手首 29.3〜43.3、前腕 41.7〜61.8、首 63.7〜88.5、胸 138.2〜211.0 mm。\n")
     A("## 0. 検出器の確認（対照）\n")
@@ -219,20 +232,44 @@ def main() -> None:
     A("## 1. 頭ヨーの範囲ごとの結果（USER-DEC-0004 の掃引。粗い走査 2 mm/px・刻み 4 mm → 見つかった形は細かい走査 1 mm/px・刻み 1 mm で確認）\n")
     A("| 頭ヨー ±φ | 形の数 | 最大の囲む角 [°]（胴 + 頭）| 袋小路になる形 | 頭と胴（3 リンク以上離れた）の最小すき間 [mm] | 自己干渉の形 |\n|---|---|---|---|---|---|")
     allp = []
+    jobs = [s for phi in HEAD_YAW_DEG for s in ((phi,) if phi == 0 else (phi, -phi))]
+    with ProcessPoolExecutor(max_workers=4) as ex:
+        done = dict(zip(jobs, ex.map(sweep_signed, jobs)))
+    per_phi: dict[float, dict] = {}
     for phi in HEAD_YAW_DEG:
         signs = (phi,) if phi == 0 else (phi, -phi)
         n = ov = 0
         wrap, clr_h = 0.0, math.inf
         pks = []
         for s in signs:
-            r = sweep(s, cfgs)
+            r = done[s]
             n += r["n"]
             ov += r["self_overlap"]
             wrap = max(wrap, r["wrap_max_deg"])
             clr_h = min(clr_h, r["min_head_to_body_mm"])
             pks += r["pockets"]
         allp += pks
+        per_phi[phi] = {"n": n, "wrap": wrap, "pockets": pks, "clr_h": clr_h}
         A(f"| ±{phi:g} | {n} | {wrap:.0f} | {len(pks)} | {clr_h:.1f} | {ov} |")
+    A("")
+    A("### 頭ヨーの範囲ごとの要約（袋小路の口の幅と、首の太い側 88.5 mm との差）\n")
+    A("| 頭ヨー ±φ | 袋小路の形 | 口の幅の最小 [mm] | 首の太い側 88.5 mm との差 [mm]（口 − 88.5。小さいほど余裕が無い）| 内側の最大の円の最大 [mm] | 抜けなくなる部位（形の数）|\n|---|---|---|---|---|---|")
+    summary = {}
+    for phi in HEAD_YAW_DEG:
+        pks = per_phi[phi]["pockets"]
+        if not pks:
+            A(f"| ±{phi:g} | 0 | — | — | — | なし |")
+            summary[phi] = None
+            continue
+        mouth = min(p["mouth_mm"] for p in pks)
+        d_in = max(p["d_in_mm"] for p in pks)
+        cnt: dict[str, int] = {}
+        for p in pks:
+            for nm in parts_trapped(p):
+                cnt[nm.split("（")[0]] = cnt.get(nm.split("（")[0], 0) + 1
+        A(f"| ±{phi:g} | {len(pks)} | {mouth:.0f} | {mouth - PARTS_MM['首'][1]:+.1f} | {d_in:.0f} | " + ("、".join(f"{k}（{v}）" for k, v in cnt.items()) or "なし") + " |")
+        summary[phi] = {"pockets": len(pks), "min_mouth_mm": mouth, "margin_to_neck_mm": mouth - PARTS_MM["首"][1], "max_d_in_mm": d_in, "parts": cnt}
+    (ROOT / "simulation" / "results" / "entrapment_check_2026-10-01.json").write_text(json.dumps({"summary": summary, "pockets": allp}, ensure_ascii=False, default=float, indent=1), encoding="utf-8")
     A("")
     if allp:
         A("## 2. 袋小路になった形（口の幅 m と内側の最大の円 D_in。細かい走査）\n")
@@ -254,7 +291,7 @@ def main() -> None:
         A("- **この形の格子では、袋小路（口が内側より細い領域）は見つからなかった。**")
     else:
         A(f"- **袋小路（口の幅が内側の最大の円より細い領域）が最初に現れる頭ヨーの範囲は ±{first:g}°**（この格子・この幅の前提。それより小さい範囲では見つからなかった）。"
-          "胴が同じ向きに大きく曲がり、頭ヨーも同じ向きに切ったとき（囲む角 160〜185°）に、頭の先と胴のあいだに口が狭い領域ができる。")
+          f"胴が同じ向きに大きく曲がり、頭ヨーも同じ向きに切ったとき（囲む角 {min(p['wrap'] for p in allp):.0f}〜{max(p['wrap'] for p in allp):.0f}°）に、頭の先と胴のあいだに口が狭い領域ができる。")
         mouths = sorted(p["mouth_mm"] for p in allp)
         parts_text = (f"**部位の太さ（指・手首・前腕・首・胸）のうち、口より太く内側に入るものは {'、'.join(hit_parts)}**。" if hit_parts else
                       "**部位の太さ（指・手首・前腕・首・胸）で、口より太く内側に入るものは、この格子では無かった**（首の太い側 88.5 mm は口 92 mm 以上より細く、"
