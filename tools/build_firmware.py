@@ -43,6 +43,9 @@ def main() -> int:
     ap.add_argument("--cli", default=None, help="arduino-cli の場所")
     ap.add_argument("--fqbn", default=FQBN)
     ap.add_argument("--build-path", default=None, help="中間ファイルの置き場所")
+    ap.add_argument("--define", action="append", default=[], metavar="NAME[=VAL]",
+                    help="コンパイルだけの確認用のマクロ（例: --define SERPENS_SERVO_FAKE=1 --define SERPENS_SERVO_SELFTEST=1。"
+                         "実 UART 経路の確認は --define SERVO_TX_PIN=43 --define SERVO_RX_PIN=44）。**書き込み用のファームには使わない**")
     args = ap.parse_args()
 
     cli = find_cli(args.cli)
@@ -52,6 +55,8 @@ def main() -> int:
     cmd = [str(cli), "compile", "--fqbn", args.fqbn]
     if args.build_path:
         cmd += ["--build-path", args.build_path]
+    if args.define:
+        cmd += ["--build-property", "compiler.cpp.extra_flags=" + " ".join(f"-D{d}" for d in args.define)]
     cmd.append(str(SKETCH))
     print("$ " + " ".join(cmd))
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")

@@ -77,6 +77,16 @@ static const uint32_t SERVO_BAUD      = 1000000;    // TTL バス
 // サーボ: FEETECH STS3215-C044（7.4V / 1:191）。**未購入・未実測**
 static const int      STEPS_PER_REV   = 4096;
 static const int      CENTER_STEP     = 2047;
+// 以下は config/robot.yaml の servo 節と同じ値（tests/test_firmware_sync.py が照合）。サーボ層（servo_bus.h）が使う
+static const int      SERVO_STEP_MIN            = 0;
+static const int      SERVO_STEP_MAX            = 4095;
+static const int      SERVO_SPEED_MAX_STEP_S    = 3400;    // 運転速度の最大 [step/s]
+static const int      SERVO_SPEED_MIN_STEP_S    = 1;       // 0 は書かない（資料に意味が無い）
+static const int      SERVO_ACCEL_REG           = 254;     // 加速度レジスタ（最大 = 加速度の整形をしない）
+static const uint16_t SERVO_TORQUE_CEILING_REG  = 167;     // トルク制限レジスタ = round(software_torque_limit_ratio 0.167 × 1000)。**起動のたびに全軸へ書く**（SRAM。電源で消える）
+static const uint8_t  SERVO_LOAD_SIGN_BIT       = 10;      // 現在負荷の符号ビット。【仮説】資料に記載なし。実機で確認
+static const uint32_t SERVO_RX_TIMEOUT_MS       = 5;       // 1 軸の応答を待つ時間。ASSUMED（実機で測る）
+static const uint32_t SERVO_MEAS_STALE_MS       = 250;     // この時間、読めていない軸は「読めない」。ASSUMED（9 軸を 1 軸ずつ順に読む = 約 90 ms で一巡）
 
 // ---- 配線（**未確定。実機を組む人が決めて、ここに書く**） ----
 // TODO: 駆動リンク用 ESP32-S3 と サーボバスの結線が未定。以下は仮の名前だけ置いてある。
@@ -85,6 +95,13 @@ static const int      CENTER_STEP     = 2047;
 //     方向制御ピン付きのトランシーバを載せるのか）
 // 決まるまでフラッシュしないこと。
 #define SERVO_UART_NUM   1
+// 配線が決まるまで -1（= ポートを作らない = サーボ層は何も送らない）。**コンパイルの確認だけ** `-DSERVO_TX_PIN=43 -DSERVO_RX_PIN=44` で上書きできる（tools/build_firmware.py --define）
+#ifndef SERVO_TX_PIN
 #define SERVO_TX_PIN     -1                         // TODO
+#endif
+#ifndef SERVO_RX_PIN
 #define SERVO_RX_PIN     -1                         // TODO
+#endif
+#ifndef SERVO_DIR_PIN
 #define SERVO_DIR_PIN    -1                         // TODO（不要な回路なら -1 のまま）
+#endif

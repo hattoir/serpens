@@ -9,6 +9,7 @@
 //   サーボの読み書き（writeServos / readServos）は配線が決まるまで空。README.md 参照。
 #include "config.h"
 #include "link.h"
+#include "servo_bus.h"
 
 // ---- 状態 ----------------------------------------------------------------------------
 static DeviceState gState = ST_BOOT;
@@ -37,6 +38,45 @@ static float gPhase = 0.0f;               // 歩容の時間位相 [rad]
 static float   gMeasPos[N_AXES], gMeasVel[N_AXES], gMeasLoad[N_AXES];
 static uint8_t gMeasTemp[N_AXES], gMeasVolt[N_AXES], gMeasFault[N_AXES];
 static bool    gMeasOk[N_AXES];
+
+// ---- サーボ層（servo_bus.h）。**既定ではポートが無い = 何も送らない**（配線 SERVO_*_PIN が決まるまで。従来と同じ）----
+// SERPENS_SERVO_FAKE=1 で偽サーボ（RAM の模型。コンパイルと机上の確認用。**実機の挙動ではない**）、SERVO_TX_PIN >= 0 で実 UART。
+static sb::AxisCfg    gAxes[N_AXES];
+static sb::ServoPort* gServoPort = nullptr;
+static sb::ServoBus*  gServoBus = nullptr;
+static bool           gServoReady = false;     // 起動の手順（自己検査 → トルク上限を全軸へ → 現在角を読む → 現在角を目標に → トルク ON）が全部通った
+static bool           gMeasEver[N_AXES];
+static uint32_t       gMeasAt[N_AXES];
+static uint8_t        gReadIdx = 0;
+static uint16_t       gServoWriteFails = 0, gServoReadFails = 0;   // 記録（TODO: テレメトリ v3 で PC へ出す。今は機体内のカウンタだけ）
+static const float    SERVO_INIT_SPEED_DPS = 20.0f;                // 起動直後に現在角へ寄せるときの速さ（ゆっくり）
+
+#if SERPENS_SERVO_FAKE
+static sb::FakeServoPort gFakePort;
+#elif SERVO_TX_PIN >= 0
+class UartServoPort : public sb::ServoPort {       // 半二重の TTL。方向制御ピンが無い基板（自動方向のアダプタ）なら SERVO_DIR_PIN = -1
+ public:
+  void begin() {
+    Serial1.begin(SERVO_BAUD, SERIAL_8N1, SERVO_RX_PIN, SERVO_TX_PIN);
+    if (SERVO_DIR_PIN >= 0) { pinMode(SERVO_DIR_PIN, OUTPUT); digitalWrite(SERVO_DIR_PIN, LOW); }
+  }
+  size_t write(const uint8_t* p, size_t n) override {
+    if (SERVO_DIR_PIN >= 0) digitalWrite(SERVO_DIR_PIN, HIGH);
+    size_t w = Serial1.write(p, n);
+    Serial1.flush();
+    if (SERVO_DIR_PIN >= 0) digitalWrite(SERVO_DIR_PIN, LOW);
+    return w;
+  }
+  size_t read(uint8_t* p, size_t want, uint32_t timeoutMs) override {
+    size_t k = 0;
+    const uint32_t t0 = millis();
+    while (k < want && (uint32_t)(millis() - t0) <= timeoutMs) { if (Serial1.available()) p[k++] = (uint8_t)Serial1.read(); }
+    return k;
+  }
+  void flush() override { while (Serial1.available()) Serial1.read(); }
+};
+static UartServoPort gUartPort;
+#endif
 
 struct DriveCmd { float amp, spatial, freq, gamma; };
 static DriveCmd gDrive = {0, 0, 0, 0};
@@ -107,24 +147,81 @@ static bool anyServoMissing() {
   return false;
 }
 
-// サーボへ 9軸同期書き込み（docs/sts3215_registers.md の 41〜47 ブロック）
-// TODO: 配線が決まるまで空。SCServo/ftservo 系ライブラリの SyncWritePosEx を使う予定。
-static void writeServos(const float deg[N_AXES]) { (void)deg; }
+// サーボへ 9軸同期書き込み（docs/sts3215_registers.md の 41〜47 ブロック。バイト列は servo_bus.h = SDK と同じ）
+// **ポートが無い / 起動の手順が通っていない間は何も送らない**。速さのレジスタは軸の上限（補間は上で別にしている）
+static void writeServos(const float deg[N_AXES]) {
+  if (!gServoBus || !gServoReady) return;
+  if (!gServoBus->syncWrite(deg, nullptr)) gServoWriteFails++;
+}
 
-// サーボから位置・速度・負荷・温度・電圧・fault を読む（56〜63 ブロック）
-// TODO: 未実装。読めなかった軸は gMeasOk[i] = false のままにする（**0 で埋めない**）
+// サーボから位置・速度・負荷・温度・電圧・fault を読む（56〜63 ブロック）。**1 周期に 1 軸ずつ順に**（読めない軸の待ちで周期を食わない）。
+// 読めなかった軸は SERVO_MEAS_STALE_MS を過ぎたら gMeasOk[i] = false（**0 で埋めない**）。ポートが無ければ全軸 false（従来どおり）
 static void readServos() {
-  for (int i = 0; i < N_AXES; i++) gMeasOk[i] = false;
+  const uint32_t now = millis();
+  if (gServoBus && gServoReady) {
+    const int i = gReadIdx;
+    gReadIdx = (uint8_t)((gReadIdx + 1) % N_AXES);
+    sb::AxisState st;
+    if (gServoBus->readAxis(i, &st)) {
+      gMeasPos[i] = st.posDeg; gMeasVel[i] = st.velDps; gMeasLoad[i] = st.load;
+      gMeasTemp[i] = st.tempC; gMeasVolt[i] = st.voltX10; gMeasFault[i] = st.fault;
+      gMeasAt[i] = now; gMeasEver[i] = true;
+    } else {
+      gServoReadFails++;
+    }
+  }
+  for (int i = 0; i < N_AXES; i++) gMeasOk[i] = gServoReady && gMeasEver[i] && (uint32_t)(now - gMeasAt[i]) <= SERVO_MEAS_STALE_MS;
 }
 
 static void setTorque(bool on) {
   gTorqueOn = on;
-  // TODO: 実機では全軸のトルクスイッチを書く
+  if (gServoBus && gServoReady && !gServoBus->setTorqueAll(on)) gServoWriteFails++;   // 全軸のトルクスイッチ（40 番地）。応答を確かめる
 }
 
 static void setTorqueRatio(float ratio) {
   gTorqueRatio = ratio;
-  // TODO: 実機ではトルク制限レジスタ（48番地）へ ratio × 安全上限 を書く
+  if (!gServoBus || !gServoReady) return;
+  // トルク制限レジスタ（48 番地）= ratio × 安全上限（SERVO_TORQUE_CEILING_REG）。**上限は超えない**（ratio > 1 でも天井まで）
+  int reg = (int)lroundf(ratio * (float)SERVO_TORQUE_CEILING_REG);
+  if (reg < 0) reg = 0;
+  if (reg > (int)SERVO_TORQUE_CEILING_REG) reg = SERVO_TORQUE_CEILING_REG;
+  if (!gServoBus->setTorqueLimitAll((uint16_t)reg)) gServoWriteFails++;
+}
+
+// 起動の手順。**1 つでも通らなければ gServoReady = false のまま = サーボへ何も書かない**（armed なら anyServoMissing で FAULT_HOLD）
+//   0. 自己検査（SERPENS_SERVO_SELFTEST。servo_bus.h の出力が SDK の正解と一致するか）
+//   1. トルク制限（天井）を全軸へ書き、応答を確かめる（SRAM なので電源で消える。PC 側 apply_torque_ceiling と同じ）
+//   2. 全軸の現在角を読む（3 回まで）
+//   3. 現在角を目標に（**ホームへ飛ばない**。ゆっくり）→ 4. トルクを入れる（現在姿勢を保持）
+static void servoInit() {
+  gServoReady = false;
+  if (!gServoPort) return;
+  for (int i = 0; i < N_AXES; i++) {
+    gAxes[i].id = JOINTS[i].servo_id; gAxes[i].direction = JOINTS[i].direction;
+    gAxes[i].hornOffsetDeg = JOINTS[i].horn_offset_deg; gAxes[i].maxSpeedDps = JOINTS[i].max_speed_dps;
+  }
+  static sb::ServoBus bus(gServoPort, gAxes, N_AXES);
+  gServoBus = &bus;
+#if SERPENS_SERVO_SELFTEST
+  if (sbSelfTest() != 0) return;
+#endif
+  if (!bus.setTorqueLimitAll(SERVO_TORQUE_CEILING_REG)) return;
+  sb::AxisState st[N_AXES];
+  for (int i = 0; i < N_AXES; i++) {
+    bool ok = false;
+    for (int r = 0; r < 3 && !ok; r++) ok = bus.readAxis(i, &st[i]);
+    if (!ok) return;
+  }
+  float slow[N_AXES];
+  for (int i = 0; i < N_AXES; i++) {
+    gGoal[i] = clampDeg(i, st[i].posDeg); gTarget[i] = gGoal[i]; slow[i] = SERVO_INIT_SPEED_DPS;
+    gMeasPos[i] = st[i].posDeg; gMeasVel[i] = st[i].velDps; gMeasLoad[i] = st[i].load;
+    gMeasTemp[i] = st[i].tempC; gMeasVolt[i] = st[i].voltX10; gMeasFault[i] = st[i].fault;
+    gMeasAt[i] = millis(); gMeasEver[i] = true;
+  }
+  if (!bus.syncWrite(gGoal, slow)) return;                    // 目標レジスタを現在角にしてから、トルクを入れる
+  if (!bus.setTorqueAll(true)) return;
+  gServoReady = true;
 }
 
 static void holdHere() {
@@ -404,11 +501,18 @@ void setup() {
   Serial.begin(921600);                                      // ネイティブ USB CDC（速度は無視される）
   gBootId = (uint16_t)(esp_random() & 0xFFFF);               // 起動ごとに変える（PC が再起動に気付く）
   for (int i = 0; i < N_AXES; i++) {
-    gGoal[i] = HOME_DEG[i];                                  // TODO: 実機では現在角を読んでから入れる
+    gGoal[i] = HOME_DEG[i];                                  // サーボ層があれば servoInit() が現在角へ置き換える（ホームへ飛ばない）
     gTarget[i] = gGoal[i];
     gSpeed[i] = JOINTS[i].max_speed_dps;
-    gMeasOk[i] = false;
+    gMeasOk[i] = false; gMeasEver[i] = false; gMeasAt[i] = 0;
   }
+#if SERPENS_SERVO_FAKE
+  gServoPort = &gFakePort;
+#elif SERVO_TX_PIN >= 0
+  gUartPort.begin();
+  gServoPort = &gUartPort;
+#endif
+  servoInit();                                               // ポートが無ければ何もしない（従来どおり）
   gState = ST_BOOT; gReason = SR_BOOT;                       // **必ず BOOT から始まる**
   gLastCtrl = millis(); gLastTelem = gLastCtrl;
 }
