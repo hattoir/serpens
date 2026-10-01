@@ -1,0 +1,4 @@
+factor,level,n_pos,n_neg,patrol_recall,inspect_recall,critical_inspect_recall,specular_critical_flagged,false_alarm_patrol,false_alarm_inspect,height_abs_err_median_mm,diameter_rel_err_median,loc_err_median_mm,insp_coin_1yen,insp_coin_10yen,insp_button_cr2032,insp_button_lr44,insp_bead_6,insp_bead_10_dark,insp_magnet_disc_10x3,insp_magnet_ball_5,insp_pill_8,insp_plastic_part_8,insp_floor_colored_12
+led_layout,legacy,44,12,1.0,1.0,1.0,1.0,0.0,0.0,1.0924810411490489,0.07312819836685841,5.913446102898389,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
+led_layout,center3d,44,12,1.0,1.0,1.0,1.0,0.0,0.0,2.077245076189656,0.08410607279151425,5.933226892633575,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
+led_layout,design_2x2,44,12,1.0,1.0,1.0,0.6875,0.0,0.0,1.178266898131743,0.15980047500491462,6.478063672110707,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0,1.0
