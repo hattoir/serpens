@@ -72,6 +72,32 @@ static void fitYawSum(float* q) {
   if (s > LIMIT_YAW_SUM_DEG) { float k = LIMIT_YAW_SUM_DEG / s; for (int i = 0; i < N_YAW_CHAIN; i++) q[YAW_CHAIN[i]] *= k; }
 }
 
+// ---- Floor Watch の頭（J7）の範囲・速さ（config.h の FW_PITCH_*。既定はオフ。serpens/motion/pitch_guard.py と同じ判断）----
+static uint16_t gPitchRejects = 0, gPitchClamps = 0, gPitchSpeedCaps = 0;   // 記録（TODO: テレメトリ v3 で PC へ出す。今は機体内のカウンタだけ）
+
+static bool pitchInStop(float d) { return d >= FW_PITCH_STOP_LO_DEG && d <= FW_PITCH_STOP_HI_DEG; }
+static bool pitchInBand(float d) { return d > FW_PITCH_SOFT_HI_DEG || d < FW_PITCH_SOFT_LO_DEG; }
+
+static float pitchClamp(float d) {                          // 姿勢プリセット・目標の最終確認
+  if (!FW_PITCH_GUARD_ENABLED || pitchInStop(d)) return d;
+  gPitchClamps++;
+  return d < FW_PITCH_STOP_LO_DEG ? FW_PITCH_STOP_LO_DEG : FW_PITCH_STOP_HI_DEG;
+}
+
+// pos から target へ向かうときの速さの上限。窓の外（区間）では上限、窓の内側から区間へ入るときは窓の端で上限に一致する傾きで減速する
+static float pitchSpeedLimit(float pos, float target, float speed) {
+  if (!FW_PITCH_GUARD_ENABLED || target == pos) return speed;
+  if (pitchInBand(pos)) return speed < FW_PITCH_NEAR_SPEED_DPS ? speed : FW_PITCH_NEAR_SPEED_DPS;
+  const bool up = target > pos;
+  const float edge = up ? FW_PITCH_SOFT_HI_DEG : FW_PITCH_SOFT_LO_DEG;
+  if ((up && target > edge) || (!up && target < edge)) {
+    const float dist = fabsf(edge - pos);
+    const float cap = sqrtf(FW_PITCH_NEAR_SPEED_DPS * FW_PITCH_NEAR_SPEED_DPS + 2.0f * FW_PITCH_DECEL_DPS2 * dist);
+    if (cap < speed) { gPitchSpeedCaps++; return cap; }
+  }
+  return speed;
+}
+
 static bool hbFresh(uint32_t now) {
   return gHbSeen && (uint32_t)(now - gHbAt) <= HEARTBEAT_TIMEOUT_MS;
 }
@@ -168,8 +194,12 @@ static void handleMotion(uint8_t type, uint16_t seq, uint32_t now) {
       const JointCfg& j = JOINTS[N_BODY + k];
       if (a[k] < j.min_deg || a[k] > j.max_deg) ok = false;
     }
+    if (FW_PITCH_GUARD_ENABLED && ok && !pitchInStop(a[FW_PITCH_AXIS - N_BODY])) { gPitchRejects++; ok = false; }   // Floor Watch の範囲の外は拒否（状態を変えない）
     if (!ok) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
-    for (int k = 0; k < 3; k++) { gTarget[N_BODY + k] = a[k]; gSpeed[N_BODY + k] = spd; }
+    for (int k = 0; k < 3; k++) {
+      gTarget[N_BODY + k] = a[k];
+      gSpeed[N_BODY + k] = (N_BODY + k == FW_PITCH_AXIS) ? pitchSpeedLimit(gGoal[FW_PITCH_AXIS], a[k], spd) : spd;
+    }
     gHeadUntil = now + ttl;
     sendAck(Serial, seq, type); return;
   }
@@ -197,7 +227,11 @@ static void handleMotion(uint8_t type, uint16_t seq, uint32_t now) {
   }
   if (type == CMD_POSE) {
     if (gRx.payload[0] != 0 || driving()) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
-    for (int i = 0; i < N_AXES; i++) { gTarget[i] = clampDeg(i, HOME_DEG[i]); gSpeed[i] = JOINTS[i].max_speed_dps; }
+    for (int i = 0; i < N_AXES; i++) {
+      float t = clampDeg(i, HOME_DEG[i]);
+      if (i == FW_PITCH_AXIS) t = pitchClamp(t);             // Floor Watch の範囲へクランプ（既定オフ）
+      gTarget[i] = t; gSpeed[i] = JOINTS[i].max_speed_dps;
+    }
     sendAck(Serial, seq, type); return;
   }
   if (type == CMD_BREATH) { gBreathing = gRx.payload[0] != 0; sendAck(Serial, seq, type); return; }
@@ -296,8 +330,14 @@ static void control(uint32_t now) {
   }
   for (int i = 0; i < N_AXES; i++) {
     if (driving() && i < N_BODY) continue;
-    float step = gSpeed[i] * dt;
-    float diff = clampDeg(i, gTarget[i]) - gGoal[i];
+    float tgt = clampDeg(i, gTarget[i]);
+    float spd = gSpeed[i];
+    if (i == FW_PITCH_AXIS) {                                // Floor Watch の頭: 範囲と、窓の端の手前の速さ（既定オフ）
+      tgt = pitchClamp(tgt);
+      spd = pitchSpeedLimit(gGoal[i], tgt, spd);
+    }
+    float step = spd * dt;
+    float diff = tgt - gGoal[i];
     if (diff > step) diff = step;
     if (diff < -step) diff = -step;
     gGoal[i] += diff;

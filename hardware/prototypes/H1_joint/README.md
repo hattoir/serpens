@@ -43,3 +43,7 @@
 
 測った値は、日付・条件・測定器を付けて **HARDWARE_VERIFIED（この個体・この条件に限る）**。
 別の個体・別の電圧へ流用しない。ELECTRICAL_SAFETY_GATE の項目は、証拠を書くまで COMPLETE にしない。
+
+## 4. 追加の測定: J1（頭ピッチ）— `j1_head_pitch.md`
+
+不感帯・バックラッシ・上限 0.02 N·m での押す力・動き出しの最小の上限・床接触の較正の繰り返し精度（ENTRY-D-0008 の依頼）。手順は `j1_head_pitch.md`、記録は `j1_head_pitch_template.csv`。**未実施**。

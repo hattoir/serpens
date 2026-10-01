@@ -320,6 +320,96 @@ close と、別スレッドの announce / tick の間の判定と送信の隙間
 **Context**: 調査エージェントの報告は、Snyder の百分位だけ独立に検証した。それ以外（CPSC の引く力、ISO/TS 15066 の値、Walker / Nikolajsen の原著、EN 71 / ASTM F963 の条文）は `SAFETY_UNVERIFIED`。
 `docs/reports/2026-09-29_child_safety_sources.md`、`ai-outbox/decisions/2026-09-29_DEC-USER-0002_safety_values.md`。
 
+## 2026-09-30 — R-012（TPU パッドは P1: 95A 級 E 20〜30 MPa・t 3 mm / P2: E ≈ 10 MPa・t 4〜6 mm）と頭の重心 y の許容（≤ 4 mm）（ENTRY-E-0014）
+
+**Decision**: パッドは E 3 MPa 級を選ばない（底付き）。**P1（窓を 14.8 mm に保つ）= 95A 級・t 3 mm で SF p05 2.5〜2.9、P2（衝撃を下げる）= E ≈ 10 MPa・t 4〜6 mm で SF p05 4.0〜4.6**（鋼ダウエル φ3 前提、120°/s の衝突・減速なし。パッドなしは 2.0）。選ぶ基準は Shore でなく実測の E（HT-008）。窓の端面の支圧は 8〜12 MPa（PLA 20〜30 MPa で SF 1.7〜3.6。未検査 = HT-009。要ならスリーブ）。**頭の重心 y の許容は |y| ≤ 4 mm**（マットの k ≥ 1 N/mm を仮定。許容 y = 4.2 mm × k。ASSUMED）。Design の v2 の +2.8 mm は許容内でダミー質量は不要。J1 のピッチの静的トルクに y は効かない（ロールのモーメント 2.7 mN·m）。
+**Why**: Design の パッド断面（7.2 mm²）で、E と厚さの組み合わせのひずみと衝撃・SF を掃引した結果（`j1_range_opt_2026-09-30.md` §4b）。重心 y は、左右の横スキッドの荷重差（y / 40 = 7%）が床のたわみの左右差になり、c₀ = 0.1 mm の半分（0.05 mm）以下に収める条件で決めた。**マット・TPU の E・PLA の圧縮強度は仮定。5.7 N・0.25 N·m は暫定で使っていない。安全の確定ではない。HARDWARE_VERIFIED ではない。**
+**戻し方**: 文書と関数（`head_cog_y_effects` / `head_cog_y_limit_mm`）のみ。設定の変更なし。
+**Context**: `simulation/hardware_gaps/HG-H1_actuator/j1_head_pitch_check.py`、`ai-shared/HARDWARE_TODO.md` HT-008 / HT-009 / HT-012。
+
+---
+
+## 2026-09-30 — R-009: Floor Watch の頭（J7）の範囲・速さの強制（既定オフ）を機体側（device_motion / ファーム）と PC 側に入れた。ENTRY-E-0011 の 2 点を訂正（膝・TPU パッド）
+
+**Decision**（User の指示 2026-09-30 夜。ENTRY-E-0012）: (1) **`serpens/motion/pitch_guard.py`** を新設し、`neck.floor_watch_*` を強制する。**範囲 [−4°, +3°] の外の明示の HEAD 指令は機体側で拒否**（NACK OUT_OF_RANGE、状態を変えない。`device_motion.head_ok`）、**姿勢プリセット（POSE）・呼吸・内部の目標は範囲へクランプ**（`set_pose`・`step`・`output`）、**窓 [−2°, +1°] の外（窓の端 〜 ストッパー）は速さを 40 °/s へ頭打ち**（窓の内側から入るときは、窓の端で 40 °/s に一致する傾き（減速度 1,000 °/s²）で減速）。拒否・クランプ・速度制限はすべて `events` と `logging`（`serpens.pitch_guard`）に記録。PC 側（`LinkClient.head`）は先に同じ検査（範囲外はクランプ + 記録）を行うが、**機体側は PC を信頼せず独立に検査する**（PC のガードを外しても NACK で拒否。試験済み）。(2) ファーム（`config.h` / `.ino`）に**同じ判断の写し**を入れた。定数は `FW_PITCH_*`（`robot.yaml` と一致を試験）。(3) **既定はオフ**（`neck.floor_watch_enforce: false`、ファームの `FW_PITCH_GUARD_ENABLED = false`）。**HT-001（J1-0: 実機の符号の確認）が済むまで有効にしない**。(4) `robot.yaml` の J7（−8 / 90）は変えていない。**Floor Watch の頭に限る**追加の制限。
+**Why**: 範囲の設定だけでは動作が変わらない（R-009）。機体側でも上限を強制する原則（CLAUDE.md「安全設計」）に従う。既定オフにして、符号が逆だった場合に誤った側へ範囲を強制しない。
+**検証と限界**: Python 側は `tests/test_pitch_guard.py`（13 件: 範囲外の拒否・呼吸のクランプ・速さの上限・窓の内側から入るときの減速・PC を外しても機体が拒否・既定オフで従来どおり・ファームの定数の一致とフックの存在）。**ファームの C++ は写しで、`tools/build_firmware.py` でコンパイル成功（ガード無効・有効の両方。SOFTWARE_VERIFIED）。書き込みはしていない。実機で動くこと = HARDWARE_UNVERIFIED**。有効化の先行確認（flip test）: `floor_watch_enforce: true` で全テストを走らせると、落ちるのは J7 60° の一般の HEAD の試験 1 件だけ（意図どおり。その試験は強制を切って固定した）。ファームは記録をカウンタ（`gPitchRejects` 等）に持つだけで、PC への通知は未実装（テレメトリ v3 の課題）。
+**訂正 1（膝）**: ENTRY-E-0011 は「+3° → +5° が 44 → 601 mm³（13.7 倍）の急な段 = 膝は +3°」としたが、Design が +4° を計算（151 mm³）したので、段は 3.4 倍 + 4.0 倍の 2 段になった。膝は +3° / +4° のどちらとも読める。**範囲は膝でなく制約（位置の誤差 + 減速の余裕を prior の 100% で満たす最小の端 = +3°）で決める**（結論は変わらない）。また −4° は補間より大きかった: 覆いなし 205 → **319**、覆いあり 13 → **23** mm³。**覆いなしの [−4, +3] の最悪は 319 mm³（覆いありの 7 倍）**。
+**訂正 2（TPU パッド）**: Design のパッドの断面（幅 3.6 × 半径方向 2.0 = 7.2 mm²）で計算し直すと、**E 3 MPa は厚さ 8 mm までひずみ 0.47〜1.3 > 0.4 で底付き**する（E-0011 の「厚さ 3〜6 mm、E 3 MPa 級」は誤り）。**E 10 MPa 級（Shore 80A 前後 = ASSUMED）で厚さ 4〜6 mm ならひずみ ≤ 0.4**（t = 6 mm: k 12 N/mm、衝撃 p95 21 N、SF p05 4.5）。**鋼ダウエルなら、パッドが底付きしても SF p05 ≥ 1.83**（パッドは任意。必須は鋼のピン）。
+**Alternatives**: PC 側だけで強制（採らなかった: PC を信頼しない）/ 範囲外の HEAD もクランプ（採らなかった: 呼び出し側が範囲外を知るべき。拒否 + ログ）/ 既定オン（採らなかった: HT-001 の前）。
+**戻し方**: `neck.floor_watch_enforce` を false のままにする（既定）。コードを外す場合は `pitch_guard.py` と `device_motion.py` / `client.py` / ファームの `FW_PITCH_*` の呼び出しを消す。有効化の手順: HT-001 で符号が一致 → `floor_watch_enforce: true` と `FW_PITCH_GUARD_ENABLED = true` を**別コミット**で（DECISIONS に HT-001 の結果を書く）。
+**Context**: `simulation/results/j1_range_opt_2026-09-30.md` §4b・§5b・§5c、`tools/j1_sign_check.py`（HT-001 の対話ツール。`tests/test_j1_sign_check.py`）、`ai-shared/HARDWARE_TODO.md`（HT-001〜004 の手順と購入リストの対応を書き足した）。**5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）。安全の確定ではない。HARDWARE_VERIFIED ではない。**
+
+---
+
+## 2026-09-30 — J1（J7）の動作範囲とストッパーの荷重の最適化: 範囲 [−4°, +3°]（覆いあり）、鋼ダウエル + TPU パッド（厚 3〜6 mm）、窓の端の手前 ≤ 40 °/s（PROVISIONAL）
+
+**Decision**（User の指示 2026-09-30 夜: User に聞かず、Engineering が決める。`simulation/results/j1_range_opt_2026-09-30.md`）: (1) **機械ストッパーの範囲 [−4°, +3°]**（覆いあり。作業窓 −2〜+1° を含み、取り込みの帯 [−1.0°, +1.15°] を含む）。(2) **ピンは鋼のダウエル φ3**（PLA は不可）、窓の端に **TPU パッド（厚さ 3〜6 mm、E 3 MPa 級）**。(3) **窓の端の手前 2° の速さ ≤ 40 °/s**。(4) 設定は `config/robot.yaml` の `neck:` に**追加**（`floor_watch_soft_deg` / `floor_watch_stop_deg` / `floor_watch_near_limit_speed_dps`）。**既存の J7 の `min_deg` / `max_deg`（−8 / 90）は変えない**（別コミット）。**すべてシミュレーション・prior・Design の見積もり。実機で未確認。安全の確定ではない（5.7 N・0.25 N·m は暫定で使っていない）。**
+**Why**: 危険体積は Design の計算済みの点（+1 / +2 / +3 / +5 / +10°）で、+3° → +5° が 44 → 601 mm³（13.7 倍）に急増する（膝 = +3°）。位置の誤差（prior: 量子化 + 不感帯 D 0〜4 + バックラッシ B 0〜8 ステップ、最大 1.09°）+ 減速の余裕を 100% の prior で満たす最小の上限が +3°（+2° は 85%）。取り込みは c ≤ 1.0 mm で 100%（床 3 種・摩擦 0.7〜1.4 倍）、帯は約 2° 幅で、作業点では prior の幅にほとんど依存しない。ストッパーは、**PLA ピンはどの条件でも SF p05 が 1.1 以下（衝撃 + 静的、prior。1.5 に届かず）で足りず**、鋼 + TPU 3 mm で SF p05 4.7（120°/s、減速なし）。**訂正**: ENTRY-E-0009 の「TPU の緩衝で 4.7〜15 N」は k = 5 N/mm の仮定で、**厚さ 1 mm のパッドでは k = 32〜108 N/mm で衝撃はほとんど減らない**（厚さ 3〜6 mm で 1/3〜1/4）。
+**Alternatives**: 上限 +2°（危険 10 mm³。D + B の実測が ≤ 約 6 ステップなら採る）/ 上限 +8° 以上（home / rest_arc / coil の 3 姿勢が残るが危険体積 約 24 倍、補間）/ 覆いなし（下側 −4° で 205 mm³ = 約 5 倍。覆いは見た目 = User）。姿勢の損失（5 グループ）は副次的なコストとして扱い、Floor Watch の頭に限る（表情・鎌首は Design の別案: 動く覆い / 外せるピン）。
+**Trade-offs**: +4° / −4° などは補間（Design 未計算 → R-003）。V(+5°) が Design の値の 1/4 以下なら膝は +5°。θ → すき間 c の写像は Design の幾何（ASSUMED）。J・k・ピンの強度・減速度は prior（HT-002 / HT-003 で測る）。強制する配線（firmware / executor）は未実装（R-009）。
+**戻し方**: `config/robot.yaml` の追加 3 行を消す（他は参照していない）。再判定: `python simulation/hardware_gaps/HG-H1_actuator/j1_range_opt_report.py`（`assumptions.yaml` に D・B・J・k の実測を入れてから）。
+**Context**: ENTRY-E-0011、`hardware/prototypes/H1_joint/j1_head_pitch.md` §5、`ai-shared/HARDWARE_TODO.md`（HT-001〜004）、`tests/test_j1_range_opt.py`。
+
+---
+
+## 2026-09-30 — Design の J1 の 3 点（符号・上げ側 +3° への縮小・ストッパーの荷重）への Engineering の回答
+
+**Decision**（Design の ENTRY-D-0010 の依頼）: (1) **符号**: Engineering の J1（= J7）は **+ = 頭を上げる**（`robot.yaml`・`poses.py`・MuJoCo・口の前縁 +0.95 mm/°）。Design の CAD は + = 下げで、θ_E = −θ_CAD の読み替えは正しい。**実機のサーボでの確認は未実施** → H1 の試験計画に **J1-0（+5° 指令で頭が上がるか）を追加**し、**ストッパーの窓を切る前に確認する**。(2) **+3° に狭めてよいか**: **Floor Watch の作業に対しては足りる**（取り込みの窓 ≤ +0.9°、作業窓 −2〜+1°。+3° は 2° の余裕 = 23 ステップ、下のくさび 44 mm³）。**ただし、ストッパーは物理的な制限なので、`robot.yaml` の J7（−8〜90°）の動作を使えなくする**: home / rest_arc / coil の J7 = 8°、人を見る 55〜65°、フル鎌首 85〜90°。**全範囲の窓（−5〜+10°）でも同じ**（+10° より上が使えない）。**技術的には可、範囲は User の判断**（Floor Watch 専用の頭か、表情・鎌首を残すか。`robot.yaml` は User が決めるまで変えない）。残す場合は、Design の別案（動く覆い）か、ストッパーを Floor Watch モードでだけ効かせる機構（外せるピン）。(3) **ストッパーの荷重**（`j1_head_pitch_check.py` の `stopper_loads()`）: 静的は、作業中の上限で 0.14〜0.93 N、既定の上限で 9〜12 N（Design の「10 N 級」と一致。prior の幅 3〜19 N）、**上限が効かない場合 29〜83 N**。**衝撃（トルク上限で抑えられない）は 120°/s・PLA 同士で 21〜66 N**（TPU の緩衝で 5〜15 N、30°/s なら 1〜4 N）。**φ3 の PLA ピン（片持ち 4.5 mm）は約 21 N（12〜29）で足りない**。設計荷重の提案（ASSUMED）: **鋼のダウエル（約 147 N）+ 窓の端に TPU の緩衝 + 窓の端の手前で速さを落とすソフトリミット**。
+**Why**: 上のとおり。符号はコード・設定で一貫だが、実機の取付向きは未確認。荷重は prior・仮定の式（HG-H1 と同じ ω√(J k)）で、実測（ばね秤・荷重計）が要る。
+**Alternatives**: +3° に狭めて robot.yaml も変える（採らなかった: User の判断）/ 衝撃を無視して静的だけで PLA ピンを可とする（採らなかった: 衝撃が上限で抑えられない）。
+**Trade-offs**: 反射慣性・接触剛性・PLA の強度は仮定。**5.7 N・0.25 N·m とは別の、機械の強度の見積もり。安全の確定ではない。HARDWARE_VERIFIED ではない。**
+**Context**: `docs/design/j1_cover_stopper_2026-09-30.md`、`j1_sign_correction_2026-09-30.md`、ENTRY-D-0010、`hardware/prototypes/H1_joint/j1_head_pitch.md` §5。
+
+---
+
+## 2026-09-30 — J1（頭ピッチ）の不感帯・バックラッシ・押す力を H1 の試験計画へ / 床接触の較正の手順 / ToF は崖の 2 値・横スキッドの前端に置く / 斜め LED の追試
+
+**Decision**（Design の ENTRY-D-0008 の依頼、User 2026-09-30）: (1) H1 の試験計画に J1-1〜J1-6（不感帯・バックラッシ・上限 0.02 N·m の押す力・動き出しの最小の上限・較正の繰り返し精度・作業姿勢の重力モーメント）を足した（`hardware/prototypes/H1_joint/j1_head_pitch.md`、`HG-H1_actuator/hardware_test_plan.md`）。(2) 床接触の較正の手順を書き、参照実装（`j1_floor_contact.py`）で手順の論理を確かめた。(3) ToF は**崖の 2 値**にだけ使い、置き場所は**横スキッドの前端（左右 2 個）**、判定は頭の XIAO で行い 1 ビットを胴の XIAO へ送る（`HG-H2_sensor_head/tof_cliff.md`。PROPOSED / SAFETY_UNVERIFIED。**Q9 の「胴の XIAO に I²C を通す」を変える提案**）。(4) 斜め LED の横スキッド前端は、別の種・多い試行で追試して保てた（巡回 0.95）。
+**Why**: (a) Design の見積もりを HG-H1 の prior で確認: 頭だけの重力モーメントでは「受動の柔らかさは成り立たない」（一致）。**ただし首を上げた姿勢（E-0006 訂正の 0.216〜0.238 N·m）ではバックドライブ < 重力の確率が 37〜60%** で、姿勢による（Design は頭だけの値）。作業中の上限 0.022 N·m の実効 0.007〜0.034 N·m は、バックドライブの最小 0.05 N·m より小さい（一致）。**この上限では J1 を動かせない可能性**（動き出しのトルクは prior に無い）→ 較正用の上限 τ_move と 作業中の上限 τ_hold を分ける案と J1-4 の実測を足した（Design の見積もりが触れていない点）。既定の上限 0.449 N·m で 0.57° で前縁が床に触れる（幾何は一致: 0.1 mm ÷ 10 mm）。(b) ToF: 保証最短 4 cm・誤差 ±20〜25 mm（Design が原文から引用。**Engineering は PDF を機械的に読めず未再確認**。最短 4 cm は Pololu の製品ページで確認）。後ろのスキッド 2 つの間は漏斗の先端の約 68 mm 後ろで、頭の長さ 60 mm より遠く、崖の検出時には頭の全体が縁を越える → 不可。横スキッド前端は 10.5 mm 後ろ（オーバーハング 11〜24 mm、80 mm/s まで。`tof_cliff_budget.py`）。(c) LED 追試（224 試行 / 条件、種 40000〜）: 移設前 0.89 → 横スキッド前端 Z6 0.95（Design 0.82 → 0.94 と一致）。Z9 で 0.64。斜めの明るさ 1/2 で 0.89、1/4 で 0.36。**Design の「鏡面の危険物の判定が悪化」は追試で見えない**（0.84 → 0.88）。大きさ誤差は悪化の向きで一致（0.19 → 0.27）。
+**Alternatives**: J1 で c を守る前提で τ_move を高くする（採らなかった。押す力が 2.8 N を超えるかを J1-4 で測る前に決めない）/ ToF を崖にも使わない（採らなかった。区別できるかを T6-1〜T6-4 で測って決める。区別できなければ反射型 IR の代案を User の承認つきで）/ 判定を胴の XIAO に置く（I²C を首の 3 関節に通す必要。採らなかった）。
+**Trade-offs**: ToF の 2 値は、近い床の無効と崖の無効が同じ出力になる可能性があり、**崖の見逃し（危険側）の率が 0 でなければ落下防止の根拠にしない**。LED はフード・スキッド自身の遮りが HG-H2 のモデルに無い（明るさの 1/2 まで保てる感度のみ）。較正のモデルは不感帯・バックラッシを仮定の格子で置いたもので、値の見積もりには使わない（手順の論理の確認のみ）。CAD には LED の移設も ToF も入っていない（Fusion 切断中）。
+**Context**: `docs/design/engineering_answers_2026-09-30.md`、ENTRY-D-0007 / D-0008、`simulation/hardware_gaps/HG-H1_actuator/j1_head_pitch_check.py`。**HARDWARE_VERIFIED ではない。5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）。**
+
+---
+
+## 2026-09-29 — CSAR の実行条件は Serpens 側で決め、「子どもかもしれない」を安全側に倒す
+
+**Decision**: 子どもが近いか（NEAR / FAR / UNKNOWN）は Serpens が自分の観測で決める（`serpens/floorwatch/csar.py`）。
+人は誰でも子どもかもしれない。FAR は「最後に周りを見て近くに人がいなかった」から 3 秒だけ信じ、それ以外は UNKNOWN = NEAR。
+Home AI の情報は「近い」だけ受け取る。撮影（閃光）と highlight_point は FAR のときだけ。後回しが 20 秒続いたら「未確認」で Task を終え、
+保護者へ知らせるのは Home AI。判定が出たら floor_finding をすぐ出し、それから物から離れる。
+
+**Why**: 「安全は最下層で保証する」。子どもと大人を区別できないので、区別できないことを安全側に倒す。Home AI に「遠い」で上書きさせると、
+ネットの向こうの判断で閃光が子どもを物へ呼ぶ。撮影中は人を見ていないので、遠いという観測を長く信じない。
+
+**Alternatives**: (1) Home AI が判定する → 却下（ネットが切れても安全、の原則）(2) 子どもが近くても撮影する → User の判断（HA-05）。既定は後回し
+(3) 撮影の前後に頭を上げて周りを見る（案 C）→ 頭カメラで人を見られるようになってから
+
+**Trade-offs**: 子どもがそばにいるあいだ、危険物の確認が遅れる（その間は「未確認の候補」として保護者へ）。
+
+**Context**: USER-DEC-SERPENS-DESIGN-0001 #1、integration-log ENTRY-0008 / 0012 / 0021、OPEN-SERPENS-DESIGN-010。試験 `tests/test_floorwatch_csar.py`（修正を外すと落ちる）
+
+---
+
+## 2026-09-29 — 床見の検出の既定を変えた（H2 の合成で見つけた穴）。照明の姿勢合わせは既定で切
+
+**Decision**: `detect` に次を入れて既定で有効にした: 側面を考えた円形の判定（`metal_disc_max_height_mm`）、物と判定された候補だけが
+影・線の候補を覆う、線の途切れは前後に床の線があるときだけ、線の基準は行の近くの中央値、床の揺れに合わせた線の閾値、暗い画素は影にしない、
+床の線から姿勢を推定して位置を直す（`pose_from_line`）、同じ影の小片をつなぐ（物が消えるならつながない）、線があるとする閾値を撮影ごとの割合でも見る。
+mission の狙い直しは線の本当の横位置で、当たっていても 2mm 以上ずれて決め手が無ければ向け直す。
+照明の較正画像を今の姿勢に合わせ直す処理（`flat_repose`）は**既定で切**。
+
+**Why**: どれも「危険物を見逃す」か「何も無い床で誤報」の向きの穴で、修正を外すと落ちる回帰試験がある（VIS-0002〜0007）。
+`flat_repose` は首が上がったときの巡回を 0.36 → 0.88 に戻すが、塊が大きくなる副作用が残り、自作の照明模型への合わせ込みになっていた（VIS-0008）。
+
+**Alternatives**: 合成の照明模型に合わせて調整を続ける → 却下（実写・実物が要る。HA-04）。
+
+**Trade-offs**: どれも合成（SYNTHETIC_VISION_SIM）でしか確かめていない。点光源の照明では数字が大きく下がる（巡回 0.64）。
+HARDWARE_VERIFIED は 0 のまま。
+
+**Context**: `ai-outbox/experiments/2026-09-29_EXP-ENG-VIS-000{1..8}_*.md`、教訓 `ai-outbox/lessons/2026-09-29_LES-ENG-VIS-0001_*.md`
+
 ---
 
 ## 2026-09-29 — C044 のトルク参照値を現行資料へ更新し、トルク制限レジスタ比を 0.287 → 0.167 に下げた（User 承認）
@@ -351,8 +441,6 @@ EXP-ENG-0001 では平床の蛇行はトルク上限 0.30 N·m でもほぼ同�
 **Alternatives**: config の direction で打ち消す（規約が 2 か所に分かれるので採らない）。
 
 **Trade-offs**: それより前の MUJOCO_SIM の数値は古いモデルの値になった（`ai-outbox/lessons/2026-09-29_LES-ENG-0001_mujoco_pitch_sign.md`）。
-
----
 
 ## 2026-09-26 — Floor Watch の inspect は展示の行動を通さず、Task が無ければ止まっている
 

@@ -52,6 +52,19 @@ static const JointCfg JOINTS[N_AXES] = {
   {9,  -35.0f,  35.0f,  90.0f, 1, 0.0f}, // J9 頭 roll
 };
 
+// ---- Floor Watch の頭（J7 = Design の J1 ピッチ）の範囲（PROVISIONAL。config/robot.yaml の neck.floor_watch_* と同じ値を手で写す）----
+// **既定はオフ**。HT-001（J1-0: 実機の符号の確認）が済むまで false のまま。有効にすると、範囲外の HEAD を NACK OUT_OF_RANGE で拒否し、
+// 姿勢プリセットの J7 を範囲へクランプし、窓の端の手前（soft の外〜stop）で速さを FW_PITCH_NEAR_SPEED_DPS へ頭打ちにする。
+// J7 の min/max（-8 / 90）は変えない。この範囲は Floor Watch の頭（機械ストッパーが効く頭）に限る。
+static const bool    FW_PITCH_GUARD_ENABLED  = false;
+static const uint8_t FW_PITCH_AXIS           = 6;      // JOINTS[6] = J7
+static const float   FW_PITCH_SOFT_LO_DEG    = -2.0f;  // 作業窓
+static const float   FW_PITCH_SOFT_HI_DEG    = 1.0f;
+static const float   FW_PITCH_STOP_LO_DEG    = -4.0f;  // 機械ストッパー
+static const float   FW_PITCH_STOP_HI_DEG    = 3.0f;
+static const float   FW_PITCH_NEAR_SPEED_DPS = 40.0f;  // 窓の端の手前の速さの上限
+static const float   FW_PITCH_DECEL_DPS2     = 1000.0f;
+
 // 起動時の姿勢（config/robot.yaml の poses.home）。J7 = +8° は呼吸が下限で切れないため
 // yaw の鎖（尾 → 頭）: 巻ける角の合計に効く軸の添字（胴体ヨー J1..J6 + 頭ヨー J8）。config の axis: yaw と同じ順
 #define N_YAW_CHAIN 7

@@ -29,7 +29,7 @@ Serpens 内部の PC → 機体（歩容パラメータ・首角・停止）は�
 |---|---|---|
 | `inspect_point` | frame_id, map_version, target{x_m,y_m,yaw_rad} | 地点へ行き、止まり、5 枚撮って（照明 3 条件 + 全消灯 + 動き確認）判定する |
 | `patrol_route` | frame_id, map_version, waypoints[1..64] | 巡回（各点で inspect） |
-| `highlight_point` | frame_id, map_version, target, (duration_s) | 発見した物の位置を身体で示す（物 → 人 → 物） |
+| `highlight_point` | frame_id, map_version, target, (duration_s) | 発見した物の位置を身体で示す（物 → 人 → 物）。**CSAR: 子どもが近い・不明のあいだは `failed`（理由に CSAR）**。物を指す・照らすと子どもを物へ連れていくため（未実装、門だけ先に） |
 | `return_dock` | — | ドックへ戻る（MVP では別機能。受理はするが実行は後） |
 | `stop` | (reason) | **常に最優先。** 実行中の Task を中断。安全停止そのものは機体側が行う |
 
@@ -109,3 +109,15 @@ retain が後からの購読に届く / **LWT が keepalive の約 1.5 倍で出
 **Mosquitto は常駐サービスにしない**: テストが 127.0.0.1 限定・一時ポート・一時設定（匿名・永続化なし）でサブプロセス起動し、
 終わったら止める。paho-mqtt は開発用の任意依存（`pip install paho-mqtt`。requirements には入れない）。
 mosquitto 実行ファイルは PATH / 環境変数 `SERPENS_MOSQUITTO` / `C:\Program Files\mosquitto` / `%LOCALAPPDATA%\Programs\mosquitto` から探し、無ければ skip。
+
+## CSAR（Child-Safe Attention Rules）と Task の結果（2026-09-29）
+
+User 採用（USER-DEC-SERPENS-DESIGN-0001 #1）。実行条件は Serpens 側（`serpens/floorwatch/csar.py`、config `floor_watch.csar`）。
+
+- 子どもが近いか（NEAR / FAR / UNKNOWN）は **Serpens が自分の観測で決める**。人は誰でも「子どもかもしれない」（区別できない）。
+  「近くに人がいない」は最後に確かめてから `far_trust_s`（3 秒）だけ信じ、切れたら UNKNOWN = NEAR 扱い。Home AI の情報は「近い」だけ受け取る:
+  Task に **`child_near: true`**（任意）を付けると `home_hint_s`（30 秒）NEAR として扱う。`false` は無視（Serpens の判定を「遠い」へ動かせない）
+- `inspect_point`: 撮影（閃光）は FAR のときだけ。NEAR / UNKNOWN なら物を照らさずに待ち、`capture_wait_s` を過ぎたら
+  **`failed`（理由に「CSAR … 候補は未確認」）**。Home AI はこれを「未確認の候補がある」として**保護者へ知らせる**（R4）。再試行は Home AI の判断
+- 判定が確定したら `floor_finding` を**すぐ**出し（離れるのを待たない）、それから物から `retreat_mm` 離れて `done`（R3）
+- 子どもが近いあいだは、頭を人の方へ向ける（上限 `look_at_person_max_deg`。近づく動きは入れない、R5）

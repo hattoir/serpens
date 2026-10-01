@@ -13,6 +13,7 @@ from typing import Any
 
 from serpens.link import messages as m
 from serpens.link.faults import finite
+from serpens.motion.pitch_guard import PitchGuard
 from serpens.link.protocol import (Cmd, FrameReader, Nack, Rep, State, StopMode, StopReason,
                                    encode)
 
@@ -45,6 +46,8 @@ class LinkClient:
         self.rtt_ms: float | None = None
         self.events = 0
         self.rejected: list[Any] = []              # 送らずに捨てた指令（NaN / Inf / 桁あふれ）
+        self.pitch = PitchGuard.from_cfg(cfg)      # Floor Watch の頭（J7）の範囲。既定オフ。PC 側は先に同じ検査（機体側も独立に行う）
+        self.last_j7: float | None = None
 
     # ---- 送信 -----------------------------------------------------------------------
     def _pack(self, build: Any) -> bytes | None:
@@ -125,7 +128,12 @@ class LinkClient:
             self.rejected.append((j7, j8, j9, speed_dps))
             return -1
         ttl = ttl_ms if ttl_ms is not None else self.drive_ttl_ms
+        if self.pitch.enabled:
+            v = self.pitch.prevet_head(j7, speed_dps, self.last_j7)      # 範囲外はクランプ + 記録、速さは上限へ
+            j7, speed_dps = v.deg, v.speed_dps
         payload = self._pack(lambda: m.Head(ttl, j7, j8, j9, speed_dps).pack())
+        if payload is not None:
+            self.last_j7 = j7
         return -1 if payload is None else self._send(Cmd.HEAD, payload, now)
 
     def body(self, now: float, angles_deg: tuple[float, ...], speed_dps: float,

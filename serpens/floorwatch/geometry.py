@@ -77,6 +77,12 @@ class Camera:
         return float(np.linalg.norm(q - p)) if q is not None else float("inf")
 
 
+def head_point(p_world: np.ndarray, cam_from: Camera, cam_to: Camera) -> np.ndarray:
+    """頭に固定の点（LED など）を、別の姿勢のカメラの世界座標へ移す（カメラ座標では同じ点）。"""
+    Rf, Rt = np.stack(cam_from._axes), np.stack(cam_to._axes)
+    return Rt.T @ (Rf @ (np.asarray(p_world, float) - cam_from.center)) + cam_to.center
+
+
 @dataclass(frozen=True)
 class LightPlane:
     """光の面 n·p = d（世界座標）。"""
@@ -113,6 +119,34 @@ class LightPlane:
         if n[0] < 0:
             n = -n
         return LightPlane(n / np.linalg.norm(n), float(n @ c / np.linalg.norm(n)))
+
+    def fixed_to_head(self, cam_from: Camera, cam_to: Camera) -> "LightPlane":
+        """頭に固定の光の面を、別の姿勢のカメラの世界座標で表す（カメラ座標では同じ面）。
+        頭が沈む・首が垂れる（高さ・pitch が変わる）と、床の上の線の位置が変わる。"""
+        Rf, Rt = np.stack(cam_from._axes), np.stack(cam_to._axes)     # 行 = カメラの x, y, z 軸（世界座標）
+        n_c = Rf @ self.normal
+        d_c = self.d - float(self.normal @ cam_from.center)
+        n_t = Rt.T @ n_c
+        return LightPlane(n_t, d_c + float(n_t @ cam_to.center))
+
+    def floor_line_image(self, cam: Camera) -> tuple[np.ndarray, np.ndarray] | None:
+        """床（z=0）との交線が画像に写る直線（点, 単位方向）。交線は 3 次元の直線なので画像でも直線（歪みなし）。"""
+        n = self.normal
+        nh2 = float(n[0] ** 2 + n[1] ** 2)
+        if nh2 < 1e-12:
+            return None
+        p0 = np.array([n[0], n[1], 0.0]) * self.d / nh2
+        dvec = np.cross(n, [0.0, 0.0, 1.0])
+        dvec = dvec / np.linalg.norm(dvec)
+        if dvec[1] < 0 or (abs(dvec[1]) < 1e-9 and dvec[0] < 0):
+            dvec = -dvec
+        ts = (40.0, 140.0) if abs(dvec[1]) > 0.5 else (-40.0, 40.0)   # 前後に走る線は前方の 2 点、左右なら左右の 2 点
+        (u1, v1, z1), (u2, v2, z2) = (cam.project(p0 + t * dvec) for t in ts)
+        if z1 <= 0 or z2 <= 0:
+            return None
+        a, b = np.array([u1, v1]), np.array([u2, v2])
+        d = b - a
+        return a, d / max(float(np.linalg.norm(d)), 1e-12)
 
     def height_at(self, cam: Camera, u: float, v: float) -> float | None:
         """線が写った画素の視線と光の面の交点の高さ [mm]。面と平行なら None。"""

@@ -1,0 +1,10 @@
+name,visible,aim_by,line_length_mm,sens_px_per_mm_min,sens_px_per_mm_median,sigma_h_mm_worst,calib_tilt0.5deg_err_mm_h1.5,calib_tilt0.5deg_err_mm_h5.0,calib_yaw0.5deg_err_mm_h1.5,calib_yaw0.5deg_err_mm_h5.0,aim_mm_per_deg_pivot40,aim_mm_per_deg_pivot60,aim_mm_per_deg_pivot80,aim_mm_per_deg_pivot104,note
+cheek_current,True,head_yaw,109.0,8.96,13.53,0.0223,0.025,0.072,0.062,0.205,2.27,2.62,2.97,3.39,現行（config）: 横基線 30mm・45° 内向き
+cheek_lat15,True,head_yaw,109.0,4.48,6.77,0.0446,0.031,0.09,0.118,0.394,2.27,2.62,2.97,3.39,横基線 15mm
+cheek_lat45,True,head_yaw,109.0,13.44,20.3,0.0149,0.027,0.079,0.042,0.139,2.27,2.62,2.97,3.39,横基線 45mm
+brow_z64_y60,True,neck_pitch,85.0,9.08,9.08,0.022,0.023,0.066,0.018,0.059,2.81,3.14,3.48,3.88,眉の段: 縦基線 34mm、床の線は 60mm 先を左右に
+brow_z64_y71,True,neck_pitch,98.0,8.14,8.14,0.0246,0.023,0.066,0.017,0.057,3.34,3.74,4.13,4.61,眉の段: 縦基線 34mm、床の線は 71mm 先を左右に
+brow_z64_y90,True,neck_pitch,120.0,6.88,6.88,0.029,0.024,0.07,0.017,0.056,4.42,4.93,5.44,6.04,眉の段: 縦基線 34mm、床の線は 90mm 先を左右に
+brow_z70_y60,True,neck_pitch,85.0,9.75,9.75,0.0205,0.019,0.056,0.016,0.055,2.77,3.07,3.38,3.75,眉の段: 縦基線 40mm、床の線は 60mm 先を左右に
+brow_z70_y71,True,neck_pitch,98.0,8.74,8.74,0.0229,0.019,0.056,0.016,0.053,3.25,3.61,3.98,4.41,眉の段: 縦基線 40mm、床の線は 71mm 先を左右に
+brow_z70_y90,True,neck_pitch,120.0,7.4,7.4,0.027,0.02,0.058,0.015,0.052,4.24,4.7,5.17,5.72,眉の段: 縦基線 40mm、床の線は 90mm 先を左右に

@@ -375,3 +375,20 @@ opencv は **`opencv-contrib-python` だけ**を入れる。`ultralytics` は `o
 
 `docs/phase2_acceptance.md` は条件ごとに「確認済み / 模擬のみ / 未実施」を分けて書いている。
 **この区別を消さない。** 実機が来たら `tools/link_check.py` で測り直して表を更新する。
+
+## 自律運用（Design ↔ Engineering。2026-09-30 追記）
+
+User に聞かずに、Design Agent と `ai-shared/` を読み書きして修正・改善を回す。要点は `ai-shared/AUTONOMY.md`（Design も読む）。
+**`ai-shared/` は git 管理外（main の作業ディレクトリ）**。コミットするのは `docs/autonomy/` のコピー（正本は `ai-shared/`）。
+
+- **起動したら必ず最初に読む**: `ai-shared/` の `design-state.md`、`engineering-state.md`、`integration-log.md`（新しい ENTRY から）、`open-questions.md`、`REQUESTS.md`（未処理の依頼の一覧）。`HARDWARE_TODO.md` は進捗の確認だけ。そのあと `.ai/BOOTSTRAP.md` の順に従う。
+- **自律ループ**: 読む → 自分宛て（`To: Engineering`）の未処理項目を **優先度順（P0 → P1 → P2）**に選ぶ → 実行 → `integration-log.md` に `ENTRY-E-xxxx` を書く → `engineering-state.md` を更新 → 相手宛て（`To: Design`）の依頼・訂正があれば書く（`REQUESTS.md` に 1 行足す）→ 次へ。
+- **所有権**: **Design は形状・CAD・見た目**を決める。**Engineering はシミュレーション・トルク・荷重・安全・制御範囲**を決める。相手の領分は決めず、依頼として `integration-log.md` に書く（`ai-shared/interface-contract.md`）。
+- **User に聞いてよいのは Design の見た目・形の判断だけ。** それ以外は自分で決め、**根拠・代替案・戻し方（変えるファイルと手順）**を ENTRY に残す。購入は承認が要る（買わない）。
+- **数値の出典を必ず書く**: 「実測」「シミュレーション」「prior（仮定）」のどれか。prior やシミュレーションだけの値を「安全の確定」と書かない（SAFETY_UNVERIFIED を維持）。5.7 N・0.25 N·m は暫定。`HARDWARE_VERIFIED` を勝手に付けない。結果が悪くても後付けの調整はしない。
+- **実機でしか確かめられないものは、自分で決めず `ai-shared/HARDWARE_TODO.md` に**「何を・どう測るか・使う道具」を書く（User が測る）。測定値が来たら取り込んで prior を置き換える。
+- **迷ったら安全側**。安全側に倒す変更は自分で進めてよい。**安全基準を緩める変更は、自分で確定しない**（`.ai/LOCAL_RULES.md`「Safety に関わる重大変更は Human Approval」。共通 OS は厳しい側が勝つ）。理由と**感度分析**を書き、`SAFETY_UNVERIFIED` を付けた**提案（PROPOSED）**として ENTRY に残す。
+- **設定（`config/robot.yaml` など）を変えるときは、最適案が出てから、根拠つきの別コミット**にする（戻せるように、変えるファイルと手順を ENTRY に書く）。既存の動作（表情・鎌首など）を壊す変更は、範囲を**追加の設定**（作業モードごとの上限）で表し、既存の上限は変えない。
+- **停止条件**: 未処理の `To: Engineering` が空で、最適化の収束基準（`AUTONOMY.md` §7）を満たしたら、`engineering-state.md` に「待機」と書いて止まる。相手宛ての `Needs response` が返ってきたら再開する。
+- **軌跡の記録（2026-10-01 追記）**: 作業のまとまり（ENTRY を書くたび・設定を変えたとき・訂正したとき）ごとに、**正本 `ai-shared/PRODUCT_HISTORY.md` の §9 へ 1 節を足し、変わったら §1（現在地）・§6（数値の推移）・§7（訂正・撤回）を直す**。結果が悪くても書く。間違いは消さず「訂正」として足す。数字には出どころ（実測 / シミュレーション / prior）を付ける。そのあと **`python tools/update_history.py`** で git 由来の自動台帳 `agent/HISTORY.md`（全コミット・ブランチの地図・DECISIONS の見出し・ENTRY の索引）を更新する（`--check` で古さの確認）。手書きの年表を 2 つ作らない。`docs/autonomy/PRODUCT_HISTORY.md` は正本のコピー。
+- 破壊的操作はしない（force push・履歴の書き換え・main への merge・大量削除）。

@@ -268,6 +268,19 @@ End-to-End latency を測る。
 先端の浮き・スコップの摩擦・床の摩擦・速度を変えても「押して逃げる距離」が 114.7 mm で不変なので、この結果は接触パラメータの数値の選び方には**依存しない**（構造的）。
 成功が現れる領域（先端 ≤ 0.1 mm の on_ramp）の収束確認（timestep 0.5 倍 / 0.25 倍、solref・solimp・margin）は**まだ**。
 
+## 4.14b 頭（J1 = J7）の範囲・ストッパー・ToF・LED（2026-09-30、`agent/engineering-h1-j1`）
+
+| 項目 | レベル | 根拠・限界 |
+|---|---|---|
+| Floor Watch の頭（J7）の範囲 [−4°, +3°]・窓 −2〜+1° の外 ≤ 40 °/s の強制（機体側 `device_motion.py` / PC 側 `client.py`）。**既定オフ** | `SOFTWARE_VERIFIED` | `tests/test_pitch_guard.py`（13 件）。有効にして全テストを走らせても、落ちるのは J7 60° の一般の HEAD の試験 1 件だけ（強制を切って固定）。**実機の符号（HT-001）が済むまで有効にしない** |
+| 同じ判断のファーム写し（`config.h` / `.ino`） | コンパイル成功 `SOFTWARE_VERIFIED`（ガード無効・有効の両方、`tools/build_firmware.py`）。**書き込みはしていない = HARDWARE_UNVERIFIED** | 記録は機体内のカウンタだけ（PC への通知は未実装） |
+| 範囲 [−4, +3]・ストッパー（鋼ダウエル φ3 + 任意のパッド）の最適化 | `PHYSICS_SIM` + `CAD_CONCEPT`（Design の危険体積）+ prior | `simulation/results/j1_range_opt_2026-09-30.md`。**J・k・ピンの強度・不感帯・バックラッシは prior（HT-002〜004 で実測）**。膝は +3° / +4° のどちらとも読める（範囲は制約で決めた） |
+| 覆いの有無（+1.1 g）で取り込みが変わらない | `PHYSICS_SIM` | 16/16 ずつ。段差 t = 0.002 mm は 0/16。凹凸の床 + 板の条件はモデルの人工物で除外 |
+| J1 の符号（+ = 頭を上げる） | コード・設定で一貫（`SOFTWARE_VERIFIED`）。**実機は未確認** | HT-001（`tools/j1_sign_check.py`。モックで動作確認済み） |
+| ToF は崖の 2 値・横スキッド前端 | `PROPOSED` / `SAFETY_UNVERIFIED` | 実測なし（T6）。近い床の無効と崖の無効が区別できるかが未確認。見逃しが 0 でなければ落下防止の根拠にしない |
+| 斜め LED を横スキッド前端へ（巡回 0.95） | `SYNTHETIC_VISION_SIM`（追試で Design と一致）| フード・スキッドの遮りはモデルに無い（明るさ 1/2 まで保つ感度のみ） |
+| B2 の観察との比較の仕組み | `SOFTWARE_VERIFIED`（合成の観察で）| 実物のデータは無い（印刷待ち）。`tools/b2_compare.py`（`agent/engineering-scoop`） |
+
 ## 5. 書くときの約束
 
 - 表・コメント・コミットメッセージで「確認済み」とだけ書かない。**上の4段のどれかを書く。**

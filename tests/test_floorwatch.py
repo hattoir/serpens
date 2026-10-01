@@ -102,7 +102,7 @@ def test_coin_on_the_line_gets_height_shadow_behind_and_size(cfg: dict, rig) -> 
 
 
 def test_specular_object_records_height_none_with_reason_and_becomes_metal_disc(cfg: dict, rig) -> None:
-    """1 + 2: 鏡面（ボタン電池相当）では線が乗らない。高さは 0 ではなく None + specular_break。円形 + 5〜25mm → metal_disc。"""
+    """1 + 2: 鏡面（ボタン電池相当）では線が乗らない。高さは 0 ではなく None + specular_break。円形 + 直径が metal_disc_diameter_mm の範囲 → metal_disc。"""
     cam, plane, r = rig
     fr = r.render(Scene([Disc(0.0, 64.0, 20.0, 1.5, 0.9, True, "washer")], seed=2))
     objs, _, _ = objects(fr, cam, plane, cfg)

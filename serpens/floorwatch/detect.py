@@ -8,7 +8,7 @@
      明るさの差が無い物（床と同じ色）は影だけ、線の異常だけからも候補を作る（patrol は影だけ、inspect は線も）
   4. 線光: 行ごとに線の位置。基準は較正した光の面が予測する床の線と、物の前後の床上の線（局所の中央値）。
      横ずれ → 光の面との交点で高さ。線が途切れたら「測れない」（**height=None + 理由**。0 とは書かない）
-  5. 候補: 大きさ・高さ（None なら理由）・影・途切れ・形。「線の途切れ + 円形 + 直径 5〜25mm」は metal_disc
+  5. 候補: 大きさ・高さ（None なら理由）・影・途切れ・形。「線の途切れ + 円形 + 直径（metal_disc_diameter_mm）」は metal_disc
      （ボタン電池の可能性）として危険物側へ回す。汚れ・模様（影なし・高さなし）と線状の継ぎ目は物ではない
 
 数値はすべて config の floor_watch.detect（DESIGN 値。実写で調整）。
@@ -22,6 +22,7 @@ import cv2
 import numpy as np
 
 from serpens.floorwatch.geometry import Camera, LightPlane
+from serpens.floorwatch.pose import estimate_pose, posed_camera
 
 HEIGHT_REASONS = ("measured", "specular_break", "off_line", "too_few_rows")
 
@@ -37,6 +38,7 @@ class LineTrace:
     u_floor: np.ndarray              # 較正した面が予測する床の線の列
     height_mm: np.ndarray            # 交点の高さ（nan = 線が無い）
     width_px: float                  # 自動推定した線幅
+    pose: tuple[float, float, float] | None = None   # 床の線から推定したカメラのずれ (Δ高さ mm, Δpitch °, 残差 px)。使わなければ None
 
 
 @dataclass
@@ -56,6 +58,7 @@ class Candidate:
     shape: str                        # blob / line
     kinds: list[dict[str, Any]]       # [{kind, confidence}]（分類器ができるまでは形と証拠だけ）
     rationale: list[str] = field(default_factory=list)
+    line_x_mm: float | None = None    # 候補の前後位置で、床の線が通る横位置（姿勢を直した後）。狙い直しの量 = floor_xy_mm[0] − これ
 
 
 def motion_px(a: np.ndarray, b: np.ndarray) -> float:
@@ -109,18 +112,41 @@ def _run_extent(mask: np.ndarray, i: int) -> int:
     return max(i - lo, hi - i)
 
 
+def _floor_line_columns(plane: LightPlane, cam: Camera, rows: np.ndarray) -> np.ndarray:
+    """行ごとの、床の上の線が写る列。床の線は画像でも直線なので式で出す（行ごとの二分法より速い。値は 1e-6 px まで一致）。
+    床に届かない行（水平線より上）は nan。"""
+    img = plane.floor_line_image(cam)
+    if img is None or abs(img[1][1]) < 1e-9:
+        return np.array([plane.line_u_on_floor(cam, float(v)) or np.nan for v in rows])
+    (a0, a1), (d0, d1) = img
+    u = a0 + (rows.astype(float) - a1) * d0 / d1
+    ok = np.array([cam.floor_point(float(uu), float(v)) is not None for uu, v in zip(u, rows)])
+    return np.where(ok & (u > -cam.width_px) & (u < 2 * cam.width_px), u, np.nan)
+
+
 def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[str, Any]) -> LineTrace:
     """行ごとに線の位置（半値以上の連続区間の輝度重心）→ 光の面との交点で高さ。"""
     H, W = line_sub.shape
     search, min_i = int(det["line_search_px"]), float(det["line_min_intensity"])
     rows = np.arange(H)
-    u_floor = np.array([plane.line_u_on_floor(cam, float(v)) or np.nan for v in rows])
+    u_floor = _floor_line_columns(plane, cam, rows)
     u_line, height = np.full(H, np.nan), np.full(H, np.nan)
     widths: list[float] = []
+    # 線が「ある」とする明るさは、この撮影の線の明るさ（行ごとの山の中央値）に対する割合でも見る（小さい方）。露出が低いと
+    # 暗い汚れの上の線が絶対値の閾値を下回り、「途切れ = 鏡面」と読んでいた（VIS-0007: 点光源の照明で露出が下がる）。
+    # 鏡面の上ではほぼ線が無いので、割合の閾値でも途切れのまま
+    windows = {}
+    peaks = []
     for v in rows:
         if np.isnan(u_floor[v]):
             continue
         lo, hi = int(max(0, u_floor[v] - search)), int(min(W, u_floor[v] + search))
+        if hi > lo:
+            windows[v] = (lo, hi)
+            peaks.append(float(line_sub[v, lo:hi].max()))
+    if peaks:
+        min_i = max(min(min_i, float(det["line_rel_min"]) * float(np.median(peaks))), float(det["line_abs_floor"]))
+    for v, (lo, hi) in windows.items():
         prof = line_sub[v, lo:hi]
         if prof.size == 0 or prof.max() < min_i:
             continue
@@ -139,7 +165,12 @@ def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[s
 
 def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: dict[str, Any],
            with_line: bool = True) -> tuple[list[Candidate], LineTrace | None, np.ndarray]:
-    """frames: normal / raking / line / dark / normal2。with_line=False は巡回中の発見（線なし）。"""
+    """frames: normal / raking / line / dark / normal2。with_line=False は巡回中の発見（線なし）。
+
+    任意で flat_normal / flat_raking（照明の較正画像。白いカードを平らに置いて各照明で撮り、全消灯を引いたもの。**機器の較正で、
+    その場所の基準床ではない**）を渡すと、通常・斜め照明の画像をそれで割ってから判定する。点光源の照明は視野の近い側と遠い側で
+    明るさが 25 倍前後違い（cos / r²）、1 回の露出では遠い半分が暗く沈む（H2 VIS-0007）。較正画像で予想される明るさが
+    `flat_min_signal` に届かない画素は、暗すぎて判定できないので前景・影に使わない。"""
     det = scaled_thresholds(cfg, cam)
     if "normal2" in frames:
         m = motion_px(frames["normal"], frames["normal2"])
@@ -148,25 +179,159 @@ def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: d
     dark = np.float32(frames["dark"])
     normal = _sub(frames["normal"], dark)
     raking = _sub(frames["raking"], dark)
+    usable = None
+    # 線を先に追う（姿勢が分かれば、照明の較正画像を今の姿勢に合わせ直せる。VIS-0008）
+    line_sub = _sub(frames["line"], dark) if with_line and "line" in frames else None
+    tr = trace_line(line_sub, cam, plane, det) if line_sub is not None else None
+    tr, cam_floor = _pose_corrected(line_sub, tr, cam, plane, det)
+    if "flat_normal" in frames and "flat_raking" in frames:
+        fn, fr_ = np.float32(frames["flat_normal"]), np.float32(frames["flat_raking"])
+        if det.get("flat_repose", False):
+            fn, fr_ = _reposed_flat(fn, fr_, normal, tr, cam, cfg, det)
+        lo = float(det["flat_min_signal"])
+        usable = (fn >= lo) & (fr_ >= lo)
+        ref_n, ref_r = float(np.median(fn[usable])) if usable.any() else 1.0, float(np.median(fr_[usable])) if usable.any() else 1.0
+        normal = (normal / np.maximum(fn, 1.0) * ref_n).astype(np.float32)          # 明るさを視野の中ほどにそろえる
+        raking = (raking / np.maximum(fr_, 1.0) * ref_r).astype(np.float32)
+        if usable.any() and not usable.all():                                        # 暗すぎる所は背景の当てはめを乱さない値で埋める
+            normal = np.where(usable, normal, float(np.median(normal[usable]))).astype(np.float32)
+            raking = np.where(usable, raking, float(np.median(raking[usable]))).astype(np.float32)
     blur = int(det["background_blur_px"]) | 1
     smooth = cv2.GaussianBlur(normal, (blur, blur), 0)                  # 木目の細かい縞を落とす
     diff = smooth - robust_background(smooth, int(det["background_poly_degree"]), float(det["diff_z"]))
     sigma = max(float(np.median(np.abs(diff - np.median(diff))) / 0.6745), float(det["noise_sigma_min"]))
     fg = (np.abs(diff) > float(det["diff_z"]) * sigma).astype(np.uint8)
+    if usable is not None:
+        fg &= usable.astype(np.uint8)
     close = int(det["blob_close_px"]) | 1
     fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, np.ones((close, close), np.uint8))
     fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
     ratio = raking / np.maximum(normal, 1.0)
     ratio = ratio / max(float(np.median(ratio)), 1e-3)                  # 全体で正規化（露出差）
-    shadow = (ratio < float(det["shadow_ratio_max"])).astype(np.uint8)
+    # 通常画像で暗すぎる画素（黒い繊維・暗い床）は、明るさの落ち込みを見分けられない → 影としない（比が雑音になる。VIS-0005）
+    shadow = ((ratio < float(det["shadow_ratio_max"])) & (normal >= float(det["shadow_min_signal"]))).astype(np.uint8)
+    if usable is not None:
+        shadow &= usable.astype(np.uint8)
     shadow = cv2.morphologyEx(shadow, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    tr = trace_line(_sub(frames["line"], dark), cam, plane, det) if with_line and "line" in frames else None
     n, _labels, stats, _cents = cv2.connectedComponentsWithStats(fg, connectivity=8)
     boxes = [tuple(int(a) for a in stats[i][:4]) for i in range(1, n) if stats[i][4] >= int(det["min_blob_px"])]
-    boxes += _shadow_only_boxes(shadow, boxes, det)
-    boxes += _line_only_boxes(tr, boxes, det)
-    out = [_candidate(b, shadow, tr, cam, det) for b in boxes]
+    # 影・線だけの候補を「もう候補がある」として捨ててよいのは、**物と判定された候補**が覆っているときだけ。
+    # 物にならなかった前景（模様・汚れ・継ぎ目と判定された塊）が覆っていても捨てない（H2 VIS-0002）:
+    #   - 床と同じ色の薄い硬貨（10 円玉）は、手前の縁の細い帯だけが前景になり線状（継ぎ目）と判定される
+    #   - 床に近い色の物は、上面が床に紛れ、左右の側面だけが小さな 2 つの塊になる（どちらも上に影が無い）
+    #   どちらも、奥の影から作る候補までその塊が消していた
+    out = [_candidate(b, shadow, tr, cam_floor, det) for b in boxes]
+    objs = [c.bbox_px for c in out if c.is_object]
+    extra = [_candidate(b, shadow, tr, cam_floor, det) for b in _shadow_only_boxes(shadow, objs, det)]
+    out += extra
+    objs += [c.bbox_px for c in extra if c.is_object]
+    out += [_candidate(b, shadow, tr, cam_floor, det) for b in _line_only_boxes(tr, objs, det)]
+    out = _merge_by_shadow(out, shadow, tr, cam_floor, det)
+    if tr is not None:                                        # 線を候補へ向け直す量のために、候補の前後位置での線の横位置
+        plane_floor = plane if cam_floor is cam else plane.fixed_to_head(cam, cam_floor)
+        for c in out:
+            c.line_x_mm = _floor_line_x(plane_floor, float(c.floor_xy_mm[1]))
     return out, tr, fg
+
+
+def _floor_line_x(plane: LightPlane, y_mm: float) -> float | None:
+    """床（z=0）の上で、前 y_mm の所を線が通る横位置。線が前後に走らない（眉の線）なら None。"""
+    n = plane.normal
+    if abs(n[0]) < 1e-9 or not np.isfinite(y_mm):
+        return None
+    return float((plane.d - n[1] * y_mm) / n[0])
+
+
+def _merge_by_shadow(cands: list[Candidate], shadow: np.ndarray, tr: LineTrace | None, cam: Camera,
+                     det: dict[str, Any]) -> list[Candidate]:
+    """1 つの物が、左右の側面の 2 つの小片に割れることがある（上面が床に紛れる。H2 VIS-0006: 10×3mm の磁石が 3mm の小片 2 つ）。
+    影は物の奥に物の幅いっぱいに落ちるので、**同じ影の塊が真上にある塊どうしは同じ物**とみなして枠をつなぎ、判定し直す。
+    別々の物が影を共有するほど近ければ、大きい 1 つの物になる（物であることは変わらない = 安全側）。"""
+    if len(cands) < 2:
+        return cands
+    n, labels, _stats, _c = cv2.connectedComponentsWithStats(shadow, connectivity=8)
+    if n <= 1:
+        return cands
+    ratio = float(det["shadow_band_rows_ratio"])
+
+    def shadow_labels(c: Candidate) -> set[int]:
+        x, y, w, h = c.bbox_px
+        band = labels[max(0, y - max(3, int(h * ratio))):y, x:x + w]
+        ids, cnt = np.unique(band[band > 0], return_counts=True)
+        return {int(i) for i, k in zip(ids, cnt) if k >= 3}
+    groups: dict[int, list[int]] = {}
+    for i, c in enumerate(cands):
+        if c.shape != "blob":
+            continue
+        for lab in shadow_labels(c):
+            groups.setdefault(lab, []).append(i)
+    merged: set[int] = set()
+    out: list[Candidate] = []
+    for members in groups.values():
+        members = [m for m in dict.fromkeys(members) if m not in merged]
+        if len(members) < 2 or not any(cands[m].is_object for m in members):
+            continue
+        xs0 = min(cands[m].bbox_px[0] for m in members)
+        ys0 = min(cands[m].bbox_px[1] for m in members)
+        xs1 = max(cands[m].bbox_px[0] + cands[m].bbox_px[2] for m in members)
+        ys1 = max(cands[m].bbox_px[1] + cands[m].bbox_px[3] for m in members)
+        union = _candidate((xs0, ys0, xs1 - xs0, ys1 - ys0), shadow, tr, cam, det)
+        if not union.is_object:                               # つないだ結果が物でなくなる（横に長い = 線状 など）なら、元の小片を残す
+            continue                                          # （物を消す方向には倒さない）
+        out.append(union)
+        merged.update(members)
+    return [c for i, c in enumerate(cands) if i not in merged] + out
+
+
+def _reposed_flat(fn: np.ndarray, fr_: np.ndarray, normal: np.ndarray, tr: LineTrace | None, cam: Camera,
+                  cfg: dict[str, Any], det: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
+    """照明の較正画像（名目の姿勢）を今の姿勢に合わせ直す。姿勢は、線があれば床の線から（高さ・pitch）、無ければ明るさの傾き
+    から pitch だけ（高さは明るさの傾きではほとんど分からない: 露出が全体の明るさを吸収する）。VIS-0008。"""
+    from serpens.floorwatch.illumination import led_positions, pose_from_shading, repose_ratio
+    leds = led_positions(cfg)
+    if tr is not None and tr.pose is not None:
+        dh, dp = float(tr.pose[0]), float(tr.pose[1])
+    else:
+        dh, dp = pose_from_shading(normal, fn, cam, leds["normal"], 0.0, float(det["pose_max_pitch_err_deg"]))
+    if abs(dh) < 1e-6 and abs(dp) < 1e-6:
+        return fn, fr_
+    rn = np.nan_to_num(repose_ratio(cam, dh, dp, leds["normal"]), nan=0.0)
+    rr = np.nan_to_num(repose_ratio(cam, dh, dp, leds["raking"]), nan=0.0)
+    return (fn * rn).astype(np.float32), (fr_ * rr).astype(np.float32)
+
+
+def _pose_corrected(line_sub: np.ndarray | None, tr: LineTrace | None, cam: Camera, plane: LightPlane,
+                   det: dict[str, Any]) -> tuple[LineTrace | None, Camera]:
+    """線があるとき、床の線からカメラの高さ・pitch のずれを推定し（H2 VIS-0003/0006）、
+      1. 直した姿勢の床の線を中心に線を探し直す（名目で探すと、ずれの大きい側で探す窓から線が外れていた）
+      2. 候補の床の位置・大きさを、直した姿勢のカメラで出す（名目で床へ戻すと 10〜30mm ずれ、線の狙い直しが外れていた）
+    推定が信用できない（点が少ない・残差が大きい・範囲の端）ときは名目のまま。"""
+    if tr is None or line_sub is None or not det.get("pose_from_line", False):
+        return tr, cam
+    hmax, pmax, rmax = float(det["pose_max_height_err_mm"]), float(det["pose_max_pitch_err_deg"]), float(det["pose_rms_max_px"])
+
+    def points(t: LineTrace) -> np.ndarray:
+        ok = ~np.isnan(t.u_line)
+        return np.stack([t.u_line[ok], t.rows[ok].astype(float)], axis=1)
+
+    def plausible(dh: float, dp: float) -> bool:
+        return bool(np.isfinite(dh) and abs(dh) < 0.95 * hmax and abs(dp) < 0.95 * pmax)
+    dh, dp, _ = estimate_pose(points(tr), cam, plane, hmax, pmax, trim=0.5)
+    if not plausible(dh, dp):
+        return tr, cam
+    cam1 = posed_camera(cam, dh, dp)
+    tr1 = trace_line(line_sub, cam1, plane.fixed_to_head(cam, cam1), det)
+    dh, dp, rms = estimate_pose(points(tr1), cam, plane, hmax, pmax, trim=0.9)
+    if not (plausible(dh, dp) and rms <= rmax):
+        return tr, cam
+    cam2 = posed_camera(cam, dh, dp)
+    tr2 = trace_line(line_sub, cam2, plane.fixed_to_head(cam, cam2), det)
+    tr2.pose = (dh, dp, rms)
+    return tr2, cam2
+
+def _is_line_shape(box: tuple[int, int, int, int], det: dict[str, Any]) -> bool:
+    _x, _y, w, h = box
+    return max(w, h) > float(det["line_aspect_min"]) * max(min(w, h), 1)
 
 
 def _covered(box: tuple[int, int, int, int], boxes: list[tuple[int, int, int, int]], margin: int) -> bool:
@@ -201,9 +366,17 @@ def _line_only_boxes(tr: LineTrace | None, boxes: list[tuple[int, int, int, int]
         return []
     valid = ~np.isnan(tr.u_floor)
     present = ~np.isnan(tr.u_line)
-    base = float(np.nanmedian(tr.height_mm)) if present.any() else 0.0
-    raised = present & (np.abs(np.nan_to_num(tr.height_mm) - base) >= float(det["height_object_min_mm"]))
+    base = _running_baseline(tr.height_mm, int(det["line_baseline_rows"]))
+    resid = tr.height_mm - base
+    # 床そのものの凹凸（カーペットの毛足など）が閾値を超えると、何も無い床で線だけの候補が出る（VIS-0005: 毛足 σ0.8mm で誤報 0.78）。
+    # 閾値は床の線の揺れ（頑健な σ）の line_rough_z 倍と height_object_min_mm の大きい方にする（平らな床では従来どおり）
+    r = resid[present & ~np.isnan(resid)]
+    rough = float(np.median(np.abs(r - np.median(r))) / 0.6745) if r.size else 0.0
+    thr = max(float(det["height_object_min_mm"]), float(det["line_rough_z"]) * rough)
+    raised = present & (np.abs(np.nan_to_num(resid)) >= thr)
     anomaly = valid & (~present | raised)
+    rows_present = np.flatnonzero(present)
+    ctx = int(det["line_context_rows"])
     out, start = [], None
     margin = int(tr.width_px * 1.5)
     for v in range(len(anomaly) + 1):
@@ -211,12 +384,33 @@ def _line_only_boxes(tr: LineTrace | None, boxes: list[tuple[int, int, int, int]
         if on and start is None:
             start = v
         elif not on and start is not None:
-            if v - start >= int(det["dropout_rows_min"]):
+            # 物が線を途切れさせる・持ち上げるなら、その前後には床の線が見えている。線の端（遠くで細って消える・
+            # 画像の縁）で始まる／終わる異常は、物の証拠にしない（H2 VIS-0002: ぼけ・画角のずれで遠くの端が消えて誤報）
+            flanked = bool(((rows_present < start) & (rows_present >= start - ctx)).any()
+                           and ((rows_present >= v) & (rows_present < v + ctx)).any())
+            if v - start >= int(det["dropout_rows_min"]) and flanked:
                 u = float(np.nanmedian(tr.u_floor[start:v]))
                 box = (max(0, int(u - margin)), start, 2 * margin, v - start)
                 if not _covered(box, boxes, int(det["blob_close_px"])):
                     out.append(box)
             start = None
+    return out
+
+
+def _running_baseline(height: np.ndarray, half_rows: int) -> np.ndarray:
+    """線の上の床の高さの基準を、行の近くの中央値で取る（全体の中央値 1 つにしない）。カメラの高さ・pitch が少しずれると、
+    床の高さは線に沿って傾いた坂（遠くほど大きく外れる）になり、全体の中央値との差で近い側が「出っ張り」に見えていた
+    （VIS-0002: pitch −2° で近い側が +1.3mm）。窓は物より十分広い（物は窓の数分の 1 なので中央値に効かない）。"""
+    h = np.asarray(height, float)
+    out = np.full(h.shape, np.nan)
+    idx = np.flatnonzero(~np.isnan(h))
+    if idx.size == 0:
+        return out
+    vals = h[idx]
+    lo = np.searchsorted(idx, idx - half_rows)
+    hi = np.searchsorted(idx, idx + half_rows, side="right")
+    for k, (a, b) in enumerate(zip(lo, hi)):
+        out[idx[k]] = float(np.median(vals[a:b]))
     return out
 
 
@@ -239,6 +433,19 @@ def _line_evidence(bbox: tuple[int, int, int, int], tr: LineTrace | None,
     return True, hs, missing
 
 
+def _roundish(dx_mm: float, foot: np.ndarray | None, top: np.ndarray | None, cam: Camera, max_h_mm: float) -> bool:
+    """横幅 dx と前後の長さが円に見合うか。**前後の長さは物の高さで変わる**: 上面が高さ H にあると、塊の上辺の視線が
+    床ではなく z=H で交わるので、床へ投影した奥の縁は (1 − H/h_cam) 倍に縮む。H ∈ [0, max_h_mm] のどれかで
+    0.5 ≤ dx/dy ≤ 2 になれば円形とする（高さを線で測れない鏡面の物でも使える）。横に長い塊（段差・継ぎ目）は通さない。"""
+    if foot is None or top is None or not np.isfinite(dx_mm):
+        return False
+    near, far0 = float(foot[1]), float(top[1])
+    far_min = far0 * (1.0 - min(max_h_mm, cam.height_mm * 0.95) / cam.height_mm)
+    dy_hi, dy_lo = far0 - near, far_min - near                    # H = 0 / H = max_h_mm のときの前後の長さ
+    lo, hi = dx_mm / 2.0, dx_mm * 2.0                              # 円形とみなす dy の範囲
+    return dy_hi > 0 and max(dy_lo, 1e-3) <= hi and dy_hi >= lo
+
+
 def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrace | None, cam: Camera,
                det: dict[str, Any]) -> Candidate:
     x, y, w, h = bbox
@@ -248,7 +455,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     diameter = float(max(w, h)) * scale if np.isfinite(scale) else float("nan")
     dx_mm = w * scale if np.isfinite(scale) else float("nan")
     dy_mm = float(top[1] - foot[1]) if foot is not None and top is not None else float("inf")   # 床上の前後の長さ
-    roundish = np.isfinite(dx_mm) and np.isfinite(dy_mm) and 0.5 <= dx_mm / max(dy_mm, 1e-3) <= 2.0
+    roundish = _roundish(dx_mm, foot, top, cam, float(det.get("metal_disc_max_height_mm", 0.0)))
     band = shadow[max(0, y - int(h * float(det["shadow_band_rows_ratio"]))):y, x:x + w]   # 影は物の奥 = 塊の上辺から上へ
     has_shadow = band.size > 0 and band.mean() > float(det["shadow_band_min"])
     on_line, hs, missing = _line_evidence((x, y, w, h), tr, det)
@@ -266,7 +473,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     else:
         reason = "too_few_rows"
     raised = height is not None and height >= min_h
-    shape = "line" if max(w, h) > float(det["line_aspect_min"]) * max(min(w, h), 1) else "blob"
+    shape = "line" if _is_line_shape(bbox, det) else "blob"
     lo, hi = (float(v) for v in det["metal_disc_diameter_mm"])
     metal_disc = dropout and shape == "blob" and roundish and lo <= diameter <= hi
     big_enough = np.isfinite(diameter) and diameter >= float(det["object_min_diameter_mm"])
@@ -279,7 +486,7 @@ def _candidate(bbox: tuple[int, int, int, int], shadow: np.ndarray, tr: LineTrac
     if dropout:
         rationale.append(f"線が {missing} 行途切れ（鏡面の疑い）。高さは測れない（None）")
     if metal_disc:
-        rationale.append("途切れ + 円形 + 直径 5〜25mm → metal_disc（ボタン電池の可能性）")
+        rationale.append(f"途切れ + 円形 + 直径 {lo:g}〜{hi:g}mm → metal_disc（ボタン電池・磁石の可能性）")
     if shape == "line":
         rationale.append("線状 → 床の継ぎ目・段差の可能性（物ではない）")
     if shape == "blob" and not big_enough:

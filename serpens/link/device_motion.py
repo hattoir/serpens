@@ -13,6 +13,7 @@ from typing import Any
 from serpens.link.messages import Body, Drive, Head
 from serpens.motion.enclosure import max_contiguous_sum
 from serpens.motion.gait import body_joint_names
+from serpens.motion.pitch_guard import PitchGuard
 
 __all__ = ["DeviceMotion", "max_contiguous_sum"]
 
@@ -43,6 +44,9 @@ class DeviceMotion:
         self.target = dict(self.goals)
         self.speed = {n: float(j["max_speed_dps"]) for n, j in self.joints.items()}
         self.phase = 0.0                     # 時間位相 [rad]（周波数を変えても飛ばない）
+        # Floor Watch の頭（J7）の範囲・速さの強制。既定はオフ（HT-001 の後）。**PC の設定では緩められない**（この機体側で行う）
+        self.pitch_axis = "J7"
+        self.pitch = PitchGuard.from_cfg(cfg) if self.pitch_axis in self.joints else PitchGuard(None)
 
     def clamp(self, name: str, deg: float) -> float:
         """ソフトリミットへ収める（上限検査を通った後の最後の砦）。"""
@@ -96,13 +100,18 @@ class DeviceMotion:
             j = self.joints[name]
             if not float(j["min_deg"]) <= deg <= float(j["max_deg"]):
                 return False
+            if name == self.pitch_axis and not self.pitch.check_head_range(deg):
+                return False                              # Floor Watch の範囲の外（拒否。状態を変えない）
         return True
 
     # ---- 出力 -----------------------------------------------------------------------
     def set_head(self, h: Head) -> None:
         """頭部の目標角と速度を入れる（検査済みの値だけ渡すこと）。"""
         for name, deg in zip(self.head, (h.j7_deg, h.j8_deg, h.j9_deg)):
-            self.target[name], self.speed[name] = deg, h.speed_dps
+            spd = h.speed_dps
+            if name == self.pitch_axis:
+                spd = self.pitch.head_speed(deg, spd, self.goals[name])
+            self.target[name], self.speed[name] = deg, spd
 
     def set_body(self, b: Body) -> None:
         """胴体ヨーの目標角を入れる（検査済みの値だけ渡すこと）。"""
@@ -118,7 +127,10 @@ class DeviceMotion:
         """姿勢プリセットを目標にする（各軸の max_speed_dps で移る）。角度合計の上限を超える形は比例で縮める。"""
         for n, j in self.joints.items():
             if n in pose:
-                self.target[n] = self.clamp(n, float(pose[n]))
+                deg = float(pose[n])
+                if n == self.pitch_axis:
+                    deg = self.pitch.clamp_target(deg, "POSE")
+                self.target[n] = self.clamp(n, deg)
                 self.speed[n] = float(j["max_speed_dps"])
         self._fit_yaw_sum(self.target)
 
@@ -151,8 +163,13 @@ class DeviceMotion:
         for name in self.goals:
             if drive is not None and name in self.body:
                 continue
-            step = self.speed[name] * dt
-            diff = self.clamp(name, self.target[name]) - self.goals[name]
+            tgt = self.clamp(name, self.target[name])
+            spd = self.speed[name]
+            if name == self.pitch_axis and self.pitch.enabled:
+                tgt = self.pitch.clamp_silent(tgt)
+                spd = self.pitch.speed_limit(self.goals[name], tgt, spd)
+            step = spd * dt
+            diff = tgt - self.goals[name]
             self.goals[name] += max(-step, min(step, diff))
 
     def output(self, t: float, breathing: bool) -> dict[str, float]:
@@ -166,4 +183,6 @@ class DeviceMotion:
             for i, name in enumerate(self.joints):
                 out[name] = self.clamp(name, out[name] + self.breath_amp[name] * math.sin(w + i * self.breath_phase))
         self._fit_yaw_sum(out)
+        if self.pitch.enabled:
+            out[self.pitch_axis] = self.pitch.clamp_output(out[self.pitch_axis])
         return out

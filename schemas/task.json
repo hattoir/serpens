@@ -14,7 +14,8 @@
     "target": {"$ref": "common.json#/$defs/pose2d", "description": "inspect_point / highlight_point の地点"},
     "waypoints": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "common.json#/$defs/pose2d"}},
     "duration_s": {"type": "number", "minimum": 0, "maximum": 300, "description": "highlight_point で示し続ける時間"},
-    "reason": {"type": "string", "maxLength": 200, "description": "stop の理由（記録用）"}
+    "reason": {"type": "string", "maxLength": 200, "description": "stop の理由（記録用）"},
+    "child_near": {"type": "boolean", "description": "Home AI が子どもが近いと知っている（CSAR）。true だけ効く（Serpens を安全側へ）。false は無視（Serpens の判定を「遠い」へ動かせない）"}
   },
   "additionalProperties": false,
   "description": "安全の設定（速度上限・角度・TTL など）を変えるフィールドは意図的に無い。安全は機体側で完結し、外から変えられない",

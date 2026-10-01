@@ -67,6 +67,13 @@ neck:
   look_max_deg: 65.0        # 人を見るときの J7 上限（これ以上倒すと J8 が世界座標で roll になる）
   full_rear_min_deg: 85.0   # 「真上から見下ろすフル鎌首」演出専用の範囲
   full_rear_max_deg: 90.0
+  # Floor Watch の頭（J1 = J7）の作業モードごとの範囲。**PROVISIONAL / 実機で未確認**（`simulation/results/j1_range_opt_2026-09-30.md`、agent/DECISIONS.md 2026-09-30）。
+  # 符号は + = 頭を上げる（実機の確認は ai-shared/HARDWARE_TODO.md HT-001）。既存の J7 の min_deg / max_deg（−8 / 90）は変えない。強制する配線は未実装（REQUESTS R-009）。
+  floor_watch_soft_deg: [-2.0, 1.0]        # 作業窓（Design の提案。すき間 ≤ 40 mm³）
+  floor_watch_stop_deg: [-4.0, 3.0]        # 機械ストッパー（上の輪の覆いあり。覆いなしは下限 −4° で危険体積 約 5 倍）
+  floor_watch_near_limit_speed_dps: 40.0   # 窓の端の手前 2° の区間の速さの上限（余裕 2° − 位置の誤差 1.09° から、減速度 1000 °/s² で減速できる速さ）
+  floor_watch_decel_dps2: 1000.0           # 窓の端の手前へ近づくときの減速の傾き（保守的な仮定。最大 2233。J1 の実測で確認）
+  floor_watch_enforce: false               # **既定オフ**。HT-001（J1-0: 実機の符号の確認）が済むまで有効にしない。有効にすると、機体側（device / ファーム）で範囲外の HEAD を拒否し、速さを制限する
 
 # 質量配分（仮定値。実測したら差し替える）
 mass_budget_g:
@@ -276,6 +283,7 @@ floor_watch:
     view_target_mm: 90.0      # 位置合わせ: 頭先端から地点までをこの距離に（床カメラの見える範囲 38〜147mm の中ほど）
     view_tol_mm: 30.0
     lat_tol_mm: 3.0           # 地点が線からこれ以上横にずれていたら頭ヨーで向け直す（線幅 3mm）
+    line_aim_tol_mm: 2.0      # 撮った後: 線が候補の中心からこれ以上ずれ、決め手（metal_disc・測れた高さ）が無ければ向け直す（H2 VIS-0002/0006、合成）
     creep_speed_mm_s: 40.0    # 微調整の速さ。止めるときは振幅を即 0（惰行させない）
     burst_max_s: 1.0
     max_adjusts: 6
@@ -298,6 +306,9 @@ floor_watch:
     tilt_deg: 45.0             # 光の面を内側へ。床の線がカメラ中心線の真下を前後に走る。高さ 1mm → 横ずれ 1mm
     width_mm_initial: 3.0      # 線幅の初期値（床上 3mm ≈ 40px）。式には入れず、点灯−消灯の床画像から自動推定する
     physical_note: "0.3mm スリット 2 枚を 20mm 離した二重スリットで床上約 2mm の見込み（未検証）"
+  normal_light:                # 通常照明（レンズのすぐ横）。照明の較正画像を今の姿勢に合わせ直すのに使う（VIS-0008）。**ASSUMED**
+    led_height_mm: 30.0        # 床から（中立姿勢）。カメラと同じ高さの見込み
+    led_forward_mm: 0.0        # カメラ直下からの前後位置
   raking:                      # 斜め照明はあごの位置（床から約 6mm、カメラの真下付近）から前向き。影は物の奥（画像の上側）
     led_height_mm: 6.0
     led_forward_mm: 0.0        # カメラ直下からの前後位置
@@ -308,7 +319,7 @@ floor_watch:
   detect:
     # 画素単位のしきい値は reference_f_px（レビューの設計値）で決めた値。使うモードの f に比例して拡大する（面積は 2 乗）
     reference_f_px: 1000.0
-    scale_with_f: [background_blur_px, blob_close_px, line_search_px, line_context_rows, line_min_rows, dropout_rows_min]
+    scale_with_f: [background_blur_px, blob_close_px, line_search_px, line_context_rows, line_min_rows, dropout_rows_min, line_baseline_rows, pose_rms_max_px]
     scale_with_f2: [min_blob_px]
     motion_max_px: 1.0         # 最初と最後の通常画像がこれ以上動いていたら撮り直し（画素。解像度に依らず「動いたか」）
     background_poly_degree: 2  # 背景 = 通常画像に頑健に当てはめた多項式の面。基準床は使わない（実機では同じ視点の空の床が無い）
@@ -318,19 +329,34 @@ floor_watch:
     shadow_object_rows_ratio: 0.5   # 影だけの候補: 影の幅 × これ を物の行数とみなす（物は影の手前）
     noise_sigma_min: 2.0       # σ の下限（カメラ雑音の目安。合成では noise_sigma と同じ）
     shadow_ratio_max: 0.7      # 斜め/通常 の比（局所正規化後）がこれ以下なら影
+    shadow_min_signal: 15.0    # 通常画像（全消灯を引いた後）がこれ未満の画素は影の判定に使わない（暗すぎて比が雑音になる。VIS-0005）
+    flat_min_signal: 12.0      # 照明の較正画像（flat_normal / flat_raking、全消灯を引いた後）がこれ未満の画素は暗すぎて判定に使わない（VIS-0007）
+    flat_repose: false         # 【試作・既定は切】照明の較正画像を今の姿勢に合わせ直す（線があれば床の線の姿勢、無ければ明るさの傾きで pitch だけ）。首が上がったときの巡回は 0.36 → 0.88 に戻るが、塊が大きくなる副作用が未解決（VIS-0008）
     shadow_band_min: 0.15      # 塊の奥（上）の帯にこの割合以上の影があれば「影あり」
     shadow_band_rows_ratio: 1.0   # 帯の高さ = 塊の高さ × これ（1 円玉の影 ≈ 18mm ≈ 塊の奥行き。2.0 だと帯が薄まり UXGA で 0.14 に落ちた）
     line_search_px: 120        # 予測した床の線の位置から左右にこの範囲で線を探す
     line_min_intensity: 60     # これ以上なら線が乗っている（全消灯を引いた後）
+    line_rel_min: 0.25         # …または、この撮影の線の明るさ（山の中央値）のこの割合以上（小さい方を使う。露出が低いとき暗い汚れの上の線を「途切れ」と読まない。VIS-0007）
+    line_abs_floor: 10         # 割合で下げても、これ未満は線と見なさない（雑音）
     line_context_rows: 12      # 物の前後の床上の線（局所基準）に使う行数
     line_min_rows: 3           # 高さを「測れた」とする最低行数
+    pose_from_line: true       # 線があるとき、床の線からカメラの高さ・pitch のずれを推定して候補の床の位置を直す（VIS-0003/0006。SYNTHETIC で確認）
+    pose_max_height_err_mm: 12.0   # 推定の探索範囲（名目からのずれ）。端に張り付いたら信用しない
+    pose_max_pitch_err_deg: 6.0
+    pose_rms_max_px: 3.0       # 床の線の当てはめの残差がこれ以下なら使う（f=1000 基準、scale_with_f）
+    line_rough_z: 4.0          # 線だけの候補の閾値 = max(height_object_min_mm, この倍 × 床の線の揺れの頑健な σ)。毛足で誤報しない（VIS-0005）
+    line_baseline_rows: 240    # 線だけの候補: 床の高さの基準を ±この行数の中央値で取る（全体の中央値にしない。姿勢のずれで床が坂に見える。VIS-0002）
     min_blob_px: 30
     object_min_diameter_mm: 2.0   # これより小さい塊は物としない（雑音・木目のかけら。飲み込みの危険も小さい）
     height_object_min_mm: 0.5  # これ以上なら「出っ張り」
     dropout_rows_min: 3        # 線の途切れがこの行数以上なら出っ張りの証拠（鏡面）
     line_aspect_min: 4.0       # 縦横比がこれ以上なら線状（継ぎ目・段差）
-    metal_disc_diameter_mm: [5.0, 25.0]   # 途切れ + 円形 + この直径 → metal_disc（ボタン電池の可能性、危険物側）
+    metal_disc_diameter_mm: [3.0, 25.0]   # 途切れ + 円形 + この直径 → metal_disc（ボタン電池・磁石の可能性、危険物側）。
+                                          # 下限 5.0 → 3.0（2026-09-29 VIS-0002）: 5mm の磁石球は大きさが約 10% 小さく出て 4.5mm になり、危険物側に回らなかった。
+                                          # 下限は ingestion_size_mm の下限と同じにする（厳しくする方向）
     metal_disc_confidence: 0.6
+    metal_disc_max_height_mm: 11.0   # 円形の判定で「0〜この高さのどこかにある円盤」と見なしてよい上限（LR44 2 個重ね 10.8mm まで）。
+                                    # 高い物は上面が視差で奥へ写り、床へ投影すると前後に伸びる → 床の高さのまま判定すると円形でなくなる（H2 VIS-0002）
   synthetic:
     noise_sigma: 2.0
     shadow_factor: 0.35
@@ -343,6 +369,17 @@ floor_watch:
     critical_min_confidence: 0.05
     child_near_m: 2.0                   # 子どもがこれより近ければ距離係数 1（不明も 1 = 安全側）
     unreachable_factor: 0.5             # 子どもが届かない場所なら score をこの倍率に
+  csar:                         # Child-Safe Attention Rules の実行条件（serpens/floorwatch/csar.py。User 採用 2026-09-29、数値は Engineering の案）
+    far_trust_s: 3.0            # 「近くに人がいない」を最後に確かめてから信じる時間（撮影 capture_s 1.5 + 静止のゆとり）。切れたら UNKNOWN = NEAR 扱い
+    near_hold_s: 5.0            # 近くで人が見えたら、見えなくなってもこの間は NEAR
+    defer_capture_when_near: true   # 子どもが近い・不明のときは撮影（閃光で物を照らす）を後回し（R2）
+    capture_wait_s: 20.0        # 後回しにして待つ上限。過ぎたら「未確認」として Task を終え、保護者へ知らせるのは Home AI（R4）
+    retreat_mm: 300.0           # 判定の後、物から離れる距離（R3）。**前向きに回り込む。後ろへは下がらない**（尾にセンサーが無い。Design ENTRY-0022）
+    retreat_clear_mm: 100.0     # 離れる道（直線の近似）が物からこれ以上離れていること（物を押さない・またがない）。無ければその場に留まる
+    retreat_speed_mm_s: 60.0    # 人の近くでは controller の制限が上書き
+    retreat_timeout_s: 20.0
+    look_at_person_max_deg: 25.0    # 子どもが近いとき、頭を人の方へ向ける上限（R5。近づく動きは入れない）
+    home_hint_s: 30.0           # Task の child_near: true（Home AI の知らせ）を NEAR として信じる時間
 
 # ---------------------------------------------------------------------------
 # 動きの質の評価（simulation/quality.py, tools/motion_quality.py）。**SIMULATED。相対比較に使う**
@@ -806,6 +843,14 @@ safety_limits:
   servo_temp_stop_c: 80       # 構想設計書の L0。本機は link.faults.temp_limit_c(60) で手前から止める
   contact_release_ms: 20      # 接触検知 → 脱力の目標。**現状 800ms。未達**（docs/safety_limits.md）
   comms_loss_safe_ms: 3000    # 構想設計書の目標。本機は 400ms で保持（より厳しい）
+  # ---- 指の挟み込み（関節のすき間）。simulation/pinch_gap.py。**厳しい側を採る**（2026-09-29）----
+  # ASTM F963-11 4.18.1（96 か月未満）: 5mm の棒を通すすき間は 13mm の棒も通すこと。構想設計書 16 章: 8mm 以下か 25mm 以上。
+  # 8mm 以下は ASTM より緩い（5〜8mm に子どもの指が入る）→ 5mm 未満か 25mm 以上。全ての関節角度で（閉じていくときに挟む）
+  pinch:
+    small_below_mm: 5.0       # これ未満なら指が入らない
+    large_from_mm: 25.0       # これ以上なら挟まらない
+    tolerance_mm: 0.3         # 製造のばらつき ±（FDM の目安。ASSUMPTION、試作で測る）
+    eccentricity_mm: 0.5      # 関節の軸のずれ・遊び ±（サーボ出力軸の遊び + ホーンの取付。ASSUMPTION、H1 で測る）
   # ---- ELECTRICAL_SAFETY_GATE（docs/safety_limits.md §5）----
   # 実機で測って証拠（日付・条件・測定器）を書くまで COMPLETE にしない。
   # **1 項目でも INCOMPLETE なら実機の自律走行は許可しない**（serpens/electrical_gate.py）。
