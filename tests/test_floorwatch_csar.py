@@ -148,14 +148,15 @@ def test_highlight_point_is_refused_while_a_child_may_be_near(cfg: dict, tmp_pat
     assert run(ex, home, tid, max_ticks=10) == "failed" and "子どもが近い" in home.last_reason(tid)
 
 
-def test_highlight_point_when_far_is_only_unimplemented_not_a_child_refusal(cfg: dict, tmp_path: Path) -> None:
+def test_highlight_point_when_far_runs_the_gesture_and_is_not_a_child_refusal(cfg: dict, tmp_path: Path) -> None:
+    """2026-10-02（LB-E-014）: 以前は「未実装」で failed だった。FAR のときは物 → 人 → 物を頭ヨーだけで示して done（模擬）。"""
     scene = FloorScene()
     session, ex, ep, home = rig(cfg, scene, tmp_path)
     _ready(ex, home, cfg, scene, tmp_path)
     assert ex.csar.state(session.t) == FAR
     target = ahead(ex, 0.20)
     tid = home.task("highlight_point", target={"x_m": target[0], "y_m": target[1], "yaw_rad": 0.0})
-    assert run(ex, home, tid, max_ticks=10) == "failed" and "子どもが近い" not in home.last_reason(tid)
+    assert run(ex, home, tid, max_ticks=2000) == "done" and "子どもが近い" not in home.last_reason(tid)
 
 
 def test_after_a_finding_the_robot_backs_away_from_the_object(cfg: dict, tmp_path: Path) -> None:

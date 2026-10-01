@@ -36,9 +36,10 @@
 
 ## 3. まだ無いもの
 
-- patrol_route（各点で inspect）、highlight_point（物 → 人 → 物の身体表現）、return_dock。
+- ~~patrol_route（各点で inspect）、highlight_point（物 → 人 → 物の身体表現）~~ → **2026-10-02 に模擬で実装**（`serpens/floorwatch/executor.py`・`highlight.py`、`tests/test_floorwatch_routes.py`）。patrol_route = 各点を順に inspect（後回し・失敗の点があっても次へ。1 点でも確認できれば done、全部だめなら failed で理由を並べる）。highlight_point = 頭ヨーだけで 物 → 人 → 物（胴は歩かない）。**子どもが近いかもしれない（または確かめられない）ときは始めず、途中で近づいたらやめる**（CSAR R1・R2・R5）。照明の制御は未（頭の XIAO のファームが無い）。**KINEMATIC_SIM。実機未確認。**
+- return_dock（充電ドックは未着手）。
 - 実機: 頭カメラの撮影、実タグ観測、実 IMU、滑りの校正、照明の制御（頭の XIAO）。
 - 目標が届かない（マット外・家具）ときの計画。いまは `goto_timeout_s` で `failed`。
 - 位置合わせの (前方, 左) は模擬では真値から取っている。実機では推定姿勢 + 地点（σ 数 cm）になるので、
   通常照明の画像で候補を見つけてから線を向ける（JUDGE 後の AIM）が主になる。
-- 人が近いときの inspect の扱い（drive_to の速度制限と停止はかかるが、撮影の可否は決めていない）。
+- ~~人が近いときの inspect の扱い~~ → 撮影の可否は CSAR が決める（子どもが近い / 不明なら撮影の閃光をせず、後回し → 20 秒で「未確認」。`tests/test_floorwatch_csar.py`）。drive_to の速度制限と停止は従来どおり。

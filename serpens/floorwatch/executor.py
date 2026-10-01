@@ -21,6 +21,8 @@ from serpens.floorwatch.dataset import imwrite
 from serpens.floorwatch.csar import NEAR, ChildProximity
 from serpens.floorwatch.detect import Candidate, detect
 from serpens.floorwatch.geometry import Camera, LightPlane
+from serpens.floorwatch.highlight import DONE as HL_DONE
+from serpens.floorwatch.highlight import HighlightMission
 from serpens.floorwatch.hood import STUCK, HoodMonitor
 from serpens.floorwatch.mission import IdleHold, InspectMission
 from serpens.floorwatch.risk import assess
@@ -62,6 +64,10 @@ class FloorWatchExecutor(Executor):
         self._pending_finish: tuple[str, str] | None = None
         self._last_phase: float | None = None
         self._last_safety: tuple[str, bool] | None = None
+        self._route: list[tuple[float, float]] | None = None   # patrol_route: 各点で inspect（SE-E7）
+        self._route_i = 0
+        self._route_log: list[tuple[str, str, int]] = []
+        self.highlight: HighlightMission | None = None          # highlight_point: 物 → 人 → 物（頭ヨーだけ）
         self.hood: HoodMonitor | None = None                  # フードの端の 1 ビット（R-023）。既定は未接続（フードの機構・頭のファームがまだ無い）
         self._hood_read: Callable[[float], tuple[bool | None, bool | None]] | None = None
 
@@ -111,15 +117,28 @@ class FloorWatchExecutor(Executor):
         self._reported = False
         if task.get("child_near") is True:                   # Home AI の「子どもが近い」は安全側にだけ効く（false は無視）
             self.csar.hint_near(self.session.t, float(self.cfg["floor_watch"]["csar"]["home_hint_s"]))
-        if task["task"] == "highlight_point":                # 物を指す・照らす = 子どもを物へ連れていく（CSAR R1・R2）
-            why = ("CSAR: 子どもが近いかもしれない（または確かめられない）ので、物を指し示さない" if not self.csar.allows_attention_to_object(self.session.t)
-                   else "highlight_point はこの段階では未実装（CSAR の門は先に通す）")
-            self._pending_finish = ("failed", why)
+        self._route, self.highlight = None, None
+        if task["task"] == "highlight_point":                # 物を指す・照らす = 子どもを物へ連れていく（CSAR R1・R2）。子どもが FAR のときだけ
+            if not self.csar.allows_attention_to_object(self.session.t):
+                self._pending_finish = ("failed", "CSAR: 子どもが近いかもしれない（または確かめられない）ので、物を指し示さない")
+                return
+            tgt = self.frame.to_world(np.array([float(task["target"]["x_m"]), float(task["target"]["y_m"])]))
+            self.highlight = HighlightMission(tgt, float(task.get("duration_s", 4.5)), self.csar.allows_attention_to_object)
+            return                                            # 胴は動かさない（IdleHold のまま。頭ヨーだけで示す）
+        if task["task"] == "patrol_route":                   # 各点で inspect（順番に。1 点が後回し / 失敗でも次へ）
+            self._route = [(float(w["x_m"]), float(w["y_m"])) for w in task["waypoints"]]
+            self._route_i, self._route_log = 0, []
+            self._begin_inspect(*self._route[0])
             return
         if task["task"] != "inspect_point":
-            self._pending_finish = ("failed", f"{task['task']} はこの段階では未実装（模擬の縦一本は inspect_point だけ）")
+            self._pending_finish = ("failed", f"{task['task']} はこの段階では未実装（模擬の縦一本は inspect_point / patrol_route / highlight_point）")
             return
-        tgt = self.frame.to_world(np.array([float(task["target"]["x_m"]), float(task["target"]["y_m"])]))
+        self._begin_inspect(float(task["target"]["x_m"]), float(task["target"]["y_m"]))
+
+    def _begin_inspect(self, x_m: float, y_m: float) -> None:
+        """1 地点の inspect の mission を始める（inspect_point と patrol_route の各点で共通）。"""
+        self._reported = False
+        tgt = self.frame.to_world(np.array([x_m, y_m]))
         # 目標 = カメラの視野中心をその地点に置く。機体（首マーカ）はその手前 = 首→頭先端 + 視野中心の距離だけ手前に止まる
         neck, tip = self.session.world.marker_xy("neck"), self.session.world.head_tip()[:2]
         d = tgt - neck
@@ -139,6 +158,7 @@ class FloorWatchExecutor(Executor):
         self.session.brain.loco.stop(reason)
         self.session.request_stop(reason, source="Home AI")
         self.session.mission, self.mission = self.idle, None
+        self.highlight, self._route = None, None
         self.task = None
 
     # ---- 1 周期 -------------------------------------------------------------------
@@ -152,6 +172,8 @@ class FloorWatchExecutor(Executor):
             status, why = self._pending_finish
             self._pending_finish = None
             self._finish(status, why)
+        if self.highlight is not None and self.task is not None:
+            self._tick_highlight(t)
         m = self.mission
         if m is not None and self.task is not None:
             if m.phase in ("RETREAT", "DONE") and not self._reported and m.result is not None:
@@ -161,14 +183,59 @@ class FloorWatchExecutor(Executor):
             if m.phase in ("WAIT_CHILD", "RETREAT") and self.csar.state(t) == NEAR:
                 self._look_at_person(t)                             # 子どもが来たら、物ではなく子どもの方を見る（CSAR R5）
         if m is not None and not m.active and self.task is not None:
-            if m.phase == "DONE":
-                self._finish("done", f"候補 {len(m.result)} 件")
-            elif m.phase in ("FAILED", "DEFERRED"):
-                self._finish("failed", m.reason)
-            self.session.mission, self.mission = self.idle, None
+            if self._route is not None:
+                self._route_log.append((m.phase, m.reason, len(m.result) if m.result else 0))
+                self.session.mission, self.mission = self.idle, None
+                if self._route_i + 1 < len(self._route):
+                    self._route_i += 1
+                    self._begin_inspect(*self._route[self._route_i])         # 次の地点へ（1 点が後回し / 失敗でも続ける）
+                else:
+                    self._finish_route()
+            else:
+                if m.phase == "DONE":
+                    self._finish("done", f"候補 {len(m.result)} 件")
+                elif m.phase in ("FAILED", "DEFERRED"):
+                    self._finish("failed", m.reason)
+                self.session.mission, self.mission = self.idle, None
         self._publish_safety()
         if self.endpoint is not None:
             self.endpoint.tick()
+
+    def _finish_route(self) -> None:
+        log, self._route = self._route_log, None
+        ok = [x for x in log if x[0] == "DONE"]
+        n_find = sum(x[2] for x in log)
+        notes = [f"{x[0]}: {x[1]}" for x in log if x[0] != "DONE"]
+        if ok:
+            self._finish("done", f"{len(ok)}/{len(log)} 点を確認、候補 {n_find} 件" + (f"（未確認 {len(notes)} 点: {'; '.join(notes)}）" if notes else ""))
+        else:
+            self._finish("failed", "どの地点も確認できなかった: " + "; ".join(notes))
+
+    def _tick_highlight(self, t: float) -> None:
+        h = self.highlight
+        person = getattr(self.session, "target", None)
+        pm = None if person is None else np.asarray(person.floor_mm, float)
+        h.tick(t, lambda xy: self._look_toward(t, xy), pm)
+        if not h.active:
+            self.highlight = None
+            if h.phase != HL_DONE and self.csar.state(t) == NEAR:
+                self._look_at_person(t)                             # 子どもが来たら、物ではなく子どもの方を見る（CSAR R5）
+            self._finish("done" if h.phase == HL_DONE else "failed", h.reason)
+
+    def _look_toward(self, t: float, xy_mm: np.ndarray) -> bool:
+        """頭ヨーをその点へ。上限（csar.look_at_person_max_deg）内なら向けて True、外なら向けずに False（無理に回さない）。"""
+        pts = self.session.world.world_points()
+        tip, prev = pts[-1][:2], pts[-2][:2]
+        heading = math.atan2(float(tip[1] - prev[1]), float(tip[0] - prev[0]))
+        d = np.asarray(xy_mm, float) - tip
+        rel = math.degrees(wrap(math.atan2(float(d[1]), float(d[0])) - heading))
+        current = float(self.session.anim.base.get(HEAD_YAW, 0.0))
+        lim = float(self.cfg["floor_watch"]["csar"]["look_at_person_max_deg"])
+        goal = current + rel
+        if abs(goal) > lim:
+            return False
+        self.session.brain.expr.look_at(t, goal, force=True)
+        return True
 
     def _observe_people(self, t: float) -> None:
         """人の観測 → 子どもが近いか。子どもと大人は区別できないので、人は誰でも「子どもかもしれない」。
