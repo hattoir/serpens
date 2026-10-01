@@ -18,3 +18,12 @@ output/
 recordings/
 config/floor_homography.json
 models/
+# H0 摩擦クーポンの STL（tools/h0_coupons.py で再生成できる。1 個 7.7MB）
+hardware/prototypes/H0_friction/stl/
+# Hardware Gap の大きな生の run（run.py で再生成できる。判定書・境界・判定の CSV はコミットする）
+simulation/hardware_gaps/*/results/*_quick.*
+simulation/hardware_gaps/HG-H0_friction/results/s1_ratio_sweep.csv
+simulation/hardware_gaps/HG-H0_friction/results/s3_monte_carlo.csv
+simulation/hardware_gaps/*/results/measured/raw/
+simulation/hardware_gaps/**/__pycache__/
+simulation/hardware_gaps/HG-S2_yaw_sum_limit/results/s2_locomotion_runs.json

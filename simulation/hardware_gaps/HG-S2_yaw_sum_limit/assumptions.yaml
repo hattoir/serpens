@@ -1,0 +1,29 @@
+# HG-S2 胴体ヨーの角度合計の上限 — 145° から上げてよいかの evidence（DEC-USER-0002 §3）
+gap_id: HG-S2_yaw_sum_limit
+gap_class: [SAFETY_GAP, MODEL_GAP]
+label: YAW_SUM_TRADEOFF_SIM
+baseline_deg: 145.0                    # 暫定 Software Safety Limit（PROVISIONAL / SAFETY_UNVERIFIED）
+sweep_deg: [145.0, 150.0, 160.0, 170.0, 180.0]
+
+configs:                               # HG-H0 と同じ overlay
+  FW5:         {overlay: config/robot_fw5.yaml}
+  FW6_HEADYAW: {overlay: config/robot_fw6_headyaw.yaml}
+  FW6_YAW5:    {overlay: config/robot_fw6_yaw5.yaml}
+
+# 移動（平面摩擦モデル）。比 r は H0 の境界付近
+locomotion:
+  ratios: [3.0, 5.0, 8.0]
+  laws: [decoupled, ellipse]
+  amplitude_deg: [10.0, 20.0, 30.0, 40.0]
+  waves: [0.75, 1.0, 1.25, 1.5]
+  gamma_step_deg: 5.0
+  turn_profiles: [head_weighted, uniform]   # 旋回オフセットの配り方（uniform は体全体を同じ円弧に = 小回りだが角度合計が大きい）
+  steps: 32
+  min_speed_mm_s: 50.0                 # HG-H0 と同じ基準（ASSUMPTION）
+  corridor_note: "U ターンに要る幅 ≈ 2 × 旋回半径 + 体の幅"
+
+# 囲い込み・挟み込みの幾何
+geometry:
+  body_width_mm: [60.0, 92.0]          # 関節部の幅（HG-S1 と同じ）
+  hook_deg: 180.0                      # これを超えて巻けると、体が物（首・胸・腕）に引っかかって保持できる（力の閉じ込み）
+  # 体の部位の太さは HG-S1 の assumptions.yaml を使う（**子どもの anthropometry の調査結果で置き換える**。DEC-USER-0002 §1）

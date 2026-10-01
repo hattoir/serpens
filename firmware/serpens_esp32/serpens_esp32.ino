@@ -53,6 +53,25 @@ static float clampDeg(int i, float deg) {
   return deg;
 }
 
+// 角度の列（尾 → 頭）のうち、連続する部分の和の絶対値の最大 = 体がその区間で囲む角（Python の max_contiguous_sum と同じ）
+static float maxContiguousSum(const float* q, int n) {
+  float best = 0.0f, runPos = 0.0f, runNeg = 0.0f;
+  for (int i = 0; i < n; i++) {
+    runPos = fmaxf(0.0f, runPos + q[i]);
+    runNeg = fminf(0.0f, runNeg + q[i]);
+    best = fmaxf(best, fmaxf(runPos, -runNeg));
+  }
+  return best;
+}
+
+// 上限を超えていれば yaw の鎖（胴体ヨー + 頭ヨー）を同じ比で縮める（形を保ったまま開く = 安全側）。サーボへ書く直前の最後の砦
+static void fitYawSum(float* q) {
+  float c[N_YAW_CHAIN];
+  for (int i = 0; i < N_YAW_CHAIN; i++) c[i] = q[YAW_CHAIN[i]];
+  float s = maxContiguousSum(c, N_YAW_CHAIN);
+  if (s > LIMIT_YAW_SUM_DEG) { float k = LIMIT_YAW_SUM_DEG / s; for (int i = 0; i < N_YAW_CHAIN; i++) q[YAW_CHAIN[i]] *= k; }
+}
+
 static bool hbFresh(uint32_t now) {
   return gHbSeen && (uint32_t)(now - gHbAt) <= HEARTBEAT_TIMEOUT_MS;
 }
@@ -103,6 +122,17 @@ static void stopMotion(StopReason reason, DeviceState to) {
 }
 
 // ---- 受信 ----------------------------------------------------------------------------
+// DRIVE の歩容が 1 周期のうちに作る、胴体ヨーの連続した角度の和の最大（control() と同じ式・同じクランプ、72 点）
+static float driveYawSum(const DriveCmd& d) {
+  float big = d.spatial * PI / 180.0f, worst = 0.0f, q[N_BODY];
+  for (int k = 0; k < 72; k++) {
+    float ph = 2.0f * PI * k / 72.0f;
+    for (int n = 0; n < N_BODY; n++) q[n] = clampDeg(n, d.amp * sinf(big * n + ph) + d.gamma * n / (float)(N_BODY - 1));
+    worst = fmaxf(worst, maxContiguousSum(q, N_BODY));
+  }
+  return worst;
+}
+
 static bool driveOk(const DriveCmd& d, uint16_t ttl) {
   float bodyMax = JOINTS[0].max_deg;
   for (int i = 1; i < N_BODY; i++) if (JOINTS[i].max_deg < bodyMax) bodyMax = JOINTS[i].max_deg;
@@ -111,7 +141,8 @@ static bool driveOk(const DriveCmd& d, uint16_t ttl) {
       && d.spatial > 0.0f && d.spatial <= LIMIT_SPATIAL_DEG
       && fabsf(d.freq) <= LIMIT_TEMPORAL_HZ
       && fabsf(d.gamma) <= LIMIT_GAMMA_DEG
-      && d.amp + fabsf(d.gamma) <= bodyMax;        // 合成しても operational limit 内
+      && d.amp + fabsf(d.gamma) <= bodyMax         // 合成しても operational limit 内
+      && driveYawSum(d) <= LIMIT_YAW_SUM_DEG;      // 1 周期のどこでも囲い込めない
 }
 
 static void handleMotion(uint8_t type, uint16_t seq, uint32_t now) {
@@ -152,6 +183,7 @@ static void handleMotion(uint8_t type, uint16_t seq, uint32_t now) {
       a[i] = rdI16(gRx.payload + 2 + 2 * i) / 10.0f;
       if (a[i] < JOINTS[i].min_deg || a[i] > JOINTS[i].max_deg) ok = false;
     }
+    if (ok && maxContiguousSum(a, N_BODY) > LIMIT_YAW_SUM_DEG) ok = false;   // 囲い込む姿勢は拒否
     if (!ok) { sendNack(Serial, seq, type, NACK_OUT_OF_RANGE); return; }
     for (int i = 0; i < N_BODY; i++) { gTarget[i] = a[i]; gSpeed[i] = spd; }
     gBodyUntil = now + ttl;
@@ -270,6 +302,7 @@ static void control(uint32_t now) {
     if (diff < -step) diff = -step;
     gGoal[i] += diff;
   }
+  fitYawSum(gGoal);                                          // 最後の砦: 角度合計の上限
   if (gTorqueOn) writeServos(gGoal);                         // 保持中も送り続ける
   readServos();                                              // 実測値を取り込む
 }

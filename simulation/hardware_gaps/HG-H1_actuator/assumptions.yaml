@@ -1,0 +1,46 @@
+# HG-H1 アクチュエータ（ST3215-C044 7.4V / 1:191）— 仮定。**すべて prior。HARDWARE_VERIFIED ではない**
+gap_id: HG-H1_actuator
+gap_class: [PARAMETER_GAP, SAFETY_GAP]
+label: ACTUATOR_MODEL_SIM
+
+servo:
+  # 資料の値（2026-09-29 に Seeed / Feetech 製品ページで確認）を中心にした prior。[min, max] は一様分布
+  stall_torque_nm_at_7v4: [1.40, 3.00]   # 製品ページ 27.4 kgf·cm = 2.687。旧 CAD 資料 16 kgf·cm = 1.569（stale）も含める
+  rated_torque_nm: 0.883                 # 製品ページ 9 kgf·cm（参考。モデルでは使わない）
+  no_load_rpm_at_7v4: [30.0, 90.0]       # **UNKNOWN**（7.4V 版の値を一次資料で確認できていない。12V 版は 45 rpm@12V）
+  stall_current_a_at_7v4: [1.5, 4.0]     # **UNKNOWN**（12V 版の Waveshare Wiki は 2.7A）
+  no_load_current_a: [0.10, 0.30]        # 12V 版の Wiki は 200mA
+  thermal_resistance_k_per_w: [15.0, 40.0]   # 巻線 → 外気。一般的な小型サーボの幅（ASSUMPTION）
+  thermal_time_constant_s: [300.0, 1200.0]
+  reflected_inertia_kgm2: [1.0e-3, 1.0e-2]   # ロータ慣性 × 191²。**UNKNOWN**（衝撃力に効く）
+  backdrive_torque_nm: [0.05, 0.50]      # 脱力時に外から回すのに要るトルク。**UNKNOWN**（挟まれた指を離せるか）
+  max_input_voltage_register_v: 8.0      # メモリテーブルの初期値（docs/sts3215_registers.md）。満充電 2S 8.4V はこれを超える
+
+control:
+  software_torque_limit_nm: 0.45
+  torque_limit_ratio: 0.167              # 2026-09-29 承認（ストール 2.687 基準）
+  cap_model_error: [-0.40, -0.20, 0.0, 0.20, 0.40]   # User 指示: nominal / ±20% / ±40%
+  temp_stop_c: 60.0                      # link.faults.temp_limit_c
+
+power:
+  cell_count: 2
+  v_open_circuit: [7.0, 8.4]             # 2S LiPo の残量の幅
+  pack_resistance_ohm: [0.02, 0.08]      # 電池未選定（ASSUMPTION）
+  wiring_resistance_ohm: [0.02, 0.06]    # ヒューズ・XT30・配線（ASSUMPTION）
+  electronics_current_a: [0.3, 0.7]      # ESP32 ×2・カメラ・LED・DC-DC 損失を 2S 側で（ASSUMPTION）
+  capacity_mah: [1000, 1500]             # Candidate
+  usable_fraction: 0.8
+
+safety:
+  pinch_lever_m: [0.020, 0.095]          # 関節軸から挟む点まで。関節のすき間（近い）〜 隣の節の先（95mm）
+  contact_stiffness_n_per_mm: [3.0, 30.0]  # 指 + TPU 外皮（ASSUMPTION。柔らかいほど衝撃力は小さい）
+  force_reference_n: null                # **安全の数値は未決定（OQ-0006）。ここに推測で入れない**
+
+# 歩容の負荷は HG-H0 の平面モデルから取る（同じ摩擦の仮定）
+demand:
+  configs: [FW6_HEADYAW, FW6_YAW5]
+  mu_forward: [0.2, 0.4, 0.8]
+  ratio: [2.0, 4.0, 8.0]
+  laws: [decoupled, ellipse]
+  gaits: [[30, 0.75], [40, 0.75]]        # [振幅 deg, 波数]
+  freq_hz: 0.5

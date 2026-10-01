@@ -1,0 +1,49 @@
+# HG-S1 接触安全（巻き付き・圧迫・引っ張り・曲げ・踏みつけ・持ち上げ）— 仮定。**危険側に倒した worst-case の幅**
+gap_id: HG-S1_contact_safety
+gap_class: [SAFETY_GAP]
+label: SAFETY_WORST_CASE_MODEL       # 解析的な worst-case。実測でも人の評価でもない
+threshold_policy: "安全のしきい値（力・圧力）は User が決める（OQ-0006）。ここでは推測で入れない"
+
+body:
+  link_mm: 95.0                      # 節ピッチ（CAD.md）
+  width_mm: [60.0, 92.0]             # 関節まわりの外装の幅（胴外装 92。関節部はくびれるかもしれない = 範囲）
+  limits_deg:                        # 可動域の 3 段（config の joint_limit_policy）
+    software: 50.0
+    mechanical: 55.0
+    geometry_onset: 64.8             # R03 局所形状で干渉が始まる角度（ここまで外力で押し込まれる最悪）
+
+configs:                             # HG-H0 と同じ overlay。胴体 yaw の本数
+  FW5:              {overlay: config/robot_fw5.yaml}
+  FW6_HEADYAW:      {overlay: config/robot_fw6_headyaw.yaml}
+  FW6_YAW5:         {overlay: config/robot_fw6_yaw5.yaml}
+  FW7_YAW5_HEADYAW: {overlay: config/robot_fw7_yaw5_headyaw.yaml}
+  FW7_YAW6:         {overlay: config/robot_fw7_yaw6.yaml}
+
+# 子どもの体の太さ（直径 mm、[最小, 大きい側]）。**Snyder 1977 の生データ（2〜7 歳）から**（child_anthropometry.yaml、DEC-USER-0002 §1）。
+# 最小 = 観測の最小、大きい側 = 6〜7 歳の P95。**2 歳未満（Primary target を含む）は出典が無く空白**
+body_parts_mm:
+  finger: [8.3, 12.7]                # 最初の関節が通らない最小の穴（指を隙間へ入れる寸法）
+  wrist: [29.3, 43.3]
+  forearm: [41.7, 61.8]
+  neck: [63.7, 88.5]
+  chest: [138.2, 211.0]
+
+# 歩容（HG-H0 の格子と同じ。旋回の γ は 可動域 − 振幅 まで）
+gait:
+  amplitude_deg: [20.0, 30.0, 40.0]
+  waves: [0.75, 1.0, 1.25, 1.5]
+  turn_profile: head_weighted
+  steps: 72
+
+torque:
+  software_limit_nm: 0.45
+  cap_error: [-0.40, 0.0, 0.40]      # HG-H1 と同じ幅
+  stall_nm: [1.40, 3.00]             # 上限が効かない場合（HG-H1 の prior と同じ）
+  backdrive_nm: [0.05, 0.50]         # 脱力時（UNKNOWN）
+
+# 子どもが加える外力（**幅として置く。ASSUMPTION**）
+external:
+  pull_n: [10.0, 240.0]              # 尾や頭をつかんで引く。CPSC 実測: 3 歳未満の 2 手 P95 150 N、6 歳以下の 1 手 P95 210 N（最大 238 N）
+  bend_force_n: [5.0, 40.0]          # 手で節を曲げる（節の先を押す）
+  step_n: [80.0, 150.0]              # 片足で踏む（幼児の体重の一部〜全部）
+  lift_mass_kg: [0.87, 1.10]         # 片端を持って持ち上げる（機体の質量。overlay の ASSUMPTION）

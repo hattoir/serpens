@@ -1,0 +1,54 @@
+# 子どもの身体寸法（直径 mm）。DEC-USER-0002 §1: 年齢から推測せず、信頼できる出典でモデル化する。
+# 出典と検証: docs/reports/2026-09-29_child_safety_sources.md
+#   Snyder et al. 1977（CPSC / UMTRI）の生データ 3,901 件から、百分位を自分で計算し直して確認した [D from M]。
+#   円周からの直径 = 円周 / π（円断面と仮定。首・手首は楕円に近いので、幅（breadth）と併記して幅の小さい方も見る）
+label: ANTHROPOMETRY_SNYDER1977_2_TO_7Y
+verification: "Snyder の百分位は独立に再計算して一致（SOFTWARE_VERIFIED）。実測の子どもではない。"
+coverage:
+  age_range_years: [2.0, 7.0]           # 生データの範囲。**2 歳未満は 3 件だけ = 空白**
+  primary_target_under_3y: "Snyder では 2〜3 歳の n = 37〜109。2 歳未満は信頼できる出典なし（首は Santos 2015 の抄録が 13〜15 か月のみ）"
+  safety_envelope_le_6y: "6〜7 歳まで（n = 66〜215）"
+
+# 直径（mm）。min = 観測の最小、p5 = 2〜3 歳の P5、p95 = 6〜7 歳の P95（envelope の大きい側）
+diameter_mm:
+  neck:
+    min: 63.7          # 円周 200 mm（2〜7 歳の観測最小）
+    p5_2to3y: 68.8     # 円周 216
+    p95_6to7y: 88.5    # 円周 278
+    santos2015_13to15mo_p5: [66.2, 67.8]   # 円周 208〜213（抄録の平均 − 1.645 SD。測定部位不明。低信頼）
+  wrist:
+    min: 29.3          # 円周 92
+    p5_2to3y: 31.8     # 円周 100
+    p95_6to7y: 43.3    # 円周 136
+  forearm:
+    min: 41.7          # 円周 131
+    p5_2to3y: 44.6     # 円周 140
+    p95_6to7y: 61.8    # 円周 194
+  upper_arm:
+    min: 40.1          # 円周 126
+    p5_2to3y: 43.3     # 円周 136
+    p95_6to7y: 66.5    # 円周 209
+    who_12mo_girls_p5: 39.5   # WHO 円周 124 mm
+  chest:
+    min: 138.2         # 円周 434（3〜4 歳）
+    p5_2to3y: 146.8    # 円周 461
+    p95_6to7y: 211.0   # 円周 663
+breadth_mm:
+  wrist_breadth: {min: 21.0, p5_2to3y: 24.0, p95_6to7y: 36.0}
+  head_breadth: {min: 119.0, p5_2to3y: 125.0, p95_6to7y: 149.0}
+  neck_breadth_lateral: {p5_2to3y: 61.0, p95_6to7y: 89.0}
+finger_mm:
+  # 「最初の関節が通らない最小の穴」= 指を穴へ入れる試験の値（組織の厚みではなく、はさまれ方に近い）
+  first_joint_diameter: {p5_2to3y: 8.7, p50_2to3y: 9.5, p95_6to7y: 12.7, min_observed: 8.3}
+  hand_clearance_min_hole: {p5_2to3y: 38.1, p95_6to7y: 57.2}
+
+# どちら側が保守的か（ハザードで向きが違う。**小さい側だけでは足りない**）
+conservative_direction:
+  finger_entrapment: "小さい側（最小の指が入る隙間 → 5〜12 mm の隙間を禁じる）"
+  ring_jam_or_squeeze: "輪の内径にちょうど収まる大きさ（首・手首・腕の全範囲を掃引する）"
+  neck_head_pocket: "首は入るが頭は抜けない開口（袋小路）→ 首の小さい側 と 頭幅の大きい側の間の開口"
+
+# 空白（埋める調査が必要）
+gaps:
+  - "2 歳未満の首・手首・腕・指の寸法（Primary target を含む）。CPSC 1975 の表（スキャン画像）を手で読む / Childata（有料）/ 日本の乳幼児身体発育調査（PDF）を手で読む"
+  - "首の楕円度（幅と奥行き）。円周から円断面と仮定すると、幅の小さい方を過大評価する"

@@ -13,6 +13,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, NamedTuple
 
+from serpens.motion.enclosure import max_contiguous_sum
+
 
 class ServoState(NamedTuple):
     """read_state() の戻り値。タプルとしても (pos, load, volt, temp) で展開できる。"""
@@ -84,6 +86,10 @@ class ServoBus(ABC):
         # （safety_limits.torque。measured_safe_torque_nm が埋まるまで暫定）
         self.torque_ceiling = float(cfg["safety_limits"]["torque"]["software_torque_limit_ratio"])
         self.torque_ceiling_applied = False
+        # yaw の鎖（尾 → 頭）の連続した角度の和の上限（体が輪を作って手首・首を囲い込めない。DEC-USER-0002）
+        self.yaw_sum_deg = float(cfg["link"]["limits"]["yaw_sum_deg"])
+        self.yaw_chain = [j.servo_id for j in self.joints.values() if j.axis == "yaw"]
+        self._last_deg: dict[int, float] = {}      # 最後に書いた角度（一部の軸だけ書くときの合計の計算に使う）
 
     # ---- 共通処理 ------------------------------------------------------------
     @property
@@ -98,15 +104,34 @@ class ServoBus(ABC):
 
     def set_goal(self, servo_id: int, deg: float, speed_dps: float, accel: float) -> None:
         """目標角を指令する。accel は加減速度 [deg/s²]。"""
-        self._set_goals({servo_id: Goal(self.clamp_deg(servo_id, deg), speed_dps, accel)})
+        self.sync_set_goals({servo_id: Goal(deg, speed_dps, accel)})
 
     def sync_set_goals(self, goals: dict[int, Goal]) -> None:
-        """複数軸の目標を同時に指令する。"""
+        """複数軸の目標を同時に指令する。可動域でクランプし、yaw の鎖の角度合計の上限に収める。"""
         clamped = {
             sid: Goal(self.clamp_deg(sid, g.deg), g.speed_dps, g.accel_dps2)
             for sid, g in goals.items()
         }
+        clamped = self.fit_yaw_sum(clamped)
         self._set_goals(clamped)
+        self._last_deg.update({sid: g.deg for sid, g in clamped.items()})
+
+    def fit_yaw_sum(self, goals: dict[int, Goal]) -> dict[int, Goal]:
+        """書いた後の姿勢が上限を超えるなら、**この指令に含まれる yaw 軸だけ**を同じ比 k で 0 側へ縮める（二分法）。
+
+        まだ書いていない軸は 0°（まっすぐ）とみなす。前の姿勢は上限内なので k = 0 で必ず収まる。
+        """
+        def total(k: float) -> float:
+            q = [goals[s].deg * k if s in goals else self._last_deg.get(s, 0.0) for s in self.yaw_chain]
+            return max_contiguous_sum(q)
+        if total(1.0) <= self.yaw_sum_deg:
+            return goals
+        lo, hi = 0.0, 1.0
+        for _ in range(30):
+            mid = (lo + hi) / 2.0
+            lo, hi = (mid, hi) if total(mid) <= self.yaw_sum_deg else (lo, mid)
+        return {sid: (Goal(g.deg * lo, g.speed_dps, g.accel_dps2) if sid in self.yaw_chain else g)
+                for sid, g in goals.items()}
 
     def read_state(self, servo_id: int) -> ServoState:
         """1軸の状態を読む。失敗したら ServoCommError。"""

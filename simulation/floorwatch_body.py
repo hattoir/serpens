@@ -20,7 +20,7 @@ from typing import Any
 
 from serpens.config import load_config
 from serpens.motion.gait import GaitParams, body_joint_names
-from simulation.mujoco.belly import BellyProfile, PROFILES
+from simulation.mujoco.belly import BellyProfile
 from simulation.mujoco.model import build_mjcf
 from simulation.mujoco.runner import SOURCE, run_gait
 
@@ -92,8 +92,7 @@ def run_case(name: str, belly: BellyProfile, torque_limit_nm: float | None = Non
              amplitude_deg: float = 30.0, waves: float = 1.0, freq_hz: float = 0.5,
              gamma_deg: float = 0.0, seconds: float = 8.0, seed: int = 0) -> StudyRow:
     cfg = fw_config(name, torque_limit_nm)
-    PROFILES.setdefault(belly.name, belly)          # 掃引用のプロファイルを一時登録
-    spec = build_mjcf(cfg, belly.name)
+    spec = build_mjcf(cfg, belly)                   # 登録簿 PROFILES は書き換えない（他のテストを汚さない）
     r = run_gait(cfg, belly.name, gait_for(cfg, amplitude_deg, waves, freq_hz), gamma_deg=gamma_deg,
                  seconds=seconds, seed=seed, spec=spec)
     length_m = float(cfg["body"]["head_tip_x_mm"]) / 1000.0

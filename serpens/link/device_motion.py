@@ -11,9 +11,13 @@ import math
 from typing import Any
 
 from serpens.link.messages import Body, Drive, Head
+from serpens.motion.enclosure import max_contiguous_sum
 from serpens.motion.gait import body_joint_names
 
+__all__ = ["DeviceMotion", "max_contiguous_sum"]
+
 HEAD_MAX = 3            # HEAD 指令が運べる軸数（payload 固定長）。実際の軸数は config から決まる
+YAW_SUM_PHASES = 72     # DRIVE の検査で 1 周期を何点で見るか
 
 
 class DeviceMotion:
@@ -25,6 +29,10 @@ class DeviceMotion:
         # 胴体ヨーより先（首・頭）。**関節数を決め打ちしない**（最小構成でも 9軸でも同じコードで動く）
         self.head = [n for n in self.joints if n not in self.body][:HEAD_MAX]
         self.limits = cfg["link"]["limits"]
+        # 胴体ヨーの角度合計の上限（体が輪を作って手首・首を囲い込めない。DEC-USER-0002 で 145° を暫定採用）
+        self.yaw_sum_deg = float(self.limits["yaw_sum_deg"])
+        # 巻ける角は頭ヨーも足して効く（安全側: 首 pitch の角度によらず同じ平面とみなす）
+        self.yaw_chain = [j["name"] for j in cfg["joints"] if j["axis"] == "yaw"]
         self.ttl_max_ms = int(cfg["link"]["drive_ttl_max_ms"])
         b = cfg["breath"]
         self.breath = b
@@ -51,7 +59,20 @@ class DeviceMotion:
                     and 0.0 < d.spatial_freq_deg <= float(lim["spatial_freq_deg"])
                     and abs(d.temporal_freq_hz) <= float(lim["temporal_freq_hz"])
                     and abs(d.gamma_deg) <= float(lim["gamma_deg"])
-                    and d.amplitude_deg + abs(d.gamma_deg) <= body_max)   # 合成しても範囲内
+                    and d.amplitude_deg + abs(d.gamma_deg) <= body_max    # 合成しても範囲内
+                    and self.drive_yaw_sum(d) <= self.yaw_sum_deg)          # 1 周期のどこでも囲い込めない
+
+    def drive_yaw_sum(self, d: Drive) -> float:
+        """DRIVE の歩容が 1 周期のうちに作る、胴体ヨーの連続した角度の和の最大（step() と同じ式・同じクランプ）。"""
+        big = math.radians(d.spatial_freq_deg)
+        top = max(len(self.body) - 1, 1)
+        worst = 0.0
+        for k in range(YAW_SUM_PHASES):
+            ph = 2.0 * math.pi * k / YAW_SUM_PHASES
+            q = [self.clamp(name, d.amplitude_deg * math.sin(big * n + ph) + d.gamma_deg * n / top)
+                 for n, name in enumerate(self.body)]
+            worst = max(worst, max_contiguous_sum(q))
+        return worst
 
     def body_ok(self, b: Body) -> bool:
         """BODY（とぐろ・鎌首などの胴体姿勢）の角度・速度がソフトリミット内か。"""
@@ -63,7 +84,7 @@ class DeviceMotion:
             j = self.joints[name]
             if not float(j["min_deg"]) <= deg <= float(j["max_deg"]):
                 return False
-        return True
+        return max_contiguous_sum(list(b.angles_deg[:len(self.body)])) <= self.yaw_sum_deg
 
     def head_ok(self, h: Head) -> bool:
         """HEAD の角度・速度が各軸のソフトリミット内か。"""
@@ -94,11 +115,20 @@ class DeviceMotion:
             self.target[n] = self.goals[n]
 
     def set_pose(self, pose: dict[str, Any]) -> None:
-        """姿勢プリセットを目標にする（各軸の max_speed_dps で移る）。"""
+        """姿勢プリセットを目標にする（各軸の max_speed_dps で移る）。角度合計の上限を超える形は比例で縮める。"""
         for n, j in self.joints.items():
             if n in pose:
                 self.target[n] = self.clamp(n, float(pose[n]))
                 self.speed[n] = float(j["max_speed_dps"])
+        self._fit_yaw_sum(self.target)
+
+    def _fit_yaw_sum(self, angles: dict[str, float]) -> None:
+        """yaw の鎖（胴体ヨー + 頭ヨー）の連続した角度の和が上限を超えていれば、同じ比で縮める（形を保ったまま開く = 安全側）。"""
+        s = max_contiguous_sum([angles[n] for n in self.yaw_chain])
+        if s > self.yaw_sum_deg:
+            k = self.yaw_sum_deg / s
+            for n in self.yaw_chain:
+                angles[n] *= k
 
     def hold(self) -> None:
         """いまの角度で保持する（停止時。ホーム姿勢へは動かさない）。"""
@@ -126,10 +156,14 @@ class DeviceMotion:
             self.goals[name] += max(-step, min(step, diff))
 
     def output(self, t: float, breathing: bool) -> dict[str, float]:
-        """サーボへ書く角度。呼吸（軸ごとの振幅・尾→頭の位相勾配）はここで足す（PC 側 animator と同じ式）。"""
+        """サーボへ書く角度。呼吸（軸ごとの振幅・尾→頭の位相勾配）はここで足す（PC 側 animator と同じ式）。
+
+        **最後の砦**: 呼吸を足した後でも胴体ヨーの角度合計が上限を超えないよう、ここで縮める。
+        """
         out = dict(self.goals)
         if breathing:
             w = 2.0 * math.pi * t / float(self.breath["period_s"])
             for i, name in enumerate(self.joints):
                 out[name] = self.clamp(name, out[name] + self.breath_amp[name] * math.sin(w + i * self.breath_phase))
+        self._fit_yaw_sum(out)
         return out

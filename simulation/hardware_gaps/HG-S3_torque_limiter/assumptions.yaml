@@ -1,0 +1,38 @@
+# HG-S3 機械式トルクリミッター（クラッチ）の滑りトルク — 仮定（**すべて探索用。実物未設計**）
+gap_id: HG-S3_torque_limiter
+gap_class: [SAFETY_GAP, PARAMETER_GAP, MODEL_GAP]
+label: TORQUE_LIMITER_SWEEP_SIM
+role: "設計に含めて検証する Safety Layer（DEC-USER-0002 §4）。ソフトの上限 + 機械のリミッターの二重層"
+
+sweep:
+  slip_torque_nm: [0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.2, 1.5]     # 指定 0.5〜1.0 に、両側を拡張
+  dynamic_factor: [1.0, 1.5, 2.0]        # 準静的な必要トルクに対する過渡（加減速・接触の衝撃）の倍率。障害物越えの代わりにも使う
+  slip_tolerance: [-0.30, 0.0, 0.30]     # 実際の滑りトルクの公称からのずれ（個体差・温度・摩耗）
+
+layout:
+  clutch_side: output                    # サーボ出力とリンクの間（外力が歯車を通らない）。input 側だと外力は歯車を通る = 保護にならない
+
+# 未知の量の prior（[min, max]、一様または対数一様。**ASSUMPTION**）
+gear:
+  break_torque_nm: [2.0, 8.0]            # 減速機の歯車が外力で壊れる出力軸トルク。**UNKNOWN**（メーカーの規格書か破壊試験で確認）
+  protect_margin: 1.5                    # 歯車を守るには 滑りトルク × これ ≤ 破断トルク
+external:
+  pull_n: [10.0, 240.0]                  # CPSC 実測: 3 歳未満の 2 手 P95 150 N、6 歳以下の 1 手 P95 210 N（最大 238 N。safety_thresholds.yaml）
+  lever_m: [0.05, 0.30]
+neck:
+  hold_mass_g: [90.0, 165.0]             # J1 が持ち上げる頭側の質量（overlay の ASSUMPTION）
+  hold_cog_mm: [35.0, 55.0]
+  hold_dynamic: 2.0                      # 頭を振ったときの過渡
+  lifted_by_child_nm: [2.0, 3.6]         # 頭をつかんで持ち上げたとき（HG-S1）
+pinch:
+  lever_m: [0.020, 0.095]                # 関節から挟まれた点まで（HG-S1 と同じ）
+
+# 判定の基準（ASSUMPTION）
+criteria:
+  max_nuisance_slip: 0.05                # 正常な歩容で滑る（追従できたはずの負荷で滑る）割合の上限
+  min_hold_margin: 1.5                   # 首を保持するトルクの余裕
+  min_gear_protect: 0.95                 # 歯車を守れる確率の下限
+
+# 力のしきい値は **PROVISIONAL / SAFETY_UNVERIFIED**（simulation/hardware_gaps/safety_thresholds.yaml、2026-09-29 に導出）。
+# run.py が読み込む。下は「しきい値が X N だとしたら」の感度の X
+threshold_probe_n: [15.0, 25.0, 35.0, 50.0, 80.0]

@@ -9,6 +9,14 @@ _last updated: 2026-09-14_
 `PahoBroker.publish` がネットワークスレッド上で PUBACK を 2 s 待って固まり、keepalive 切れで LWT が出ていた。
 試験側の client_id 衝突（`home-test` ×2）がそれを隠していた。続けて残り 3 件も直した: `Endpoint(PahoBroker)` を通常どおり組める（`autoconnect=False` → `start()`）／切断中の publish は例外にせず safety_state は溜めない／close と announce・tick の TOCTOU は「判定 → 積む」だけをロック、待つのは外。main にローカルコミット済み・**未 push**（User 判断待ち）。
 
+## Current Goal（2026-09-29 RUN-ENG-0003: 実機待ちの Hardware Gap シミュレーション）
+
+User 指示: 実機が要るところで止まらず、近似環境で感度・探索を続け、何を測れば判断が確定するかまで絞る。
+`simulation/hardware_gaps/`（H0 摩擦 / H1 アクチュエータ / H2 頭カメラ）を作った。新しいモデル `simulation/planar_friction.py`
+（平面・準静的の方向別クーロン摩擦）。要点は `ai-outbox/experiments/2026-09-29_EXP-ENG-0002_hardware_gap_sims.md`。
+**EXP-ENG-0001 の「しきい値 1.5〜2.5」は MuJoCo pyramidal cone による楽観値だった**（新しい境界は HG-H0 の decision_boundary.md）。
+次: H0 の実測 CSV（45° の滑り方向試験を追加）→ `run.py --measured` → 6 本目の用途の仮決定（User）。
+
 ## Current Goal（2026-09-29 Engineering Agent RUN-ENG-0001、branch `agent/engineering-floor-watch`）
 
 User 方針は **6 モーター**（CAD・PRODUCT.md は 5 サーボのまま。6 本目の使い方は OQ-0101）。
@@ -18,6 +26,8 @@ Floor Watch 用の MuJoCo overlay（`config/robot_fw5.yaml` / `robot_fw6_yaw5.ya
 結論（PHYSICS_SIM）: 推進は腹面の横/前後 摩擦比で決まり、しきい値は約 1.5〜2.5。トルク上限 0.45 N·m は平床の蛇行を縛らない。
 次は実物で測る: **H0 摩擦クーポン（購入不要）** → H1 1 関節 / H2 頭の撮影試験（購入は User 承認後）。
 状態の正本は `ai-shared/engineering-state.md`、提案は `ai-outbox/decisions/2026-09-29_PROP-ENG-0001_hardware_gate.md`。
+User 決定（DEC-USER-0001）: **H0 → locomotion 再評価 → 6 本目の用途を仮決定 → H1（C044）→ H2**。H0 の道具（`tools/h0_coupons.py`・`tools/h0_friction.py`・`hardware/prototypes/H0_friction/`）は用意済みで、User の測定待ち。
+既知の失敗: `tests/test_mqtt_live.py` の retain テストが、負荷のかかった全件実行で落ちることがある（OQ-0107。別タスクで調査中）。
 
 ## Current Goal（2026-09-26 フェーズ 2 レビュー対応 + フェーズ 1 追加確認）
 

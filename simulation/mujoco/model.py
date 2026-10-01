@@ -82,10 +82,13 @@ def _masses(cfg: dict[str, Any], n_segments: int) -> list[float]:
     return out
 
 
-def build_mjcf(cfg: dict[str, Any], belly: str = "WHEEL", timestep: float = 0.002,
+def build_mjcf(cfg: dict[str, Any], belly: str | BellyProfile = "WHEEL", timestep: float = 0.002,
                kp_scale: float = 1.0) -> ModelSpec:
-    """config から MJCF を組み立てる。`kp_scale` は位置サーボのゲイン（**未同定**）の倍率。"""
-    prof = profile(belly)
+    """config から MJCF を組み立てる。`kp_scale` は位置サーボのゲイン（**未同定**）の倍率。
+
+    `belly` は登録済みの名前か、掃引・実測用の `BellyProfile`（登録簿 PROFILES は書き換えない）。
+    """
+    prof = belly if isinstance(belly, BellyProfile) else profile(belly)
     joints = cfg["joints"]
     radius = float(cfg["body"]["diameter_mm"]) / 2.0 * MM
     tail_x = float(cfg["body"]["tail_x_mm"]) * MM

@@ -169,10 +169,20 @@ def test_c044_profile_is_not_polluted_by_the_12v_servo(cfg: dict) -> None:
     assert s["model"] == "STS3215-C044"
     assert s["nominal_voltage_v"] == pytest.approx(7.4) and s["gear_ratio"] == "1:191"
     assert s["hardware_verified"] is False
-    assert s["torque_reference_source"] == "CAD_REFERENCE"
+    # 2026-09-29（User 承認）: 現行の Seeed / Feetech 資料の値。旧 CAD 資料の 5.2 / 16 は stale として残す（消さない）
+    assert s["torque_reference_source"] == "VENDOR_PAGE_2026-09-29"
     assert "stall_torque_kgfcm" not in s, "旧 12V のストールトルクが残っている"
-    assert float(s["rated_torque_reference_kgfcm"]) == pytest.approx(5.2)
-    assert float(s["stall_torque_reference_kgfcm"]) == pytest.approx(16.0)
+    assert float(s["rated_torque_reference_kgfcm"]) == pytest.approx(9.0)
+    assert float(s["stall_torque_reference_kgfcm"]) == pytest.approx(27.4)
+    assert float(s["stale_rated_torque_reference_kgfcm"]) == pytest.approx(5.2)
+    assert float(s["stale_stall_torque_reference_kgfcm"]) == pytest.approx(16.0)
+    t = cfg["safety_limits"]["torque"]
+    kgfcm = 0.0980665
+    assert float(t["stall_torque_reference_nm"]) == pytest.approx(27.4 * kgfcm, abs=0.002)
+    assert float(t["rated_torque_reference_nm"]) == pytest.approx(9.0 * kgfcm, abs=0.002)
+    # レジスタ比は、大きい方のストール値で計算してある（小さい方で計算すると上限を超えて出る）
+    assert float(t["software_torque_limit_ratio"]) * float(t["stale_stall_torque_reference_nm"]) \
+        <= float(t["software_torque_limit_nm"]) + 1e-6
     assert float(s["supply_voltage_v"]) == pytest.approx(7.4), "電源電圧が 12V のまま"
 
 

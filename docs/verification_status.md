@@ -43,7 +43,7 @@
 | software_operational_limit ±50°（CONDITIONAL） | `HARDWARE_UNVERIFIED` | 実機試験の**候補値**であって実機運転の許可ではない。`config/robot.yaml` の `joint_limit_policy` |
 | 最小曲げ半径 82.3mm / 輪の内径 114mm | `SOFTWARE_VERIFIED` | 幾何計算（`tests/test_safety_limits.py`）。**外皮を着せた実物では変わりうる** |
 | とぐろが自己干渉しない（クリアランス 89.6mm） | `SOFTWARE_VERIFIED` | 中心線の距離計算。外皮の厚みは未考慮 |
-| ソフトのトルク上限 0.450N·m（ストール参照比 0.287） | `HARDWARE_UNVERIFIED` | C044（7.4V/1:191）の**参照値**（rated 5.2 / stall 16 kgf·cm）から。`measured_safe_torque_nm` は null |
+| ソフトのトルク上限 0.450N·m（ストール参照比 0.167） | `HARDWARE_UNVERIFIED` | C044（7.4V/1:191）の**参照値**（2026-09-29 から現行資料の rated 9 / stall 27.4 kgf·cm。旧 5.2 / 16 は stale / source-unverified）から。`measured_safe_torque_nm` は null。H1 で実測する |
 | ELECTRICAL_SAFETY_GATE（8項目） | **全項目 INCOMPLETE** | `docs/safety_limits.md` §5。閉じている間は実機の自律走行を拒否（`SOFTWARE_VERIFIED`: `tests/test_electrical_gate.py`） |
 | 接触 → 脱力 20ms | **未達・要求未確定** | `docs/contact_release_requirements.md` |
 | 挟み込み力 12.4N | `HARDWARE_UNVERIFIED` | 計算値。ISO/TS 15066 との比較も未（規格本文を参照できていない） |

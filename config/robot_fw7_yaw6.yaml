@@ -1,0 +1,37 @@
+# Floor Watch 7 モーター案: 胴体 yaw ×6 ＋ 首 pitch。**CONCEPT。CAD に存在しない。**
+# User 指示（2026-09-29）の比較対象「6 Body Yaw + Head Pitch 相当」。FW6_YAW5 の尾側にさらに 95mm の節を 1 つ足した仮置き。
+# 6 モーター方針からは 1 本多い。推進の上限を見るための参照。質量はすべて ASSUMPTION。
+body:
+  length_mm: 763
+  diameter_mm: 92
+  mass_g: 1100
+  tail_x_mm: 0
+  head_tip_x_mm: 763
+joints:
+  - {name: J7, servo_id: 7, axis: yaw,   x_mm: 145.0, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J6, servo_id: 6, axis: yaw,   x_mm: 240.0, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J5, servo_id: 5, axis: yaw,   x_mm: 335.0, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J4, servo_id: 4, axis: yaw,   x_mm: 430.0, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J3, servo_id: 3, axis: yaw,   x_mm: 525.0, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J2, servo_id: 2, axis: yaw,   x_mm: 620.0, direction: 1, horn_offset_deg: 0.0, onset_deg: 64.8, onset_collides_deg: 64.9, mechanical_min_deg: -55.0, mechanical_max_deg: 55.0, min_deg: -50.0, max_deg: 50.0, max_speed_dps: 240.0}
+  - {name: J1, servo_id: 1, axis: pitch, x_mm: 706.8, direction: 1, horn_offset_deg: 0.0, onset_deg: null, onset_collides_deg: null, mechanical_min_deg: 0.0, mechanical_max_deg: 45.0, min_deg: 0.0, max_deg: 40.0, max_speed_dps: 120.0}
+mass_budget_g:
+  servo_each: 55
+  servo_count: 7
+  segment_frame_each: 45
+  segment_frame_count: 8
+  passive_wheels_total: 0
+  head_total: 90
+  skin_and_wiring: 130
+  tail_payload: 130
+  neck_lifted_mass: 90
+  neck_lifted_cog_mm: 35
+poses:
+  home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 0}
+gait:
+  presets:
+    forward:    {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 0.0}
+    turn_left:  {amplitude_deg: 30.0, spatial_freq_deg: 60.0, temporal_freq_hz: 0.5, turn_bias_deg: 20.0}
+sim:
+  # 近似カプセル（径 92mm、節 95mm）が中立でも重なるため自己接触を切る（MuJoCo のモデル化の都合。実外装の干渉判定は CAD で行う）
+  mujoco_self_collision: false

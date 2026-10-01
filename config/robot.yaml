@@ -80,6 +80,19 @@ mass_budget_g:
   neck_lifted_mass: 200         # J7 が持ち上げる質量
   neck_lifted_cog_mm: 104       # J7 から重心までの距離
 
+# 質量の追加（Design の見積もり、ENTRY-D-0005 / `docs/design/mass_addendum_2026-09-30.md`。**PROPOSED。収支 mass_budget_g には含めていない**:
+# テスト・MuJoCo は mass_budget_g の合計（1000 g）を使う。確定して収支へ入れるときに、合計・上の body.mass_g・テストを一緒に直す）。
+# 質量の上限 safety_limits.mass_total_g_max（1700 g）との比は tests/test_flank_v.py で確認する。
+mass_additions_g:
+  status: PROPOSED
+  source: "Design ENTRY-D-0005（CAD のボクセルから計算。中空は殻 1.2 mm の上限の見積もり）。実測なし"
+  knuckle_drum_solid_max: {J2: 13.7, J3: 14.2, J4: 16.6, J5: 16.6, total: 61.1}
+  knuckle_drum_hollow_shell_1p2mm_max: {J2: 11.0, J3: 14.0, J4: 15.4, J5: 15.4, total: 55.8}
+  head_lower_rear_fill_solid: 1.8
+  # 頭に足す取り込み機構（フードなど）の質量。中空を前提にする（中実は J7 のトルクと重心が悪化する）。ASSUMED
+  intake_head_hollow_assumed: [10.0, 19.0]
+  intake_head_solid: [55.0, 65.0]
+
 # ArUco マーカ（DICT_4X4_50, 50mm）。位置は尾端からの距離（胴体に沿って）
 # 首マーカは J7 より胴体側（J6-J7 リンク上）。J7 より先だと鎌首でマーカが傾いて検出できない
 # 台座: 60×60×厚さ3mm の平板（50mm マーカ + 周囲 5mm 余白）。外皮の上に載せる着脱式（マジックテープ/薄型磁石）
@@ -156,7 +169,8 @@ poses:
   home: {J1: 0, J2: 0, J3: 0, J4: 0, J5: 0, J6: 0, J7: 8, J8: 0, J9: 0}
   # **R03 の休憩姿勢**: 緩い弧（合計 240°）。とぐろではない。
   # 旧とぐろ（329°巻き・J1=83°）は R03 の可動域に入らないので legacy_poses へ移した
-  rest_arc: {J1: 45.3, J2: 43.0, J3: 40.9, J4: 38.8, J5: 36.9, J6: 35.1, J7: 8, J8: 0, J9: 0}
+  # 2026-09-29: 胴体ヨーの角度合計の上限 145°（link.limits.yaw_sum_deg、DEC-USER-0002）に合わせ、旧 240° の弧を同じ形のまま 135°（= 145° − 胴体ヨーの呼吸振幅の和 10°）に開いた
+  rest_arc: {J1: 25.5, J2: 24.2, J3: 23.0, J4: 21.8, J5: 20.8, J6: 19.7, J7: 8, J8: 0, J9: 0}
   # とぐろへの移り方: 尾から順に巻き、頭（J7 以降）を最後に引き込む
   coil_sequence:
     order: [J1, J2, J3, J4, J5, J6, J7, J8, J9]
@@ -757,13 +771,29 @@ behavior:
 safety_limits:
   # ---- トルク: 出どころの違う4つを別々に持つ ----
   torque:
-    # REFERENCE（CAD 資料の STS3215-C044 7.4V 値。実測ではない）
-    rated_torque_reference_nm: 0.510      # 5.2 kgf·cm
-    stall_torque_reference_nm: 1.569      # 16 kgf·cm。**連続安全トルクとして使わない**
-    # ソフトが出してよい上限。rated 以下に取る（構想設計書16章の 1.2N·m より、サーボの定格が先に効く）
+    # REFERENCE（STS3215-C044 7.4V / 1:191。**実測ではない**）。2026-09-29 に User 承認で現行資料の値へ更新:
+    #   Seeed / Feetech の製品ページ（2026-09-29 に確認）: ストール 27.4 kgf·cm / 定格 9 kgf·cm
+    rated_torque_reference_nm: 0.883      # 9 kgf·cm
+    stall_torque_reference_nm: 2.687      # 27.4 kgf·cm。**連続安全トルクとして使わない**
+    # 旧 REFERENCE（CAD 資料由来）は **stale / source-unverified**。元出典を確かめるまで矛盾として残す（削除しない。OQ-0103）
+    stale_rated_torque_reference_nm: 0.510   # 5.2 kgf·cm
+    stale_stall_torque_reference_nm: 1.569   # 16 kgf·cm
+    # ソフトが出してよい上限。rated 以下に取る（構想設計書16章の 1.2N·m より、サーボの定格が先に効く）。**N·m の上限は変えていない**
     software_torque_limit_nm: 0.450
     # サーボのトルク制限レジスタへ書く比（ストール基準。= software / stall_reference）
-    software_torque_limit_ratio: 0.287
+    # 2026-09-29: 0.287（ストール 16 前提）→ 0.167（User 承認、OQ-0108）。ストールが 27.4 なら 0.287 では約 0.77 N·m 出るため。
+    # **H1 で実測したストール・トルク制限の効きで作り直す**（hardware/prototypes/H1_joint/README.md）
+    software_torque_limit_ratio: 0.167
+    # 機械式トルクリミッター（クラッチ）。**設計に含めて検証する Safety Layer**（DEC-USER-0002 §4）。ソフトの上限 + 機械の二重の安全層。
+    # 滑りトルクは PROVISIONAL / SAFETY_UNVERIFIED。simulation/hardware_gaps/HG-S3_torque_limiter で 0.4〜1.5 N·m を掃引し、
+    # 不要な滑り ≤ 5%（過渡 ×1.5・個体差 −30%）・歯車の保護・首の保持を同時に満たす窓が 0.7〜1.0 N·m。H1 の実測後に更新する
+    mechanical_limiter:
+      status: DESIGN_PROVISIONAL
+      layout: output_side           # サーボ出力とリンクの間。入力側だと外力が歯車を通る（保護にならない）
+      slip_nm_window: [0.7, 1.0]
+      slip_nm_baseline: 0.7         # 窓の中の安全側（力が小さい側）
+      slip_tolerance: 0.30          # 個体差・温度・摩耗（見込み）。実測で置き換える
+      hardware_verified: false
     # **実測して初めて埋まる。** 埋まるまで実機の自律走行は許可しない
     measured_safe_torque_nm: null
     hardware_verified: false
@@ -802,10 +832,14 @@ servo:
   nominal_voltage_v: 7.4
   gear_ratio: "1:191"
   hardware_verified: false
-  # CAD 側資料の REFERENCE 値（7.4V 時）。**実測ではない。データシート確認も未**
-  rated_torque_reference_kgfcm: 5.2      # 連続で出せるとされる値
-  stall_torque_reference_kgfcm: 16.0     # **連続安全トルクとして使わない**（起動・拘束時の最大）
-  torque_reference_source: CAD_REFERENCE
+  # REFERENCE 値（7.4V 時）。**実測ではない。** 2026-09-29 に現行の Seeed / Feetech 資料の値へ更新（User 承認）。
+  # 設計判断には H1 の実測値を使う（User 指示 2026-09-29）
+  rated_torque_reference_kgfcm: 9.0      # 連続で出せるとされる値
+  stall_torque_reference_kgfcm: 27.4     # **連続安全トルクとして使わない**（起動・拘束時の最大）
+  # 旧 CAD 資料の値。**stale / source-unverified**。元出典を確かめるまで矛盾として残す（OQ-0103）
+  stale_rated_torque_reference_kgfcm: 5.2
+  stale_stall_torque_reference_kgfcm: 16.0
+  torque_reference_source: VENDOR_PAGE_2026-09-29   # Seeed / Feetech 製品ページ。旧 CAD_REFERENCE は stale_* に残す
   baudrate: 1000000
   steps_per_rev: 4096
   center_step: 2047          # [W] の中立位置。[M] の「2048 校正」とは 1step 差
@@ -888,6 +922,12 @@ link:
     gamma_deg: 30.0             # 旋回オフセット γ0
     head_speed_dps: 120.0       # HEAD 指令の速度上限（J7 の max_speed_dps と同じ）
     body_speed_dps: 240.0       # BODY 指令（とぐろ・鎌首）の速度上限（胴体ヨーの max_speed_dps）
+    # 胴体ヨーの「連続した関節の角度の和」の上限（体が輪を作って手首・首を囲い込めない。PRODUCT.md §4）。
+    # **PROVISIONAL / SAFETY_UNVERIFIED**: DEC-USER-0002（2026-09-29）で 145° を暫定採用。歩容は旋回込みで最大 142°
+    # （simulation/hardware_gaps/HG-S1_contact_safety）。上げる提案は evidence が揃ってから（HG-S2）。
+    # 対象は yaw の鎖（胴体ヨー + 頭ヨー。首 pitch によらず同じ平面とみなす = 安全側）。DRIVE / BODY は胴体だけで超えたら NACK、
+    # POSE・機体の最終出力（呼吸込み）・ServoBus（PC 直結の経路も含む最下層）は鎖全体を上限に収める
+    yaw_sum_deg: 145.0
   # 機体が自分で緊急停止する条件（サーボの読み値。実機未検証）
   faults:
     temp_limit_c: 60            # behavior.safety.overheat_c(55) より上。機体側の最後の砦
