@@ -1,0 +1,183 @@
+# 頭のスコップ＋フタ（頭内に閉じ込める機構）の成立性調査 — MuJoCo 用の設定。単位はキー名の接尾辞（_mm, _g, _deg, _s ...）。
+# 方針（User 決定 2026-09-29）: 頭内取り込み機構は**第 2 段階の製品機能**。この作業はその成立性調査（PRODUCT.md §2）。
+# 出典と ASSUMED の区別:
+#   BRIEF   = User の指示書（2026-09-29）の値
+#   ASSUMED = 指示書に無い、または実物未測定の仮値。**実物の試験片の結果が出るまで「候補」の根拠にしない**
+# ヘビ本体・蛇行・安全機構は扱わない。頭だけをレール（x 方向のスライダー）上のブロックとして動かす。
+# 絨毯は**未対応**（毛への沈み込みを MuJoCo の剛体接触で再現できない。docs/verification_status.md）。
+
+head:
+  width_mm: 48.0                 # BRIEF
+  length_mm: 60.0                # BRIEF
+  skid_height_mm: 5.0            # BRIEF。頭の下面のスキッド。**動きには使わない**（頭は x 方向にだけ動き、高さは固定）
+  mass_g: 80.0                   # BRIEF（ASSUMED）
+
+# スコップ（下あご）。傾斜板は先端（床）から奥行き 30mm（斜面に沿って）で立ち上がる薄板（先端厚 = 板厚）
+scoop:
+  depth_along_slope_mm: 30.0     # BRIEF。「奥行き」= 斜面に沿った長さと解釈（α = 8/12/18° で立ち上がり 4.2 / 6.2 / 9.3 mm）
+  tip_clearance_mm: 0.1          # User 承認 2026-09-29（先端は床に接する。0 / 0.2 / 0.5 は別に振る）
+  wall_thickness_mm: 1.0         # ASSUMED（カップ型の側壁の厚み）
+  wall_height_mm: 5.0            # ASSUMED（傾斜板の上面からの側壁の高さ。床まで下ろした柱状）
+  friction_object: 0.3           # User 承認 2026-09-29（PETG 平滑の仮値。0.15 / 0.5 は上位候補だけ確認）
+  sweep:                         # BRIEF
+    tip_thickness_mm: [0.4, 0.6, 1.0]
+    alpha_deg: [8.0, 12.0, 18.0]
+    side_wall: [false, true]
+    width_mm: [30.0, 40.0]
+
+# 閉じ込め空間（ランプの上端から水平に続く）
+cavity:
+  length_mm: 30.0                # BRIEF（x）
+  width_mm: 30.0                 # BRIEF（y）
+  height_mm: 15.0                # BRIEF（z）
+  floor_plate_mm: 1.5            # ASSUMED
+  wall_mm: 1.0                   # ASSUMED（側壁・奥壁）
+
+# フタ（上あご）。空間の奥の上端にヒンジ。開き 60° → 閉 0°
+lid:
+  open_deg: 60.0                 # BRIEF
+  close_time_s: 0.3              # BRIEF
+  thickness_mm: 1.5              # ASSUMED
+  mass_g: 5.0                    # ASSUMED
+  torque_limit_nm: 0.05          # ASSUMED（物を挟んだとき押しつぶさず止まる程度。先端で約 1.7 N）
+  friction_object: 0.3           # ASSUMED（スコップと同じ）
+  closed_tolerance_deg: 2.0      # これ以下なら「閉じた」
+
+# 対象物（BRIEF）。物 – 床の摩擦は床の値（立方体だけ friction_floor で上書き）
+objects:
+  coin_1yen:   {shape: cylinder, diameter_mm: 20.0, height_mm: 1.5, mass_g: 1.0}
+  battery_cr2032: {shape: cylinder, diameter_mm: 20.0, height_mm: 3.2, mass_g: 3.0}
+  bead:        {shape: sphere, diameter_mm: 8.0, mass_g: 0.3, rolling_friction_m: 2.0e-5}   # 転がり抵抗 c_rr ≈ 0.005 × 半径 4mm（ASSUMED。結果に強く効く）
+  crumb_cube:  {shape: box, edge_mm: 10.0, mass_g: 0.5, friction_floor: 0.8}                  # 「摩擦高め」= 0.8（ASSUMED）
+
+floors:                          # BRIEF。剛体平面（絨毯は未対応）
+  flooring: {friction: 0.3}
+  mat: {friction: 0.6}
+
+motion:
+  speeds_mm_s: [10.0, 20.0, 40.0]   # BRIEF
+  push_force_limit_n: 1.0           # BRIEF（ヘビの推進力相当。ASSUMED）
+  ramp_up_s: 0.1                    # 速度指令の立ち上がり
+  continue_during_close: true       # フタを閉じる間も前進を続ける（厳しい側）
+  settle_after_close_s: 2.0         # User 指示 2026-09-30: 閉じ終わりから 2 秒後まで見て「保持」を判定する
+  travel_max_mm: 150.0              # 追跡の上限（先端の前進距離）
+
+placement:
+  distance_ahead_mm: [30.0, 60.0]   # ASSUMED（物の中心の、先端からの初期距離の範囲。一様乱数）
+  lateral_offsets_mm: [0.0, 5.0, 10.0]   # BRIEF（符号はランダム）
+  yaw_random: true                  # BRIEF（円板・球は見た目に関係しない）
+
+# フタを閉じるきっかけ
+trigger:
+  default: ideal_center_depth
+  ideal_center_depth_mm: 15.0       # User 承認 2026-09-29: 物の中心が空間の奥へ 15mm 入った瞬間（理想センサー）
+  latency_ms: [0.0, 50.0, 100.0]    # User 指示
+  contact_advance_mm: 50.0          # 「接触から一定距離」: スコップと物の最初の接触から、この距離だけ前進してから閉じる（ASSUMED）
+  tof:                              # 現実のセンサー案（User 指示）。VL53L1X 相当（ASSUMED）
+    sensor_x_mm: 25.0               # 先端からの位置（ランプの上）
+    sensor_z_mm: 14.0               # 床からの高さ
+    fov_half_deg: 13.5              # 27° の視野
+    rate_hz: 30.0
+    threshold_mm: 60.0              # この距離を切ったら
+    advance_mm: 48.0                # そこから前進する距離（= 閾値 − 12mm。物の半径を 6mm と仮定して中心が奥へ入る量に合わせた。センサーは物の大きさを知らない）
+    floor_rejected: true            # 床からの戻りは除く（床の背景を差し引ける最良の場合）
+
+# 数値（収束確認で決める。tools/scoop_convergence.py）
+sim:
+  timestep_s: 2.0e-4
+  solref_time_const_s: 0.002
+  solimp: [0.95, 0.99, 0.0005]
+  cone: elliptic
+  multiccd: true
+  check_every_steps: 5              # トリガー判定・状態の読み出しの間隔
+
+# 評価
+eval:
+  n_stage1: 10                      # 全条件（User 指示: N=10 で全条件 → 上位のみ N=30）
+  n_stage2: 30
+  ci_level: 0.90
+  base_seed: 20260929
+
+# 短ランプ（User 決定 2026-09-29: 1（薄い先端・低摩擦）は掃引しない。短ランプ + 掻き込みフタ だけを試す）
+ramp_sweep:
+  alpha_deg: 12.0                   # 固定
+  ramp_mm: [5.0, 8.0, 10.0, 15.0]   # 斜面に沿った傾斜板の長さ。空間はランプ終端から始まる
+  tip_thickness_mm: [0.4, 0.6]      # スコップ μ は 0.3 固定（scoop.friction_object）
+  width_mm: 30.0                    # 指示なし → 既定（30）。側壁なし（open）
+
+# 巻き込みくちばし（User 決定 2026-09-29 / 依頼 2026-09-30: フタの形を奥ヒンジから変更。奥ヒンジは幾何的に物を奥へ押せない）
+# ヒンジ = ランプ先端の真上。開 = 腕が前へ水平、閉 = 前 → 下 → 奥へ 180° 回って奥向き水平。腕先は床上 tip_clearance_mm を通る（腕長 = ヒンジ高さ − 隙間）。
+beak:
+  hinge_z_mm: [10.0, 12.0, 15.0]    # ASSUMED（12 が基準）
+  tip_clearance_mm: 0.5             # BRIEF
+  tip_mm: 0.6                       # 先端厚（依頼に指定なし → 0.6 に固定。0.4 は上位案の感度で見る）
+  ramp_mm: [5.0, 8.0, 10.0]
+  close_time_s: [0.3, 0.6]
+  width_side: [[30.0, false], [40.0, true]]   # (幅 mm, 側壁)。2 × 2 の全組合せは回数が増えるので 2 通りに絞り、残り 2 通りは上位案の感度で見る
+  cavity_width_follows_shape: true  # 空間の幅 = スコップの幅（腕はその幅いっぱい）
+  speeds_mm_s: [2.0, 10.0]          # 依頼 2026-09-30
+  stop_on_trigger: [true, false]    # true = 検出したら頭を止めてから閉じる / false = 前進しながら閉じる
+  trigger: "contact:0"              # ASSUMED: 物がスコップに触れた瞬間に閉じ始める（接触 / ToF が理想的に働いた場合）
+  torque_limit_nm: 0.05             # ASSUMED（SG90 の停動トルクは約 0.18 N·m とされるが未実測。感度で 0.02 / 0.18 も見る）
+  latch: true                       # 閉じ終わったら開かない（機械ラッチ。可動域を閉じ位置に絞ってモデル化）
+
+# ===== 口に入れやすい形と機構の探索（User 依頼 2026-09-30。simulation/scoop/forms/）=====
+# 共通: 口は「床が空間の床になる」開放底のフード（傾斜板・先端の厚みの制約が無い）。ゲート（一度閉じたら開かない）で閉じる。
+# すべて MUJOCO_SIM。BRIEF = 依頼の指定、ASSUMED = 実測なし。
+forms:
+  cavity: {depth_mm: 30.0, width_mm: 30.0, height_mm: 15.0, wall_mm: 1.0, roof_mm: 1.0, clearance_mm: 0.1}   # 30×30×15 は BRIEF。壁厚・屋根厚・床との隙間 0.1 は ASSUMED
+  funnel: {front_width_mm: 60.0, length_mm: 30.0}     # G: 口で 60 → 奥で 30（BRIEF）。長さ 30 は ASSUMED
+  gate: {time_s: 0.2, force_n: 5.0, mass_g: 5.0}      # 上から降りる板。閉じ時間・力・質量は ASSUMED。ラッチ = 閉じたら可動域を閉位置に絞る
+  trigger:
+    full_inside_margin_mm: 1.0                        # 物の中心が「物の外接半径 + この値」以上、空間の中へ入ったらゲートを閉じ始める（理想センサー、ASSUMED）
+  hold_s: 2.0                                         # BRIEF: 閉じ終わりから 2 秒後まで空間の中
+  launch_speed_mm_s: 350.0                            # 飛ばされた = 物の速さがこれを超えた（前回と同じ。機構の速度が大きい案は 1.5 × 機構の最大速度）
+  abort_push_mm: 30.0                                 # 物が最初の位置から前へこれ以上押し出されたら打ち切る（計算時間の節約。結果は pushed_ahead）
+  speeds_mm_s: [2.0, 10.0]                            # BRIEF
+  travel_extra_mm: 60.0                               # 物の位置 + これだけ進んでも合図が出なければ打ち切り
+  backstop: {gap_mm: 0.5, leg_diameter_mm: 30.0}      # F: 物の前に壁 / 脚（φ30）。物との隙間 0.5 は ASSUMED
+  friction_wall: 0.3                                  # 壁・屋根・ゲート・アーム・フックと物の μ（前回のスコップと同じ。ASSUMED）
+  sweeper:                                            # A: 縦軸サイドスイーパー（駆動 1 = 左右をリンクで連動 + ゲート 1）
+    open_half_angle_deg: 30.0                         # V 字の片側の開き（前方から外側へ）。ASSUMED
+    arm_height_mm: 10.0                               # 腕の板の高さ。床上 0.5mm から。BRIEF: 0.5mm の平面を掃く
+    arm_bottom_mm: 0.5
+    arm_thickness_mm: 1.0                             # ASSUMED
+    arm_mass_g: 1.0                                   # ASSUMED
+    torque_limit_nm: 0.05                             # ASSUMED（前回と同じ）
+    soft_tip: {length_mm: 5.0, stiffness_nm_rad: 2.0e-4, damping: 1.0e-5}   # 柔らかい先端 = 先端 5mm がばね（ASSUMED）。硬い = 剛体
+    reach_trigger_mm: 12.0                            # 物の中心が口の前 12mm 以内に来たら腕を閉じ始める（理想センサー、ASSUMED）
+    gate_delay_s: 0.3                                 # 腕が閉じ終わって、この時間で物が完全に入っていなければゲートを閉じる
+  belt:                                               # B: ベルト式ランプ（ローラー列で近似。駆動 1 = ベルトモーター + ゲート 1）
+    ramp_deg: 12.0
+    ramp_along_mm: 8.0                                # 斜面に沿った長さ（ASSUMED。前回の結果でランプ長は効かなかった）
+    roller_torque_nm: 0.01                            # ASSUMED
+  brush:                                              # C: 回転ブラシ（駆動 1 + ゲート 1）
+    flaps: 6                                          # BRIEF
+    hub_radius_mm: 1.5                                # ASSUMED
+    flap_thickness_mm: 0.4                            # ASSUMED
+    flap_mass_g: 0.02                                 # ASSUMED
+    stiffness_nm_rad: {soft: 2.0e-6, hard: 2.0e-4}    # フラップ剛性 2 水準（ASSUMED）
+    floor_interference_mm: 0.1                        # フラップ先端が床にこの分食い込む向き（ASSUMED）
+    flap_floor_mu: 0.5                                # ASSUMED
+    torque_limit_nm: 0.01                             # ASSUMED
+    x_offset_mm: 1.0                                  # ゲート面からブラシの前の縁までの距離（ASSUMED）
+  cup:                                                # D: 上から被せるカップ（駆動 1 = 昇降。ゲートなし）
+    lift_mm: 14.0                                     # 持ち上げ量（立方体 10mm を越す。ASSUMED）
+    lower_speed_mm_s: 30.0                            # ASSUMED
+    start_delay_s: 0.2
+    wall_mm: 1.0
+    force_n: 5.0                                      # ASSUMED
+    offsets_mm: [0.0, 3.0, 6.0, 10.0]                 # BRIEF（円周方向はランダム）
+  cloche:                                             # H: フード昇降（フードを床から lift 上げて近づき、物の上へ落として被せる。駆動 2 = 昇降 + ゲート）
+    offsets_mm: [0.0, 5.0, 10.0, 15.0]                # User の依頼 2026-09-30（符号はランダム）
+  hook:                                               # E: 頭を越えて引くフック（駆動 2 = 前後 + 上下、+ ゲート 1）
+    height_up_margin_mm: 0.5                          # 持ち上げ位置 = 空間の高さ − フックの高さ − この値（ASSUMED）
+    low_mm: 0.3                                       # 下ろした位置（フックの下端の床からの高さ。ASSUMED）
+    width_mm: 28.0                                    # 口を通る幅（ASSUMED）
+    extend_speed_mm_s: 60.0                           # ASSUMED
+    pull_speed_mm_s: 30.0                             # ASSUMED
+    vertical_time_s: 0.3                              # ASSUMED
+    beyond_mm: 3.0                                    # 物の前の縁からさらに前へ出す量（ASSUMED）
+    reach_trigger_mm: 40.0                            # 物の中心が口の前 40mm 以内に来たら止まって始める（理想センサー、ASSUMED）
+    force_n: 2.0                                      # ASSUMED
+    gate_delay_s: 0.2
