@@ -12,7 +12,7 @@ from __future__ import annotations
 import math
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -21,6 +21,7 @@ from serpens.floorwatch.dataset import imwrite
 from serpens.floorwatch.csar import NEAR, ChildProximity
 from serpens.floorwatch.detect import Candidate, detect
 from serpens.floorwatch.geometry import Camera, LightPlane
+from serpens.floorwatch.hood import STUCK, HoodMonitor
 from serpens.floorwatch.mission import IdleHold, InspectMission
 from serpens.floorwatch.risk import assess
 from serpens.floorwatch.scene import FloorScene, HomeFrame, camera_to_home, capture_synthetic
@@ -61,6 +62,28 @@ class FloorWatchExecutor(Executor):
         self._pending_finish: tuple[str, str] | None = None
         self._last_phase: float | None = None
         self._last_safety: tuple[str, bool] | None = None
+        self.hood: HoodMonitor | None = None                  # フードの端の 1 ビット（R-023）。既定は未接続（フードの機構・頭のファームがまだ無い）
+        self._hood_read: Callable[[float], tuple[bool | None, bool | None]] | None = None
+
+    def attach_hood(self, monitor: HoodMonitor, read: Callable[[float], tuple[bool | None, bool | None]]) -> None:
+        """フードの端のビット（下, 上）の読み出しと、0.6 s のタイムアウトの監視を繋ぐ。**模擬の MockHood.read か、将来の頭 XIAO のビット。**"""
+        self.hood, self._hood_read = monitor, read
+
+    def _check_hood(self, t: float) -> None:
+        """端のビットを 1 回読む。固着（STUCK）ならラッチして、いまの mission を止め、Task を failed にする（前進停止 + 記録）。人の確認（acknowledge）まで新しい Task は受けない。"""
+        if self.hood is None:
+            return
+        was = self.hood.state
+        bits = self._hood_read(t) if self._hood_read is not None else (None, None)
+        self.hood.update(bits[0], bits[1], t)
+        if self.hood.forward_inhibit and was != STUCK:
+            reason = f"フードの端のビットが立たない: {self.hood.stuck_reason}"
+            self.session.brain.loco.stop(reason)
+            if self.mission is not None and self.mission.active:
+                self.mission.abort(reason)
+            self.session.mission, self.mission = self.idle, None          # Task が無いときと同じ止まり方（IdleHold が毎周期止める）
+            if self.task is not None:
+                self._pending_finish = ("failed", reason)
 
     def attach(self, endpoint: Endpoint) -> None:
         self.endpoint = endpoint
@@ -79,6 +102,8 @@ class FloorWatchExecutor(Executor):
     def blockers(self) -> list[str]:
         t = self.session.t
         held = [] if self.session.stop.moving_allowed else ["機体が停止中（人の開始操作が要る。MQTT からは再開できない）"]
+        if self.hood is not None and self.hood.forward_inhibit:
+            held.append("フードの端のビットが立たなかった（人の確認が要る。MQTT からは解除できない）")
         return held + self.session.pose_blockers() + start_blockers(self.cfg, self.est.estimate(t), self.est.health(t))
 
     def start(self, task: dict[str, Any]) -> None:
@@ -121,6 +146,7 @@ class FloorWatchExecutor(Executor):
         self.session.step()
         t = self.session.t
         self._localize(t)
+        self._check_hood(t)
         self._observe_people(t)
         if self._pending_finish is not None and self.task is not None:
             status, why = self._pending_finish

@@ -369,6 +369,9 @@ floor_watch:
     critical_min_confidence: 0.05
     child_near_m: 2.0                   # 子どもがこれより近ければ距離係数 1（不明も 1 = 安全側）
     unreachable_factor: 0.5             # 子どもが届かない場所なら score をこの倍率に
+  hood:                         # 口の前の開放底フード（案 L2 の昇降）の端の 1 ビット（serpens/floorwatch/hood.py）。ENTRY-D-0015 (5) / R-017 / R-023。**模擬だけ。実機・ファームは未接続**
+    endstop_timeout_s: 0.6      # 昇降の指令からこの時間で「下がりきった / 上がりきった」が立たなければ、駆動を保持・前進停止・記録（ラッチ）。ASSUMED（HT-013 で SG90 の動作時間と検出遅れを実測して見直す）
+    endstop_stale_s: 0.6        # 端のビットの読み出しがこの時間なければ止める（読めない = 立っていない）。ASSUMED（同じ値を仮置き。頭の XIAO の送信周期が決まったら見直す）
   csar:                         # Child-Safe Attention Rules の実行条件（serpens/floorwatch/csar.py。User 採用 2026-09-29、数値は Engineering の案）
     far_trust_s: 3.0            # 「近くに人がいない」を最後に確かめてから信じる時間（撮影 capture_s 1.5 + 静止のゆとり）。切れたら UNKNOWN = NEAR 扱い
     near_hold_s: 5.0            # 近くで人が見えたら、見えなくなってもこの間は NEAR
