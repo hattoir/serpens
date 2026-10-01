@@ -35,7 +35,9 @@ VALUE_SOURCES = {
     "servo_dynamics": "UNKNOWN",         # 応答（kp/damping）は未同定
 }
 
-AXIS_VECTOR = {"yaw": "0 0 1", "pitch": "0 1 0", "roll": "1 0 0"}
+# pitch は **+ で頭側が上がる**（serpens/motion/kinematics.py と同じ規約）。体は +x へ伸びるので y 軸まわり負回転。
+# 2026-09-29 まで "0 1 0" で逆向きだった（+ で頭が床へ潜る。EX-1 の home J7=+8° は頭を床へ押していた）
+AXIS_VECTOR = {"yaw": "0 0 1", "pitch": "0 -1 0", "roll": "1 0 0"}
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,7 @@ def _masses(cfg: dict[str, Any], n_segments: int) -> list[float]:
       フレーム … 胴体側のセグメント（seg0〜seg7）
       受動輪・外皮・配線 … 全セグメントへ均等
       頭部一式 … 最後のセグメント
+      尾の積荷（tail_payload。電池など、任意）… 最初のセグメント
     """
     b = cfg["mass_budget_g"]
     servo = float(b["servo_each"]) / 1000.0
@@ -75,6 +78,7 @@ def _masses(cfg: dict[str, Any], n_segments: int) -> list[float]:
     for k in range(min(int(b["segment_frame_count"]), n_segments)):
         out[k] += frame
     out[-1] += float(b["head_total"]) / 1000.0
+    out[0] += float(b.get("tail_payload", 0.0)) / 1000.0
     return out
 
 
@@ -90,6 +94,10 @@ def build_mjcf(cfg: dict[str, Any], belly: str = "WHEEL", timestep: float = 0.00
     lengths = [xs[i + 1] - xs[i] for i in range(len(xs) - 1)]
     masses = _masses(cfg, len(lengths))
     torque = float(cfg["safety_limits"]["torque"]["software_torque_limit_nm"])
+    # 太い胴（FW 系 overlay）では、近似カプセルどうしが中立でも重なる（実外装は節ごとの卵型で重ならない）。
+    # その場合だけ自己接触を切る（床との接触は下の <pair> で明示するので残る）。既定は従来どおり有効
+    self_collide = bool(cfg.get("sim", {}).get("mujoco_self_collision", True))
+    no_self = "" if self_collide else ' contype="0" conaffinity="0"'
 
     body_xml, closing = [], []
     for k, seg_len in enumerate(lengths):
@@ -107,7 +115,7 @@ def build_mjcf(cfg: dict[str, Any], belly: str = "WHEEL", timestep: float = 0.00
                 f'range="{lo:.4f} {hi:.4f}"/>')
         body_xml.append(
             f'{indent}  <geom name="seg{k}_geom" type="capsule" '
-            f'fromto="0 0 0 {seg_len:.4f} 0 0" size="{radius:.4f}" mass="{masses[k]:.4f}"/>')
+            f'fromto="0 0 0 {seg_len:.4f} 0 0" size="{radius:.4f}" mass="{masses[k]:.4f}"{no_self}/>')
         closing.append(f"{indent}</body>")
     body_xml += list(reversed(closing))
 
