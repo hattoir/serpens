@@ -160,10 +160,12 @@ def pin_capacity(material: str, sigma_mpa: float, d: float = 3.0, L: float = 4.5
 
 
 def stopper_mc(n: int = 20000, seed: int = 1, omega: float = 120.0, decel_deg: float = 0.0, tpu: bool = True, material: str = "steel",
-               a_decel: float | None = None, e_mpa: float | None = None, t_mm: float | None = None, k_pad_n_mm: float | None = None) -> dict:
+               a_decel: float | None = None, e_mpa: float | None = None, t_mm: float | None = None, k_pad_n_mm: float | None = None,
+               j_load_kgm2: float = 0.0) -> dict:
     """衝撃 + 静的（上限 ÷ 腕）の合計荷重（保守的に和）と、ピンの許容荷重（曲げ）から、安全率 SF = 許容 ÷ 荷重 を prior で。"""
     r = np.random.default_rng(seed)
     j = np.exp(r.uniform(math.log(A["servo"]["reflected_inertia_kgm2"][0]), math.log(A["servo"]["reflected_inertia_kgm2"][1]), n))
+    j = j + j_load_kgm2                                          # 頭（負荷）の慣性 M L²。既定 0 = 従来の計算（ロータの反映慣性 prior だけ）
     stall = r.uniform(*A["servo"]["stall_torque_nm_at_7v4"], n)
     e = r.choice(A["control"]["cap_model_error"], n)
     arm = r.uniform(*ARM_M, n)
