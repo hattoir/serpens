@@ -108,3 +108,49 @@ def test_ingest_does_not_modify_the_config(im, tmp_path: Path) -> None:
     rows = [{"trial": 0, "speed_mm_s": 50, "coast_mm": 40}]
     im.ingest("stop_coast", write(tmp_path / "x.csv", im.COLUMNS["stop_coast"], rows), tmp_path / "out")
     assert hashlib.sha256(p.read_bytes()).hexdigest() == before
+
+
+# ---- ELECTRICAL_SAFETY_GATE の材料（LB-E-046〜053）--------------------------------------------------------------
+def test_power_sag_reports_drop_and_margin_to_the_assumed_servo_minimum(im, tmp_path: Path) -> None:
+    rows = [{"trial": i, "event": "all_axes_start", "v_nominal": 7.4, "v_min": 6.4 + 0.05 * i, "brownout": 0} for i in range(4)]
+    rows += [{"trial": 9, "event": "stall", "v_nominal": 7.4, "v_min": 5.5, "brownout": 1}]
+    res, _ = im.ingest("power_sag", write(tmp_path / "p.csv", im.COLUMNS["power_sag"], rows), tmp_path / "out")
+    a, s = res["by_event"]["all_axes_start"], res["by_event"]["stall"]
+    assert a["drop_v"]["max"] == pytest.approx(1.0) and a["margin_to_servo_min_v"] == pytest.approx(0.4) and a["brownouts"] == 0
+    assert s["margin_to_servo_min_v"] < 0 and s["brownouts"] == 1 and res["assumed_servo_min_v"] == 6.0
+
+
+def test_trip_counts_trials_that_did_not_trip(im, tmp_path: Path) -> None:
+    rows = [{"trial": 0, "device": "polyswitch", "i_set_a": 3.0, "trip_a": 3.2, "trip_ms": 800, "tripped": 1},
+            {"trial": 1, "device": "polyswitch", "i_set_a": 3.0, "trip_a": 3.1, "trip_ms": 900, "tripped": 1},
+            {"trial": 2, "device": "polyswitch", "i_set_a": 3.0, "tripped": 0}]
+    res, _ = im.ingest("trip", write(tmp_path / "t.csv", im.COLUMNS["trip"], rows), tmp_path / "out")
+    assert res["not_tripped_trials"] == 1 and res["by_device"]["polyswitch"]["tripped_fraction"] == pytest.approx(2 / 3)
+
+
+def test_thermal_recovers_steady_rise_and_time_constant(im, tmp_path: Path) -> None:
+    t = np.arange(0, 60, 1.0)
+    temp = 25.0 + 18.0 * (1.0 - np.exp(-t / 8.0))
+    rows = [{"trial": 0, "point": "connector", "t_min": float(a), "temp_c": float(b), "ambient_c": 25.0, "current_a": 2.0} for a, b in zip(t, temp)]
+    res, _ = im.ingest("thermal", write(tmp_path / "h.csv", im.COLUMNS["thermal"], rows), tmp_path / "out")
+    p = res["by_point"]["connector"]
+    assert p["delta_t_steady_c"] == pytest.approx(18.0, abs=0.3) and p["tau_min"] == pytest.approx(8.0, rel=0.1)
+
+
+def test_servo_temp_finds_the_stop_temperature_against_the_config_limit(im, tmp_path: Path) -> None:
+    t = np.arange(0, 600, 10.0)
+    temp = 25.0 + 0.07 * t
+    rows = [{"trial": 0, "t_s": float(a), "temp_c": float(b), "load": 0.5, "stopped": int(b >= 60.0)} for a, b in zip(t, temp)]
+    res, _ = im.ingest("servo_temp", write(tmp_path / "s.csv", im.COLUMNS["servo_temp"], rows), tmp_path / "out")
+    assert res["rise_c_per_min"] == pytest.approx(0.07 * 60.0, rel=0.02)
+    assert res["stopped_at_c"] is not None and 60.0 <= res["stopped_at_c"] < 61.0 and res["stopped_before_limit"] is True
+    assert res["config"]["link_faults_temp_limit_c"] == 60.0
+
+
+def test_stop_time_groups_by_trigger_and_marks_esp32_independent_trials(im, tmp_path: Path) -> None:
+    rows = [{"trial": i, "trigger": "estop", "what": "supply_cut", "t_trigger_ms": 1000, "t_effect_ms": 1000 + 8 + i, "esp32_running": 0} for i in range(5)]
+    rows += [{"trial": 10 + i, "trigger": "comm_loss", "what": "motion_stop", "t_trigger_ms": 0, "t_effect_ms": 380 + i, "esp32_running": 1} for i in range(5)]
+    res, _ = im.ingest("stop_time", write(tmp_path / "st.csv", im.COLUMNS["stop_time"], rows), tmp_path / "out")
+    e, c = res["by_trigger"]["estop/supply_cut"], res["by_trigger"]["comm_loss/motion_stop"]
+    assert e["ms"]["mean"] == pytest.approx(10.0) and e["trials_with_esp32_stopped"] == 5 and c["trials_with_esp32_stopped"] == 0
+    assert res["config"]["heartbeat_timeout_ms"] == 400.0 and "合否ではない" in res["note"]

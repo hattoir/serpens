@@ -7,6 +7,11 @@
     python tools/ingest_measurements.py imu          <csv>
     python tools/ingest_measurements.py contact_load <csv>
     python tools/ingest_measurements.py current      <csv>
+    python tools/ingest_measurements.py power_sag    <csv>      # 電圧降下・突入（GATE power_capacity）
+    python tools/ingest_measurements.py trip         <csv>      # 過電流保護の動作（GATE overcurrent_protection）
+    python tools/ingest_measurements.py thermal      <csv>      # 配線・コネクタの発熱（GATE wiring_heat）
+    python tools/ingest_measurements.py servo_temp   <csv>      # サーボの温度上昇と停止（GATE servo_temperature）
+    python tools/ingest_measurements.py stop_time    <csv>      # 電源遮断・緊急停止・通信断から止まるまで（GATE independent_power_cut / physical_estop / real_stop_time）
     python tools/ingest_measurements.py --template <kind>      # 列の雛形を出す
 
 出力: `simulation/results/measured/<kind>_<csv の日付またはファイル名>.md`（と `.json`）。**設定ファイルは書き換えない**（`config/robot.yaml` との比較だけ。変更が要るなら Engineering が根拠つきの別 commit にする）。
@@ -42,6 +47,11 @@ COLUMNS: dict[str, list[str]] = {
     "imu": ["date", "operator", "trial", "t_s", "yaw_deg", "ref_yaw_deg", "note"],
     "contact_load": ["date", "operator", "trial", "location", "force_n", "instrument", "note"],
     "current": ["date", "operator", "trial", "state", "supply_v", "current_a", "peak_a", "note"],
+    "power_sag": ["date", "operator", "trial", "event", "v_nominal", "v_min", "i_peak_a", "duration_ms", "brownout", "note"],
+    "trip": ["date", "operator", "trial", "device", "i_set_a", "trip_a", "trip_ms", "tripped", "note"],
+    "thermal": ["date", "operator", "trial", "point", "t_min", "temp_c", "ambient_c", "current_a", "note"],
+    "servo_temp": ["date", "operator", "trial", "t_s", "temp_c", "load", "stopped", "note"],
+    "stop_time": ["date", "operator", "trial", "trigger", "what", "t_trigger_ms", "t_effect_ms", "esp32_running", "note"],
 }
 
 
@@ -50,7 +60,8 @@ def load_csv(path: Path, kind: str) -> list[dict[str, str]]:
     rows = list(csv.DictReader(open(path, encoding="utf-8-sig")))
     need = {"stop_coast": ["speed_mm_s", "coast_mm"], "capture_time": ["settle_s", "capture_s"], "gait_slip": ["commanded_advance_mm", "measured_advance_mm"],
             "tag_detect": ["distance_mm", "detected"], "imu": ["t_s", "yaw_deg", "ref_yaw_deg"], "contact_load": ["location", "force_n"],
-            "current": ["state", "current_a"]}[kind]
+            "current": ["state", "current_a"], "power_sag": ["event", "v_nominal", "v_min"], "trip": ["device", "i_set_a", "tripped"],
+            "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"]}[kind]
     if not rows:
         raise ValueError(f"{path}: 行が無い")
     missing = [c for c in need if c not in rows[0]]
@@ -207,9 +218,111 @@ def a_current(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
             "note": "GATE の項目を COMPLETE にするには、日付・条件・測定器の証拠（`serpens/electrical_gate.py`）が要る。この要約は証拠の代わりにならない"}
 
 
+SERVO_MIN_V = 6.0          # Waveshare Wiki の ST3215（7.4V 版の動作下限の目安）。**ASSUMED**（C044 の資料は未確認。レジスタ 15 の初期値は 4.0 V）
+
+
+def a_power_sag(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """電圧降下: 事象（全軸同時の起動・ストール等）ごとの最小電圧と降下量、ブラウンアウト（リセット）の有無。"""
+    by: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        ev, vn, vm = (r.get("event") or "?").strip(), num(r, "v_nominal"), num(r, "v_min")
+        if vn is None or vm is None:
+            continue
+        d = by.setdefault(ev, {"drop": [], "vmin": [], "brownout": 0, "n": 0})
+        d["drop"].append(vn - vm)
+        d["vmin"].append(vm)
+        d["n"] += 1
+        d["brownout"] += int((r.get("brownout") or "").strip() in ("1", "true", "True"))
+    out = {ev: {"n": d["n"], "drop_v": stats(np.array(d["drop"])), "v_min": stats(np.array(d["vmin"])), "brownouts": d["brownout"],
+                "margin_to_servo_min_v": float(min(d["vmin"])) - SERVO_MIN_V} for ev, d in by.items()}
+    return {"by_event": out, "assumed_servo_min_v": SERVO_MIN_V, "note": "動作下限 6.0 V は ASSUMED（資料の確認が要る = OQ-0103）。余裕が負 = 下限を下回った測定がある"}
+
+
+def a_trip(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """過電流保護: 設定電流ごとに、動作した割合と動作電流・動作時間。**動作しなかった試行が 1 つでもあれば、その設定は保護として働いていない**（数えるだけ。判定はしない）。"""
+    by: dict[str, dict[str, list[float]]] = {}
+    not_tripped = 0
+    for r in rows:
+        dev = (r.get("device") or "?").strip()
+        d = by.setdefault(dev, {"i_set": [], "trip_a": [], "trip_ms": [], "tripped": []})
+        tr = (r.get("tripped") or "").strip() in ("1", "true", "True")
+        d["tripped"].append(float(tr))
+        not_tripped += int(not tr)
+        for k, col_ in (("i_set", "i_set_a"), ("trip_a", "trip_a"), ("trip_ms", "trip_ms")):
+            v = num(r, col_)
+            if v is not None:
+                d[k].append(v)
+    out = {dev: {"n": len(d["tripped"]), "tripped_fraction": float(np.mean(d["tripped"])), "i_set": stats(np.array(d["i_set"])),
+                 "trip_a": stats(np.array(d["trip_a"])), "trip_ms": stats(np.array(d["trip_ms"]))} for dev, d in by.items()}
+    return {"by_device": out, "not_tripped_trials": not_tripped}
+
+
+def a_thermal(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """配線・コネクタの発熱: 点ごとに、定常の温度上昇 ΔT（最後の 20% の平均 − 周囲）と、指数の時定数（1 − exp(−t/τ) の当てはめ）。"""
+    by: dict[str, list[tuple[float, float, float]]] = {}
+    for r in rows:
+        tm, tc, amb = num(r, "t_min"), num(r, "temp_c"), num(r, "ambient_c")
+        if tm is not None and tc is not None:
+            by.setdefault((r.get("point") or "?").strip(), []).append((tm, tc, 0.0 if amb is None else amb))
+    out = {}
+    for pt, v in by.items():
+        v.sort()
+        tm = np.array([x[0] for x in v])
+        dT = np.array([x[1] - x[2] for x in v])
+        tail = dT[int(0.8 * len(dT)):] if len(dT) >= 5 else dT
+        dT_inf = float(tail.mean())
+        tau = float("nan")
+        if len(dT) >= 5 and dT_inf > 0.5:
+            f = np.clip(dT / dT_inf, 1e-6, 0.999)
+            ok = f < 0.95
+            if ok.sum() >= 3:
+                y = -np.log(1.0 - f[ok])
+                tau = float(1.0 / np.polyfit(tm[ok], y, 1)[0]) if np.polyfit(tm[ok], y, 1)[0] > 0 else float("nan")
+        out[pt] = {"n": len(v), "delta_t_steady_c": dT_inf, "tau_min": tau, "max_temp_c": float(max(x[1] for x in v))}
+    return {"by_point": out}
+
+
+def a_servo_temp(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """サーボの温度上昇: 最高温度、停止した温度（`stopped` = 1 の最初の行）、config の停止温度との比較。"""
+    t, temp = col(rows, "t_s"), col(rows, "temp_c")
+    n = min(t.size, temp.size)
+    t, temp = t[:n], temp[:n]
+    stop_c = None
+    for r in rows:
+        if (r.get("stopped") or "").strip() in ("1", "true", "True") and num(r, "temp_c") is not None:
+            stop_c = num(r, "temp_c")
+            break
+    slope = float(np.polyfit(t, temp, 1)[0]) if n > 2 and np.ptp(t) > 0 else float("nan")
+    cfgv = {"link_faults_temp_limit_c": float(c["link"]["faults"]["temp_limit_c"]), "servo_temperature_limit_c": float(c["servo"]["temperature_limit_c"]),
+            "safety_limits_servo_temp_stop_c": float(c["safety_limits"]["servo_temp_stop_c"])}
+    return {"max_temp_c": float(temp.max()) if n else None, "rise_c_per_min": slope * 60.0 if math.isfinite(slope) else None, "stopped_at_c": stop_c,
+            "config": cfgv, "stopped_before_limit": None if stop_c is None else bool(stop_c <= cfgv["link_faults_temp_limit_c"] + 1.0),
+            "note": "停止温度が config の 60 ℃（機体側の上限）の近傍で止まったかを見る。**GATE servo_temperature の状態は書き換えない**"}
+
+
+def a_stop_time(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """停止までの時間 = t_effect − t_trigger（ms）。きっかけ（estop / comm_loss / contact / esp32_hang）と、何が止まったか（supply_cut = サーボ電源の遮断 / motion_stop = 動きの停止）ごとに。
+    `esp32_running` = 0 の行は ESP32 を止めた（ハングさせた）状態の試験 = **独立した遮断**の確認。"""
+    by: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        a, b = num(r, "t_trigger_ms"), num(r, "t_effect_ms")
+        if a is None or b is None:
+            continue
+        key = f"{(r.get('trigger') or '?').strip()}/{(r.get('what') or '?').strip()}"
+        d = by.setdefault(key, {"dt": [], "esp32_off": 0})
+        d["dt"].append(b - a)
+        d["esp32_off"] += int((r.get("esp32_running") or "").strip() in ("0", "false", "False"))
+    cfgv = {"heartbeat_timeout_ms": float(c["link"]["heartbeat_timeout_ms"]), "drive_ttl_ms": float(c["link"]["drive_ttl_ms"]),
+            "contact_release_ms": float(c["safety_limits"]["contact_release_ms"])}
+    out = {k: {"n": len(d["dt"]), "ms": stats(np.array(d["dt"])), "trials_with_esp32_stopped": d["esp32_off"]} for k, d in by.items()}
+    return {"by_trigger": out, "config": cfgv,
+            "note": "`contact_release_ms` 20 は要求そのものが未確定（`contact_release_requirements.md`）。この要約は比較の材料で、合否ではない"}
+
+
 ANALYZERS: dict[str, Callable[[list[dict[str, str]], dict[str, Any]], dict[str, Any]]] = {
     "stop_coast": a_stop_coast, "capture_time": a_capture_time, "gait_slip": a_gait_slip, "tag_detect": a_tag_detect,
     "imu": a_imu, "contact_load": a_contact_load, "current": a_current,
+    "power_sag": a_power_sag, "trip": a_trip, "thermal": a_thermal, "servo_temp": a_servo_temp, "stop_time": a_stop_time,
 }
 
 
