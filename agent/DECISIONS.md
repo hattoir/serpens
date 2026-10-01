@@ -17,6 +17,25 @@
 
 ---
 
+## 2026-10-01 — 統合 branch `integration/hw-boundary-2026-10-01`: ベースラインを再適用し、衝突は「より厳しい安全値」を残して両方の記述を保つ
+
+**Decision**:
+1. main が revert したベースライン（`69b7179` 床見ベースライン / `ca76785` 要約・引き継ぎ）を、統合 branch の最初に **revert の revert**（`2df5e9b`・`dc57239`）で再適用した。
+2. その上へ `agent/engineering-scoop`（285f014）→ `agent/engineering-floor-watch`（e30262e）→ `agent/engineering-h1-j1`（b3df1e0）→ vision-sim の保全 commit（8338611、結果データのみ）を `--no-ff` で merge した（ローカルのみ。push・main への merge はしていない）。
+3. 衝突は文書 8 箇所（revert の revert 2・eng-floor-watch 3・h1-j1 3。両方の記述を残した。MQTT の重複 2 項だけバイト一致なので片方を除いた）とコード 2 箇所（`serpens/link/device_motion.py` の `output()`、`firmware/serpens_esp32/serpens_esp32.ino`）。コードの 2 箇所は、**どちらも制限をかける処理で対象の軸が別**なので両方を残した（ヨー鎖の縮小 145° と J7 の pitch クランプ）。
+4. `config/robot.yaml` は衝突なしで自動マージされたが、**全キーを機械比較**した（main に対して緩んだ実効値 0、削除 0）。トルクのレジスタ比は 0.287 → 0.167（User 承認）、`yaw_sum_deg` 145、機械式リミッター窓 0.7–1.0 N·m、`neck.floor_watch_enforce` は false のまま。
+5. `CLAUDE.md` の「N 件通る」は、どの branch の件数（463 / 464 / 510 / 563）も転記せず、**統合 SHA で実測した件数だけ**を書く。
+
+**Why**: 全 agent branch は revert 済みベースラインの子孫なので、revert を含む木へ素直に merge すると、ベースラインのファイルが警告なしに消える（`engineering-state.md` 148-149 行が「後で revert の revert が要る」と予告している）。衝突の取り方は、安全値は厳しい側が勝つ（共通 OS の下限ルール）ことと、記述を捨てないこと。
+
+**Alternatives**: (a) revert の revert をせず merge → ベースラインが静かに消える／modify-delete 衝突になる。(b) 衝突を一律 `theirs` で解決 → `device_motion.py` と firmware で片方の最後の砦を捨てる。(c) cherry-pick で組み直す → 親子関係と revert の履歴を失う（`GIT_POLICY.md`「diff: 親子関係と revert の履歴」）。
+
+**Trade-offs**: 統合 branch は main に入れるとベースラインを main へ再導入する（User の確認事項 = `ai-outbox/open-questions/2026-10-01_OQ-INTEGRATION-001-005.md` の 001）。`agent/DECISIONS.md` / `agent/STATE.md` は両側の節が並ぶので長くなる（新しい順は完全には保たれない）。
+
+**Context**: 詳細・衝突ごとの根拠・テスト結果は main 作業木の `ai-shared/closed-loop/INTEGRATION_BASE.md`（未追跡）。HARDWARE_VERIFIED = 0 / HUMAN_EVALUATED = 0 のまま。
+
+---
+
 ## 2026-09-29 — MQTT 残りの 3 件: Endpoint(PahoBroker) の通常構築 / 切断中の publish / close の TOCTOU（DEC-SERPENS-0001 の続き）
 
 **Decision**:

@@ -321,7 +321,7 @@ CAD.mdの値は確度と検証範囲を確認し、既存の制御設定を自�
 .venv/Scripts/python.exe -m pytest -q
 ```
 
-463 件通るのが正常（2026-09-29 MQTT の残り 3 件（通常構築・切断中の publish・close の TOCTOU）の回帰試験を追加した時点。MuJoCo 未導入の環境では 16 件 skip、mosquitto 実行ファイルが無い環境では `tests/test_mqtt_live.py` の 7 件 skip）。**1 件でも落ちたら先に直す。**
+671 件通って 2 件 skip が正常（2026-10-01、統合 branch `integration/hw-boundary-2026-10-01` の SHA `9033abb` を clean checkout で**実測**。MuJoCo と mosquitto が入っている環境。skip の 2 件は clean checkout 由来: `tests/test_b2_compare.py`（`ai-shared` は git 管理外）と `tests/test_offline.py`（YOLO の重みが無い）。MuJoCo / mosquitto が無い環境での skip 件数はこの SHA では未計測）。**1 件でも落ちたら先に直す。**
 このリポジトリのテストは安全機構の振る舞いを直接検証しているので、
 落ちたテストを「タイミングの問題」として通す方向に直してはいけない
 （実際に 1 件、テストが正しくて実装が間違っていた例がある。`agent/DECISIONS.md` 参照）。

@@ -4,6 +4,12 @@
 
 _last updated: 2026-09-14_
 
+## 2026-10-01 統合（Integration、HBCL Phase 0）: `integration/hw-boundary-2026-10-01`
+
+scoop / eng-floor-watch / h1-j1（+ vision-sim の保全 commit）を、revert 済みベースラインを再適用した上へ merge した。**ローカルのみ（push・main への merge なし）**。
+安全値は厳しい側（トルク比 0.167・ヨー合計 145°・リミッター窓 0.7〜1.0 N·m）。`HARDWARE_VERIFIED = 0` / `HUMAN_EVALUATED = 0` のまま。
+判断の記録は `DECISIONS.md` の同日の項、衝突ごとの根拠と全件テストの実測は `ai-shared/closed-loop/INTEGRATION_BASE.md`（main 作業木）。独立検証は別セッションで未実施。
+
 ## 2026-09-29 MQTT: 生きている機体が OFFLINE と出る不具合を直した（SOFTWARE_VERIFIED、詳細は DECISIONS 同日 / DEC-SERPENS-0001）
 
 `PahoBroker.publish` がネットワークスレッド上で PUBACK を 2 s 待って固まり、keepalive 切れで LWT が出ていた。
