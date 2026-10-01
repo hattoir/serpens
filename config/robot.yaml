@@ -307,6 +307,12 @@ floor_watch:
     shadow_band_min: 0.15      # 塊の奥（上）の帯にこの割合以上の影があれば「影あり」
     shadow_band_rows_ratio: 1.0   # 帯の高さ = 塊の高さ × これ（1 円玉の影 ≈ 18mm ≈ 塊の奥行き。2.0 だと帯が薄まり UXGA で 0.14 に落ちた）
     line_search_px: 120        # 予測した床の線の位置から左右にこの範囲で線を探す
+    # 線光を評価する床の範囲（カメラ直下からの距離 mm）。これより遠い行の途切れ・持ち上がりは物の証拠にしない。
+    # 根拠（SYNTHETIC_SENSOR_SIM、2026-09-29）: 停止時は地点を 90±30mm 先に置く（mission.view_target_mm）ので対象は近距離だけ。
+    # HG-H2 の nominal（100mm 合焦・口径 1mm）では線が 1.09m 先で消え、そこが 130mm の specular_break の偽物になった。
+    # 掃引した条件で線が遠方で消え始める最短距離は 555mm（floor_albedo 0.2）→ 250mm なら 2 倍以上の余裕。
+    # mission.reach_mm（合成画像に物を入れる視野の目安）と同じ値。実カメラのピントを測ったら見直す
+    line_max_range_mm: 250.0
     line_min_intensity: 60     # これ以上なら線が乗っている（全消灯を引いた後）
     line_context_rows: 12      # 物の前後の床上の線（局所基準）に使う行数
     line_min_rows: 3           # 高さを「測れた」とする最低行数

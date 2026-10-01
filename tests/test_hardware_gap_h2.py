@@ -77,3 +77,41 @@ def test_ingest_fov_and_focus_recover_the_parameters(h2, tmp_path: Path, monkeyp
     assert fit["aperture_mm"] == pytest.approx(a_true, rel=0.05)
     assert (tmp_path / "results" / "measured" / "raw").exists()
     assert list((tmp_path / "ai-outbox" / "handoffs").glob("*_HG-H2_measured.md"))
+
+
+def test_defocused_far_field_line_dropout_is_not_an_object_but_near_specular_still_is(h2) -> None:
+    """2026-09-29 HG-H2 の発見の回帰: nominal（UXGA・100mm 合焦・口径 1mm）では遠方で線光がぼけて消え、その途切れが
+    1m 先・直径 130mm の specular_break の偽物になっていた（汚れだけの床で floor_finding の誤報になる）。
+    線を評価する範囲（floor_watch.detect.line_max_range_mm）を外すと偽物が再現し、config の値では消える。
+    近くの鏡面（ボタン電池）は同じぼけの下でも specular_break として見つかる。"""
+    import copy
+    from serpens.config import load_config
+    from serpens.floorwatch.detect import detect
+    from serpens.floorwatch.geometry import LightPlane
+    from serpens.floorwatch.synthetic import Disc, Renderer, Scene, Stain
+    p = dict(h2.A["nominal"])
+    cfg = h2.cfg_for(load_config(), p)
+    max_mm = float(cfg["floor_watch"]["detect"]["line_max_range_mm"])
+    assert max_mm <= float(cfg["floor_watch"]["mission"]["reach_mm"])
+    unbounded = copy.deepcopy(cfg)
+    unbounded["floor_watch"]["detect"]["line_max_range_mm"] = math.inf
+    cam = h2.camera(p)
+    plane = LightPlane.design(cfg)
+    rend = Renderer(cam, plane, h2.lighting(p))
+    deg = h2.Degrader(cam, rend, p)
+    yc = h2.view_center_mm(p)
+    stain = rend.render(Scene(stains=[Stain(0.0, yc, 18.0, 0.3)], floor_albedo=float(p["floor_albedo"])))
+    phantoms = []
+    for seed in (2, 4, 5):                                        # 劣化の雑音次第で出たり出なかったりする（6 通り中 3）
+        frames = {k: deg(v, np.random.default_rng(seed)) for k, v in stain.items()}
+        before = [c for c in detect(frames, cam, plane, unbounded)[0] if c.is_object]
+        phantoms += [c for c in before if math.hypot(*c.floor_xy_mm) > max_mm]
+        after = [c for c in detect(frames, cam, plane, cfg)[0] if c.is_object]
+        assert not after, [(c.floor_xy_mm, c.diameter_mm, c.height_reason) for c in after]
+    assert phantoms and all(c.height_reason == "specular_break" and c.floor_xy_mm[1] > 900.0 for c in phantoms)
+    cell = rend.render(Scene([Disc(0.0, yc, 20.0, 3.2, 0.75, True, "button_cell")], floor_albedo=float(p["floor_albedo"])))
+    frames = {k: deg(v, np.random.default_rng(2)) for k, v in cell.items()}
+    objs = [c for c in detect(frames, cam, plane, cfg)[0] if c.is_object]
+    hit = [c for c in objs if abs(c.floor_xy_mm[0]) < 12.0 and abs(c.floor_xy_mm[1] - yc) < 25.0]
+    assert hit and hit[0].line_dropout and hit[0].height_reason == "specular_break"
+    assert any(k["kind"] == "metal_disc" for k in hit[0].kinds)

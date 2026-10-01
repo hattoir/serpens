@@ -7,7 +7,9 @@
   3. 斜め照明 / 通常 の比（床の模様の濃さが打ち消される）を全体の中央値で正規化 → 影。影は物の**奥**（画像の上側）。
      明るさの差が無い物（床と同じ色）は影だけ、線の異常だけからも候補を作る（patrol は影だけ、inspect は線も）
   4. 線光: 行ごとに線の位置。基準は較正した光の面が予測する床の線と、物の前後の床上の線（局所の中央値）。
-     横ずれ → 光の面との交点で高さ。線が途切れたら「測れない」（**height=None + 理由**。0 とは書かない）
+     横ずれ → 光の面との交点で高さ。線が途切れたら「測れない」（**height=None + 理由**。0 とは書かない）。
+     途切れ・持ち上がりを物の証拠にするのは、カメラ直下から line_max_range_mm 以内の床の行だけ
+     （遠方はぼけと減光で線が消える。HG-H2 で 1m 先に specular_break の偽物が出た）
   5. 候補: 大きさ・高さ（None なら理由）・影・途切れ・形。「線の途切れ + 円形 + 直径 5〜25mm」は metal_disc
      （ボタン電池の可能性）として危険物側へ回す。汚れ・模様（影なし・高さなし）と線状の継ぎ目は物ではない
 
@@ -37,6 +39,7 @@ class LineTrace:
     u_floor: np.ndarray              # 較正した面が予測する床の線の列
     height_mm: np.ndarray            # 交点の高さ（nan = 線が無い）
     width_px: float                  # 自動推定した線幅
+    in_range: np.ndarray             # 床の線がカメラ直下から line_max_range_mm 以内の行。範囲外の途切れ・持ち上がりは物の証拠にしない
 
 
 @dataclass
@@ -115,6 +118,11 @@ def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[s
     search, min_i = int(det["line_search_px"]), float(det["line_min_intensity"])
     rows = np.arange(H)
     u_floor = np.array([plane.line_u_on_floor(cam, float(v)) or np.nan for v in rows])
+    max_mm = float(det["line_max_range_mm"])
+    in_range = np.zeros(H, bool)
+    for v in rows:
+        p = None if np.isnan(u_floor[v]) else cam.floor_point(float(u_floor[v]), float(v))
+        in_range[v] = p is not None and float(np.hypot(p[0], p[1])) <= max_mm
     u_line, height = np.full(H, np.nan), np.full(H, np.nan)
     widths: list[float] = []
     for v in rows:
@@ -134,7 +142,7 @@ def trace_line(line_sub: np.ndarray, cam: Camera, plane: LightPlane, det: dict[s
         h = plane.height_at(cam, u, float(v))
         if h is not None:
             u_line[v], height[v] = u, h
-    return LineTrace(rows, u_line, u_floor, height, float(np.nanmedian(widths)) if widths else float("nan"))
+    return LineTrace(rows, u_line, u_floor, height, float(np.nanmedian(widths)) if widths else float("nan"), in_range)
 
 
 def detect(frames: dict[str, np.ndarray], cam: Camera, plane: LightPlane, cfg: dict[str, Any],
@@ -199,7 +207,7 @@ def _line_only_boxes(tr: LineTrace | None, boxes: list[tuple[int, int, int, int]
     """線の異常（途切れ・持ち上がり）が続く行から候補を作る（床と同じ色の物、透明な物）。"""
     if tr is None or not np.isfinite(tr.width_px):
         return []
-    valid = ~np.isnan(tr.u_floor)
+    valid = ~np.isnan(tr.u_floor) & tr.in_range                          # 範囲外（遠方）の途切れは物にしない
     present = ~np.isnan(tr.u_line)
     base = float(np.nanmedian(tr.height_mm)) if present.any() else 0.0
     raised = present & (np.abs(np.nan_to_num(tr.height_mm) - base) >= float(det["height_object_min_mm"]))
@@ -227,7 +235,7 @@ def _line_evidence(bbox: tuple[int, int, int, int], tr: LineTrace | None,
         return False, [], 0
     x, y, w, h = bbox
     margin = tr.width_px if np.isfinite(tr.width_px) else 0.0
-    rows = [v for v in range(y, y + h) if not np.isnan(tr.u_floor[v]) and x - margin <= tr.u_floor[v] <= x + w + margin]
+    rows = [v for v in range(y, y + h) if tr.in_range[v] and x - margin <= tr.u_floor[v] <= x + w + margin]
     if not rows:
         return False, [], 0
     ctx = int(det["line_context_rows"])

@@ -17,6 +17,26 @@
 
 ---
 
+## 2026-09-29 — 線光の途切れを物の証拠にするのは近距離（250mm 以内）の行だけにした
+
+**Decision**: `floor_watch.detect.line_max_range_mm`（250mm。`mission.reach_mm` と同じ）を足した。`trace_line` は各行に `in_range`
+（床の線がカメラ直下からこの距離以内か）を持たせ、`_line_only_boxes` と `_line_evidence` は範囲外の行を「途切れ・持ち上がり」の
+証拠に使わない。線のトレースと線幅の推定は範囲外の行も含めて従来のまま。
+
+**Why**: HG-H2（SYNTHETIC_SENSOR_SIM、UXGA・100mm 合焦・口径 1mm）で、遠方（床 1.0〜1.1m、画像の上端）で線光がぼけて減光し、
+汚れだけ・継ぎ目だけの床で直径 120〜130mm の `specular_break` の物が出た（is_object=True）。そのまま通すと偽の floor_finding 通知になる。
+掃引 44 条件のうち 26 条件で出ていた（nominal 41%）。停止時に地点を置くのは 90±30mm 先（`view_target_mm`）なので、250mm より遠い線は
+判断に要らない。250 の根拠は、線が遠方で消え始める最短距離（掃引で 555mm、floor_albedo 0.2）に対する余裕と、`reach_mm` との一致。
+**Alternatives**: (1) `trace_line` で範囲外の行の u_floor を nan にする → 線幅の推定（中央値 61→69px）が変わり、線だけの候補の箱が
+広がって飽和画像の巨大な前景に「覆われ」、exposure_gain=2.5 の button_lr44 の見逃しが 1/6 → 5/6 シードに増えた（多シードで確認して却下）。
+(2) 遠方の候補を bbox の位置で捨てる → 線の証拠だけでなく影・前景の経路も切ってしまう。
+**Trade-offs**: 遠方の本物の物（250mm より先）は inspect では線で確かめられない（もとから停止位置の視野外）。巡回（線なし）の
+発見は影の経路のままで、この変更の対象外。実カメラのピントを測ったら（HG-H2 T1〜T5）250 を見直す。
+**Context**: 回帰試験は `tests/test_hardware_gap_h2.py`（範囲を外すと偽物が再現し、config の値では消え、近くのボタン電池は
+`specular_break` + `metal_disc` で見つかる）。OQ-0111。
+
+---
+
 ## 2026-09-29 — C044 のトルク参照値を現行資料へ更新し、トルク制限レジスタ比を 0.287 → 0.167 に下げた（User 承認）
 
 **Decision**: `safety_limits.torque` の参照値を、現行の Seeed / Feetech 資料の C044（7.4V / 1:191）の値

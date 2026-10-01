@@ -4,6 +4,13 @@
 
 _last updated: 2026-09-14_
 
+## Current Goal（2026-09-29 検出器の遠方の偽物を除外、branch `agent/floorwatch-farfield-roi`）
+
+HG-H2 の発見（ぼけた遠方で線光が途切れ、1m 先に `specular_break` の偽物）を修正。`floor_watch.detect.line_max_range_mm` = 250mm より
+遠い行の線の途切れ・持ち上がりは物の証拠にしない（`detect.py` の `LineTrace.in_range`）。理由と却下した案は DECISIONS 2026-09-29。
+HG-H2 の掃引 44 条件で「範囲外の偽物」26 条件 → 0、検出率・誤報率・見逃しは不変。**SYNTHETIC_SENSOR_SIM。実カメラで確かめていない。**
+次: 実カメラのピント・FOV を測って（HG-H2 T1〜T5）250mm を見直す。巡回（線なし）の遠方の候補は影の経路で別扱い（未検証）。
+
 ## Current Goal（2026-09-29 RUN-ENG-0003: 実機待ちの Hardware Gap シミュレーション）
 
 User 指示: 実機が要るところで止まらず、近似環境で感度・探索を続け、何を測れば判断が確定するかまで絞る。
