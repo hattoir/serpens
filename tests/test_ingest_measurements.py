@@ -154,3 +154,9 @@ def test_stop_time_groups_by_trigger_and_marks_esp32_independent_trials(im, tmp_
     e, c = res["by_trigger"]["estop/supply_cut"], res["by_trigger"]["comm_loss/motion_stop"]
     assert e["ms"]["mean"] == pytest.approx(10.0) and e["trials_with_esp32_stopped"] == 5 and c["trials_with_esp32_stopped"] == 0
     assert res["config"]["heartbeat_timeout_ms"] == 400.0 and "合否ではない" in res["note"]
+
+
+def test_power_sag_estimates_the_total_source_resistance(im, tmp_path: Path) -> None:
+    rows = [{"trial": i, "event": "stall", "v_nominal": 7.4, "v_min": 7.4 - 0.20 * ip, "i_peak_a": ip, "brownout": 0} for i, ip in enumerate([1.0, 1.5, 2.0, 2.5])]
+    res, _ = im.ingest("power_sag", write(tmp_path / "r.csv", im.COLUMNS["power_sag"], rows), tmp_path / "out")
+    assert res["by_event"]["stall"]["r_total_ohm"]["mean"] == pytest.approx(0.20)

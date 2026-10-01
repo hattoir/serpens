@@ -228,13 +228,17 @@ def a_power_sag(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]
         ev, vn, vm = (r.get("event") or "?").strip(), num(r, "v_nominal"), num(r, "v_min")
         if vn is None or vm is None:
             continue
-        d = by.setdefault(ev, {"drop": [], "vmin": [], "brownout": 0, "n": 0})
+        d = by.setdefault(ev, {"drop": [], "vmin": [], "brownout": 0, "n": 0, "r": []})
         d["drop"].append(vn - vm)
+        ip = num(r, "i_peak_a")
+        if ip is not None and ip > 0:
+            d["r"].append((vn - vm) / ip)                              # 電源の全抵抗 R ≈ 降下 / ピーク電流（HG-E1 の判断境界と同じ量）
         d["vmin"].append(vm)
         d["n"] += 1
         d["brownout"] += int((r.get("brownout") or "").strip() in ("1", "true", "True"))
     out = {ev: {"n": d["n"], "drop_v": stats(np.array(d["drop"])), "v_min": stats(np.array(d["vmin"])), "brownouts": d["brownout"],
-                "margin_to_servo_min_v": float(min(d["vmin"])) - SERVO_MIN_V} for ev, d in by.items()}
+                "margin_to_servo_min_v": float(min(d["vmin"])) - SERVO_MIN_V,
+                "r_total_ohm": stats(np.array(d["r"]))} for ev, d in by.items()}
     return {"by_event": out, "assumed_servo_min_v": SERVO_MIN_V, "note": "動作下限 6.0 V は ASSUMED（資料の確認が要る = OQ-0103）。余裕が負 = 下限を下回った測定がある"}
 
 

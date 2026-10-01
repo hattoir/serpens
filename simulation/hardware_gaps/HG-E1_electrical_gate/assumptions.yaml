@@ -1,0 +1,47 @@
+# HG-E1 電気層（ELECTRICAL_SAFETY_GATE の 8 項目）— 仮定。**すべて ASSUMPTION（prior）。実測 0 件。HARDWARE_VERIFIED = 0。**
+# 出典のある値は出典を書く。出典の無いものは「ASSUMED」で、幅（最小, 最大）で置く。実測で置き換える（`tools/ingest_measurements.py`）。
+gap_id: HG-E1_electrical_gate
+gap_class: [ELECTRICAL_GAP, SAFETY_GAP]
+label: ELECTRICAL_BUDGET_MC           # 解析 + Monte Carlo。実測でも回路の検証でもない
+
+servo:                                # ST3215-C044（7.4V / 1:191）。**電流は UNKNOWN**（12V 品の 2.7 A / 200 mA は使わない = docs/electronics.md §2）
+  count: {MVP_5: 5, EX1_9: 9}         # Floor Watch MVP は 5 サーボ（CAD）、従来 EX-1 は 9 軸
+  i_no_load_a: [0.10, 0.40]           # ASSUMED（12V 品の 0.2 A を中心に幅）
+  i_hold_a: [0.10, 1.00]              # ASSUMED（保持トルクに依存。トルク制限レジスタ比 0.167 = 約 0.45 N·m の保持）
+  i_stall_a: [1.20, 3.00]             # ASSUMED（12V 品 2.7 A を 7.4 V へ比例換算 1.7 A を中心に幅。**同じモーターとは限らない**）
+  gait_rms_over_hold: [1.0, 2.5]      # 歩容中の実効電流 / 保持電流（ASSUMED）
+  simultaneity: [0.3, 1.0]            # 全軸同時の起動 / 衝突のとき、ストールの何割が同時に流れるか（ASSUMED）
+  v_min_operating: 6.0                # Waveshare Wiki ST3215_Servo の動作範囲 6〜12.6 V（C044 の下限は未確認）
+  v_max_register14_default: 8.0       # レジスタ 14 の初期値（docs/sts3215_registers.md）。満充電 2S = 8.4 V はこれを超える
+
+supply:                               # 電源の選択肢。**未選定**（OQ-0104 / docs/electronics.md §5）
+  nominal_v: 7.4
+  full_charge_v: 8.4
+  r_total_ohm: [0.05, 0.60]           # 電池の内部抵抗 + 配線 + コネクタ + 遮断器（ASSUMED）
+  battery_mah: [1000, 1500]           # 2S LiPo 1000〜1500 mAh は Candidate（engineering-state.md）
+  c_rate_max: [10, 20]                # 連続放電（ASSUMED）
+
+wiring:                               # 配線・コネクタ（ASSUMED）
+  wire_r_ohm_per_m: {AWG24: 0.084, AWG22: 0.053, AWG20: 0.033}     # 銅線の一般値（20℃）
+  length_m: [0.3, 1.2]
+  connector_r_ohm: [0.005, 0.050]     # 接触抵抗（劣化で増える）
+  wire_rth_k_per_w_per_m: [8.0, 40.0]  # 束ねた被覆線の熱抵抗（ASSUMED。外装の中で放熱が悪いほど大）
+
+thermal:                              # サーボ 1 個の温度モデル（lumped。ASSUMED）
+  c_th_j_per_k: [10.0, 30.0]
+  r_th_k_per_w: [5.0, 15.0]
+  r_motor_ohm: [2.5, 6.0]             # 巻線抵抗（V_stall / I_stall 付近。ASSUMED）
+  ambient_c: [20.0, 35.0]
+  limits_c: {link_fault: 60.0, servo_register: 70.0, safety_stop: 80.0}   # config: link.faults.temp_limit_c / servo.temperature_limit_c / safety_limits.servo_temp_stop_c
+
+protection:                           # 過電流保護（ASSUMED。部品は未選定）
+  derating: 1.25                      # 通常の最大電流に対する余裕
+  polyswitch_hold_to_trip: 2.0        # PTC の動作電流 ≈ 保持電流の 2 倍（一般の傾向。ASSUMED）
+  electronic_trip_delay_ms: [1.0, 50.0]
+
+stop_time:                            # 停止までの時間（ASSUMED）。通信断は config の値を使う
+  relay_open_ms: [3.0, 15.0]
+  supply_bleed_ms: [1.0, 30.0]        # 遮断後に出力（コンデンサ）が下がるまで
+  servo_motion_stop_ms: [5.0, 80.0]   # 電源が落ちてから動きが止まるまで（1:191 の減速で止まりやすい側。未測定）
+  control_period_ms: 10.0
+  contact_release_requirement_ms: 20.0   # 要求そのものが未確定（docs/contact_release_requirements.md）
