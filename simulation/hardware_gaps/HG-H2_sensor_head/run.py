@@ -217,7 +217,7 @@ def ok(r: dict[str, Any]) -> bool:
 
 
 def ok_with_phantoms(r: dict[str, Any]) -> bool:
-    """範囲外の偽物も誤報として数えた場合（検出器を直すまではこちらが実際の挙動）。"""
+    """範囲外の偽物も誤報として数えた場合（2026-10-01 の統合 branch の検出では 0 条件。以前の検出では 26/44 条件で出ていた）。"""
     return ok(r) and r["far_phantom_inspect"] <= A["criteria"]["max_false_alarm"]
 
 
@@ -229,7 +229,7 @@ def write_decision(rows: list[dict[str, Any]], stamp: str) -> None:
          f"基準（ASSUMPTION）: 停止時（線上）の検出率 ≥ {A['criteria']['min_recall_inspect']:.0%}、巡回時 ≥ {A['criteria']['min_recall_patrol']:.0%}、"
          f"誤報率 ≤ {A['criteria']['max_false_alarm']:.0%}\n",
          "誤報は頭から `floor_watch.mission.reach_mm` 以内の候補だけを数える。それより遠い偽物（ぼけた遠方で線光が途切れて出る "
-         "`specular_break` など）は「範囲外の偽物」として別に数える（**現在の検出器はこれを除外しない = 修正タスクを提案済み**）。\n",
+         "`specular_break` など）は「範囲外の偽物」として別に数える（2026-10-01 の統合 branch `f8f2229` で回し直した結果: **範囲外の偽物が出る条件は 26/44 → 0/44**（nominal 41% → 0%）。vision-sim の検出の修正（`d259f59` ほか）が既に除外している。farfield-roi の `line_max_range_mm` は統合していない。**SYNTHETIC_SENSOR_SIM。実カメラでは未確認**）。\n",
          "| 条件 | 巡回 検出 | 停止 検出（線上） | 危険物（線上） | 誤報 巡回 / 停止 | 範囲外の偽物 | 大きさ誤差 | 中心のぼけ σ px | 中心 mm/px | 撮り直し | 合否 | 見逃し |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rows:

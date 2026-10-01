@@ -77,3 +77,32 @@ def test_ingest_fov_and_focus_recover_the_parameters(h2, tmp_path: Path, monkeyp
     assert fit["aperture_mm"] == pytest.approx(a_true, rel=0.05)
     assert (tmp_path / "results" / "measured" / "raw").exists()
     assert list((tmp_path / "ai-outbox" / "handoffs").glob("*_HG-H2_measured.md"))
+
+
+def test_defocused_far_field_line_dropout_is_not_an_object_but_near_specular_still_is(h2) -> None:
+    """OQ-0111 / LB-E-009。2026-09-29 の HG-H2 の発見の回帰（farfield-roi `0e9b79a` のシナリオを、新しい設定キー無しで）:
+    nominal（UXGA・100mm 合焦・口径 1mm）では遠方で線光がぼけて消え、その途切れが 1m 先・直径 130mm の specular_break の偽物になっていた。
+    統合 base の検出（vision-sim の修正）では、汚れだけの床で `reach_mm` より遠い物の候補は出ない。近くの鏡面（ボタン電池）は同じぼけの下でも見つかる。
+    **SYNTHETIC_SENSOR_SIM。実カメラでは未確認。**"""
+    from serpens.config import load_config
+    from serpens.floorwatch.detect import detect
+    from serpens.floorwatch.geometry import LightPlane
+    from serpens.floorwatch.synthetic import Disc, Renderer, Scene, Stain
+    p = dict(h2.A["nominal"])
+    cfg = h2.cfg_for(load_config(), p)
+    reach = float(cfg["floor_watch"]["mission"]["reach_mm"])
+    cam = h2.camera(p)
+    plane = LightPlane.design(cfg)
+    rend = Renderer(cam, plane, h2.lighting(p))
+    deg = h2.Degrader(cam, rend, p)
+    yc = h2.view_center_mm(p)
+    stain = rend.render(Scene(stains=[Stain(0.0, yc, 18.0, 0.3)], floor_albedo=float(p["floor_albedo"])))
+    for seed in (2, 4, 5, 6, 7, 8):                               # 劣化の雑音次第で出たり出なかったりした（farfield は 6 通り中 3）
+        frames = {k: deg(v, np.random.default_rng(seed)) for k, v in stain.items()}
+        far = [c for c in detect(frames, cam, plane, cfg)[0] if c.is_object and math.hypot(*c.floor_xy_mm) > reach]
+        assert not far, [(c.floor_xy_mm, c.diameter_mm, c.height_reason) for c in far]
+    cell = rend.render(Scene([Disc(0.0, yc, 20.0, 3.2, 0.75, True, "button_cell")], floor_albedo=float(p["floor_albedo"])))
+    frames = {k: deg(v, np.random.default_rng(2)) for k, v in cell.items()}
+    objs = [c for c in detect(frames, cam, plane, cfg)[0] if c.is_object]
+    hit = [c for c in objs if abs(c.floor_xy_mm[0]) < 12.0 and abs(c.floor_xy_mm[1] - yc) < 25.0]
+    assert hit and any(k["kind"] == "metal_disc" for k in hit[0].kinds)
