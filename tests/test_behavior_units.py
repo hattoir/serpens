@@ -313,3 +313,22 @@ def test_stalk_gait_is_a_different_waveform_not_just_slower(cfg: dict) -> None:
     assert adv == pytest.approx(cfg["behavior"]["controller"]["stalk_advance_per_cycle_mm"], rel=0.15)
     bl_per_s = adv * abs(stalk.temporal_freq_hz) / float(cfg["body"]["length_mm"])
     assert 0.02 <= bl_per_s <= 0.07, bl_per_s
+
+
+def test_allow_reverse_at_edge_setting_controls_the_default_without_changing_exhibition(cfg: dict) -> None:
+    """LB-E-015: 既定（設定 true）は展示の従来どおり後退する。設定を false にすると、引数なしでも止まって blocked（尾が見えない運用）。
+    明示の引数は設定より強い。"""
+    import copy
+    c = cfg["behavior"]["controller"]
+    x = cfg["mat"]["width_mm"] - c["head_reach_mm"] - c["mat_margin_mm"] + 20.0
+    p = pose(x, 600.0, 0.0)
+    t = c["forward_min_s"] + 0.1
+    tgt = np.array([3000.0, 600.0])
+    assert c["allow_reverse_at_edge"] is True
+    assert Controller(cfg).drive_to(t, p, tgt, 100.0).moving                                 # 既定: 後退する（変わらない）
+    strict = copy.deepcopy(cfg)
+    strict["behavior"]["controller"]["allow_reverse_at_edge"] = False
+    cmd = Controller(strict).drive_to(t, p, tgt, 100.0)
+    assert not cmd.moving and cmd.blocked
+    assert Controller(strict).drive_to(t, p, tgt, 100.0, allow_reverse=True).moving          # 明示の True は設定より強い（展示の呼び出し側が選べる）
+    assert not Controller(cfg).drive_to(t, p, tgt, 100.0, allow_reverse=False).moving

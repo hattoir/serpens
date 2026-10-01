@@ -680,6 +680,9 @@ behavior:
     near_person_mm: 1000.0        # 人のこの距離以内では
     near_speed_limit_mm_s: 80.0   #   最高速度 8cm/s
     stop_distance_mm: 400.0       # 頭先端から人までこの距離で必ず停止
+    # マット端で「後退しながら向き直る」を許すか。true = 展示（上方のカメラで尾が見える）の従来の動き。**尾にセンサーが無い室内の運用では false**
+    # （見えない後ろへ下がらず、止まって blocked を返す）。Floor Watch の mission は設定に依らず False を渡す。LB-E-015 / ENTRY-E-0001 (2)
+    allow_reverse_at_edge: true
     # 歩容を止めてからの惰性 = 速さ × gait.blend_s × これ。
     # 実測: 50mm/s で指令して停止 → 1秒のブレンド中に約80mm 進む（= 1.6）
     coast_ratio: 1.6

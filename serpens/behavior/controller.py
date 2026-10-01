@@ -129,12 +129,16 @@ class Controller:
     # ---- 指令 -----------------------------------------------------------------
     def drive_to(self, t: float, pose: SnakePose, target_xy: np.ndarray, speed_mm_s: float,
                  person_xy: np.ndarray | None = None, stop_at_person: bool = False,
-                 edge_is_goal: bool = False, gait: str = "base", allow_reverse: bool = True) -> DriveCommand:
+                 edge_is_goal: bool = False, gait: str = "base", allow_reverse: bool | None = None) -> DriveCommand:
         """target_xy へ向かう指令を作る。gait="stalk" で忍び寄りの波形にする。
 
         allow_reverse=False: マット端で「後退しながら向き直る」をしない（止まって blocked を返す）。尾にセンサーが無いので、
-        人のいる所（Floor Watch）では見えない後ろへ下がらない（Design integration-log ENTRY-0022）。展示は従来どおり True。"""
+        人のいる所（Floor Watch）では見えない後ろへ下がらない（Design integration-log ENTRY-0022）。展示は従来どおり True。
+        allow_reverse=None（既定）: 設定 `behavior.controller.allow_reverse_at_edge`（既定 true = 展示。上方のカメラで尾が見える前提）に従う。
+        **尾にセンサーが無い室内の運用では false にする**（LB-E-015。Floor Watch の mission は明示的に False を渡す）。"""
         c = self.c
+        if allow_reverse is None:
+            allow_reverse = bool(c.get("allow_reverse_at_edge", True))
         speed = self.speed_limit(pose, person_xy, speed_mm_s)
         if person_xy is not None and stop_at_person and \
                 self.head_distance(pose, person_xy) <= float(c["stop_distance_mm"]) + speed * self.coast_s:
