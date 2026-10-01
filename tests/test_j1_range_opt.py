@@ -25,8 +25,36 @@ def test_computed_hazard_points_are_used_as_is_and_the_gaps_are_interpolated(o) 
     assert o.hazard(-3.0, True) == (6.0, False)                     # 上の覆いあり（Design の STL）
     assert o.hazard(-3.0, False) == (105.0, False)
     assert o.hazard(4.0, True) == (151.0, False) and o.hazard(-4.0, False) == (319.0, False) and o.hazard(-4.0, True) == (23.0, False)   # Design が R-003 で計算
-    v, interp = o.hazard(6.0, True)
-    assert interp and 151.0 < v < 1562.0                             # +6° は未計算 = 補間
+    v, interp = o.hazard(6.5, True)
+    assert interp and 1270.0 < v < 1432.0                            # +6.5° は未計算 = 補間（+6 / +7° は Design の計算）
+
+
+def test_design_values_of_entry_d0015_replace_the_old_interpolation(o) -> None:
+    """ENTRY-D-0015 (3): +6 / +7 / +8 / +9° = 1270 / 1432 / 1584 / 1714、−7.5°（覆いあり）= 106（Design の CAD_CONCEPT）。旧（2026-09-30）の表は補間だった。"""
+    for t, v in ((6.0, 1270.0), (7.0, 1432.0), (8.0, 1584.0), (9.0, 1714.0)):
+        assert o.hazard(t, True) == (v, False) and o.hazard(t, False) == (v, False)
+    assert o.hazard(-7.5, True) == (106.0, False) and o.hazard(-7.5, False) == (1350.0, False)
+    saved = o.V_COMPUTED
+    try:
+        o.V_COMPUTED = o.V_COMPUTED_0930                              # 旧の表では、同じ点は補間で、Design の値より小さい（ENTRY-D-0015 の「33〜74% 大」の再現）
+        old = {t: o.hazard(t, True) for t in (6.0, 7.0, 8.0, 9.0)}
+    finally:
+        o.V_COMPUTED = saved
+    assert all(interp for _v, interp in old.values())
+    # 実際の値は +74.6 / +62.6 / +48.6 / +32.8 %（Design の「33〜74%」は端数を切り捨てた表記と読める。誤差の範囲）
+    assert [round(100 * (n - old[t][0]) / old[t][0]) for t, n in ((6.0, 1270), (7.0, 1432), (8.0, 1584), (9.0, 1714))] == [75, 63, 49, 33]
+
+
+def test_recheck_with_design_values_keeps_the_recommended_range(o) -> None:
+    """差し替えで範囲 [−4, +3] が変わらないことの確認（`j1_range_opt_recheck.py`）。結果に合わせた調整はしない。"""
+    spec = importlib.util.spec_from_file_location("j1_range_opt_recheck", ROOT / "simulation/hardware_gaps/HG-H1_actuator/j1_range_opt_recheck.py")
+    r = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(r)
+    d = r.run()
+    for k in ("nocover", "cover"):
+        for tag in ("old", "new"):
+            assert (d[tag]["recommend"][k]["lo"], d[tag]["recommend"][k]["hi"]) == (-4.0, 3.0)
+    assert d["new"]["ranges"][(-4.0, 8.0)][True]["worst"] == 1584.0 and d["old"]["ranges"][(-4.0, 8.0)][True]["interpolated_ends"]
 
 
 def test_poses_lost_by_the_range(o) -> None:
