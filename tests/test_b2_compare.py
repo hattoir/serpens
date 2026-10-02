@@ -67,3 +67,14 @@ def test_agreement_and_disagreement_are_told_apart(bc, tmp_path: Path) -> None:
     out = tmp_path / "out.md"
     bc.write_md(cmp_, out, "log.csv")
     assert "一致 2 / 3 条件" in out.read_text(encoding="utf-8")
+
+
+def test_unreadable_rows_with_a_result_are_reported_and_carpet_is_kept_without_a_prediction(bc, tmp_path: Path) -> None:
+    p = write_log(tmp_path / "log.csv", [(0, 0, "1yen", "carpet", "enter"), (0, 0, "1yen", "flooring", ""), (0, 0, "??", "flooring", "enter"),
+                                           (0, 0, "1yen", "tile", "enter"), (0, 0, "1yen", "mat", "meh")])
+    skipped: list[tuple[str, str]] = []
+    rows = bc.read_log(p, skipped)
+    assert [(r["obj"], r["floor"]) for r in rows] == [("coin_1yen", "carpet")]            # 空の結果は未観察として飛ばす（警告に数えない）
+    assert sorted(skipped) == sorted([("物が未知", "??"), ("床が未知", "tile"), ("結果の語が未知", "meh")])
+    cmp_ = bc.compare(rows, bc.load_sim())
+    assert cmp_[0]["verdict"] == "予測なし" and cmp_[0]["pred"] is None                  # carpet は表に出る（シミュは無い）

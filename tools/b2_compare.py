@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RES = ROOT / "simulation" / "results"
 OBJ = {"1yen": "coin_1yen", "coin_1yen": "coin_1yen", "cr2032": "battery_cr2032", "battery_cr2032": "battery_cr2032", "bead8": "bead", "bead": "bead",
        "cube10": "crumb_cube", "crumb_cube": "crumb_cube"}
-FLOOR = {"flooring": "flooring", "floor": "flooring", "mat": "mat"}
+FLOOR = {"flooring": "flooring", "floor": "flooring", "mat": "mat", "carpet": "carpet"}      # carpet はシミュに無い（予測なしとして表に出す。ENTRY-D-0023）
 RESULT = {"enter": "enter", "入る": "enter", "return": "return", "戻る": "return", "underrun": "underrun", "下をくぐる": "underrun",
           "pushed_away": "pushed_away", "押されて逃げた": "pushed_away", "pinched": "pinched", "挟まった": "pinched"}
 SIM_OUTCOME = {"success": "enter", "escaped": "return", "pushed_ahead": "pushed_away", "pinched": "pinched", "not_entered": "pushed_away", "knocked_in": "return"}
@@ -79,19 +79,29 @@ def predict(sim: dict, t: float, c: float, obj: str, floor: str) -> tuple[dict[s
     return sim[(best, c, obj, floor)], best, abs(best - t) > 1e-9 or False
 
 
-def read_log(path: Path) -> list[dict]:
+def read_log(path: Path, skipped: list[tuple[str, str]] | None = None) -> list[dict]:
+    """結果が書かれた行を読む。**結果が空の行は未観察として黙って飛ばす**が、結果があるのに読めない行（結果の語・t / c・物・床が未知）は
+    `skipped` に (理由, 値) で積む（None なら捨てる。呼び出し側が警告に出す）。"""
     rows = []
     for r in csv.DictReader(open(path, encoding="utf-8-sig")):
         raw = (r.get("result(enter/return/underrun/pushed_away)") or r.get("result(enter/return/underrun/pushed_away/pinched)") or r.get("result") or "").strip()
         res = RESULT.get(raw.lower(), RESULT.get(raw))
-        if not raw or res is None:
+        if not raw:
+            continue
+        if res is None:
+            if skipped is not None:
+                skipped.append(("結果の語が未知", raw))
             continue
         try:
             t, c = float(r["condition_t_mm"]), float(r["condition_c_mm"])
         except (KeyError, ValueError):
+            if skipped is not None:
+                skipped.append(("t / c が数でない", f"{r.get('condition_t_mm')}/{r.get('condition_c_mm')}"))
             continue
         obj, floor = OBJ.get(r["object"].strip().lower()), FLOOR.get(r["floor"].strip().lower())
         if obj is None or floor is None:
+            if skipped is not None:
+                skipped.append(("物が未知" if obj is None else "床が未知", r["object"] if obj is None else r["floor"]))
             continue
         rows.append({"t": t, "c": c, "obj": obj, "floor": floor, "result": res, "video": r.get("video_file", ""), "notes": r.get("notes", "")})
     return rows
@@ -140,7 +150,11 @@ def main() -> None:
     ap.add_argument("log", type=Path)
     ap.add_argument("--out", type=Path, default=RES / "b2_vs_sim.md")
     a = ap.parse_args()
-    rows = read_log(a.log)
+    skipped: list[tuple[str, str]] = []
+    rows = read_log(a.log, skipped)
+    if skipped:
+        from collections import Counter
+        print(f"警告: 結果が書かれているのに読めなかった行が {len(skipped)} 行ある: " + "、".join(f"{k[0]}「{k[1]}」×{n}" for k, n in Counter(skipped).items()))
     cmp_ = compare(rows, load_sim())
     write_md(cmp_, a.out, str(a.log))
     print(a.out.read_text(encoding="utf-8"))
