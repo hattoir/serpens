@@ -59,6 +59,7 @@ COLUMNS: dict[str, list[str]] = {
     "tof_floor": ["date", "operator", "trial", "test", "surface", "height_mm", "speed_mm_s", "scenario", "distance_mm", "range_status", "classified", "note"],
     "limiter_slip": ["date", "operator", "specimen", "direction", "slip_torque_nm", "temp_c", "cycle", "note"],
     "cable_cycle": ["date", "operator", "trial", "cycles", "continuity_ohm", "wear", "broken", "note"],
+    "hood_edge": ["date", "operator", "trial", "edge", "contact_area_mm2", "drop_height_mm", "peak_n", "note"],
 }
 
 
@@ -70,7 +71,7 @@ def load_csv(path: Path, kind: str) -> list[dict[str, str]]:
             "current": ["state", "current_a"], "power_sag": ["event", "v_nominal", "v_min"], "trip": ["device", "i_set_a", "tripped"],
             "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"], "exposure": ["exposure_mode", "saturated_pct"], "j1_dead_backlash": ["test_id", "direction", "goal_step", "servo_present_step"],
             "j1_push": ["register_torque_limit", "torque_on", "force_n_mean"], "j1_stopper": ["damper", "peak_n"],
-            "tof_floor": ["test", "surface", "distance_mm"], "limiter_slip": ["specimen", "slip_torque_nm"], "cable_cycle": ["cycles"]}[kind]
+            "tof_floor": ["test", "surface", "distance_mm"], "limiter_slip": ["specimen", "slip_torque_nm"], "cable_cycle": ["cycles"], "hood_edge": ["edge", "contact_area_mm2"]}[kind]
     if not rows:
         raise ValueError(f"{path}: 行が無い")
     missing = [c for c in need if c not in rows[0]]
@@ -541,12 +542,30 @@ def a_cable_cycle(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, An
             "note": "目標は 1000 往復（0.5 Hz で約 33 分）。擦れも断線も導通の変化も無いことが `joint_limit_policy.verified_with_cable` の材料。**この取り込みは合否を出さない・config を書き換えない**"}
 
 
+def a_hood_edge(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """HT-006: フード昇降の縁の接触面積（感圧紙の読み）と落下ピーク。縁（edge）ごとに、接触面積・ピーク荷重の分布と、ピーク ÷ 面積 = 平均圧力 [kPa]（N / mm² = MPa なので ×1000）。
+    **しきい値は置かない**（力・圧力の安全のしきい値は PROVISIONAL / SAFETY_UNVERIFIED。User が決める）。合否ではない。"""
+    by: dict[str, dict[str, list[float]]] = {}
+    for r in rows:
+        key = (r.get("edge") or "?").strip()
+        d = by.setdefault(key, {"area": [], "peak": [], "p": []})
+        a, p = num(r, "contact_area_mm2"), num(r, "peak_n")
+        if a is not None:
+            d["area"].append(a)
+        if p is not None:
+            d["peak"].append(p)
+        if a is not None and p is not None and a > 0:
+            d["p"].append(p / a * 1000.0)
+    out = {k: {"contact_area_mm2": stats(np.array(d["area"])), "peak_n": stats(np.array(d["peak"])), "mean_pressure_kpa": stats(np.array(d["p"]))} for k, d in sorted(by.items())}
+    return {"by_edge": out, "note": "圧力のしきい値は無い（PROVISIONAL）。面積が小さく荷重が大きいほど平均圧力が大きい。感圧紙の読みは濃度から圧力への換算の誤差が大きい（フィルムの仕様の範囲）"}
+
+
 ANALYZERS: dict[str, Callable[[list[dict[str, str]], dict[str, Any]], dict[str, Any]]] = {
     "stop_coast": a_stop_coast, "capture_time": a_capture_time, "gait_slip": a_gait_slip, "tag_detect": a_tag_detect,
     "imu": a_imu, "contact_load": a_contact_load, "current": a_current,
     "power_sag": a_power_sag, "trip": a_trip, "thermal": a_thermal, "servo_temp": a_servo_temp, "stop_time": a_stop_time, "exposure": a_exposure,
     "j1_dead_backlash": a_j1_dead_backlash, "j1_push": a_j1_push, "j1_stopper": a_j1_stopper,
-    "tof_floor": a_tof_floor, "limiter_slip": a_limiter_slip, "cable_cycle": a_cable_cycle,
+    "tof_floor": a_tof_floor, "limiter_slip": a_limiter_slip, "cable_cycle": a_cable_cycle, "hood_edge": a_hood_edge,
 }
 
 

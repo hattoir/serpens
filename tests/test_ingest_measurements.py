@@ -252,3 +252,12 @@ def test_cable_cycle_finds_first_wear_and_break(im, tmp_path: Path) -> None:
     res, _ = im.ingest("cable_cycle", write(tmp_path / "c.csv", im.COLUMNS["cable_cycle"], rows), tmp_path / "out")
     assert res["max_cycles"] == 1000 and res["first_wear_at_cycles"] == 500 and res["first_break_at_cycles"] == 900
     assert abs(res["continuity_change_frac"] - 0.2) < 1e-9
+
+
+def test_hood_edge_pressure_is_peak_over_area(im, tmp_path: Path) -> None:
+    rows = [{"trial": i, "edge": "tpu_lip", "contact_area_mm2": 40.0, "drop_height_mm": 10, "peak_n": 8.0} for i in range(5)]
+    rows += [{"trial": 10 + i, "edge": "sharp", "contact_area_mm2": 4.0, "drop_height_mm": 10, "peak_n": 8.0} for i in range(5)]
+    res, _ = im.ingest("hood_edge", write(tmp_path / "h.csv", im.COLUMNS["hood_edge"], rows), tmp_path / "out")
+    a, b = res["by_edge"]["tpu_lip"], res["by_edge"]["sharp"]
+    assert abs(a["mean_pressure_kpa"]["mean"] - 200.0) < 1e-9 and abs(b["mean_pressure_kpa"]["mean"] - 2000.0) < 1e-9
+    assert a["contact_area_mm2"]["n"] == 5
