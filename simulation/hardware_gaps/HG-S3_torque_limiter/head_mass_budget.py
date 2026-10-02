@@ -27,6 +27,12 @@ SHELL_G = {1.2: 137.0, 1.6: 169.0, 2.0: 199.0, 2.5: 234.0}      # Design の見�
 ELEC_G = (10.0, 15.0, 20.0)             # 電子部品（ASSUMED）
 DESIGN_COG_MM = 19.0                    # 頭の重心の J1 軸からの距離（Design。CAD_CONCEPT）
 CFG_COG_MM = 104.0                      # config の保守側の重心の距離（neck_lifted_cog_mm）
+# Design の Fusion 実体（HEAD E3 INTEGRATED v3。ENTRY-D-0021、2026-10-02。CAD_CONCEPT）: シェル 77.7 + 取り込み 23.8 + スキッド 10.3 = 113.8 g、重心 (−198.0, +3.1, 36.1)。
+# D-0015 の「殻 137〜234 g」は**取り込み・スキッドを含む全体の値だった**（比較の基準の誤り。D-0021 で訂正）。電子部品（XIAO・ToF・LED・配線）は殻に含まれない: Design の見積もり 約 25〜30 g
+V3_HEAD_G = 113.8
+V3_ELEC_G = (25.0, 30.0)
+V3_COG_X_MM = 198.0 - 181.8             # J1 軸（X −181.8。CAD.md）からの重心の前後距離 = 16.2 mm
+V3_COG_Y_MM = 3.1
 
 
 def _load(name: str, rel: str):
@@ -115,7 +121,24 @@ def main() -> None:
     A("**ANALYTIC + ACTUATOR_MODEL_SIM。PROVISIONAL。実機で未確認（HARDWARE_VERIFIED = 0）。Design の殻の質量は Design の見積もり（CAD_CONCEPT、Engineering 未検証）。電子部品の質量は ASSUMED。"
       "5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）で、ここでは使わない。安全・合格の語は使わない。** 再現: `simulation/hardware_gaps/HG-S3_torque_limiter/head_mass_budget.py`。\n")
     A(f"config（変更しない）: `head_total` = {b['head_total']:g} g、`neck_lifted_mass` = {b['neck_lifted_mass']:g} g・重心 {b['neck_lifted_cog_mm']:g} mm（J7 の保守側の基準）、収支の合計 = {b['total']:g} g、`mass_total_g_max` = {b['cap']:g} g。\n")
-    A("## 1. 頭の質量（殻 + 電子部品）と、config の 90 g に対する倍率\n")
+    A("## 0. 【最新】Design の Fusion 実体（v3、ENTRY-D-0021）での値\n")
+    A(f"頭 = シェル 77.7 + 取り込み 23.8 + スキッド 10.3 = **{V3_HEAD_G:g} g**（CAD_CONCEPT）+ 電子部品 {V3_ELEC_G[0]:g}〜{V3_ELEC_G[1]:g} g（Design の見積もり）= **{V3_HEAD_G + V3_ELEC_G[0]:g}〜{V3_HEAD_G + V3_ELEC_G[1]:g} g**（90 g の {(V3_HEAD_G + V3_ELEC_G[0]) / b['head_total']:.2f}〜{(V3_HEAD_G + V3_ELEC_G[1]) / b['head_total']:.2f} 倍）。"
+      f"重心は J1 軸の {V3_COG_X_MM:g} mm 前、y {V3_COG_Y_MM:+g} mm。**§1 以降は、D-0015 の旧い見積もり（137〜234 g を『殻』として電子部品を足していた = 二重計上）での表。比較のために残す（最新は上の v3）。**\n")
+    A("| 項目 | 頭 [g] | (a) 増分を 16.2 mm に置く [N·m]（割合）| (a) 増分を 104 mm に置く（保守側）[N·m]（割合）| (b) 頭だけ 16.2 mm [N·m]（割合）| 全体質量の最大 [g]（上限 1700 g に対する割合）|\n|---|---|---|---|---|---|")
+    for e in V3_ELEC_G:
+        m = V3_HEAD_G + e
+        d = m - b["head_total"]
+        ta, tb, tc = static_torque_nm(d, V3_COG_X_MM), static_torque_nm(d, CFG_COG_MM), head_only_torque_nm(m, V3_COG_X_MM)
+        tm = total_mass_g(d)
+        A(f"| v3 + 電子 {e:g} g | {m:g} | {ta:.3f}（{100 * ta / SOFT_CAP_NM:.0f}%）| {tb:.3f}（{100 * tb / SOFT_CAP_NM:.0f}%）| {tc:.3f}（{100 * tc / SOFT_CAP_NM:.0f}%）| {tm['max']:.0f}（{100 * tm['max'] / tm['cap']:.0f}%）|")
+    m_v3 = V3_HEAD_G + V3_ELEC_G[1]
+    lim = y_limit_mm(m_v3, 1.0)
+    A(f"\n重心 y の許容（左右のたわみの差 ≤ 0.05 mm。k = 1 N/mm は ASSUMED）: 頭 {m_v3:g} g で **{lim:.2f} mm**（k に比例）。Design の v3 の y = {V3_COG_Y_MM:+g} mm は、**k ≥ {V3_COG_Y_MM / lim:.2f} N/mm なら内側**（Design の「余裕小」と同じ読み。HT-012 で k を実測）。")
+    ov = load_inertia_kgm2(m_v3, V3_COG_X_MM)
+    oc = load_inertia_kgm2(m_v3, CFG_COG_MM)
+    A(f"頭の慣性（点質量。ストッパーの衝撃の J に足す）: Design の重心で {ov:.2e} kg·m²（ロータの反映慣性 prior の下限 1e-3 の {100 * ov / 1e-3:.0f}%）、config の保守側の重心（104 mm）で {oc:.2e}（同 {100 * oc / 1e-3:.0f}%）。")
+    A("**読み**: config の `head_total: 90` は変えない（PROPOSED）。v3 は 90 g を約 54〜60% 超える（Design の「シェル + 電子で約 105 g、取り込み 23.8 g は別枠 19 g 超過」と同じ向き）。J7 の静的トルクは保守側の基準でも上限の約 6 割（56〜58%）、Design の幾何では 5%。重心 y は k ≥ 約 1.1 N/mm（ASSUMED の 1 N/mm のすぐ上）が要り、**余裕が小さい**（HT-012 で k を実測）。**実測 = HT-016。**\n")
+    A("## 1. （旧）頭の質量（殻 + 電子部品）と、config の 90 g に対する倍率 — D-0015 の見積もり。D-0021 で全体の値と訂正されたので二重計上\n")
     A("| 殻の厚さ [mm] | 殻 [g]（Design）| + 電子部品 10 / 15 / 20 g（ASSUMED）| 90 g に対する倍率 |\n|---|---|---|---|")
     for s, m in SHELL_G.items():
         tot = [head_total_g(s, e) for e in ELEC_G]

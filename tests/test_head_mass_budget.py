@@ -72,3 +72,12 @@ def test_load_inertia_with_design_cog_is_small_compared_with_the_rotor_prior(hb)
     j = hb.load_inertia_kgm2(254.0, hb.DESIGN_COG_MM)
     assert j < 1.0e-3 * 0.1                                                      # ロータ反映慣性 prior の下限（1e-3）の 1 割未満
     assert hb.load_inertia_kgm2(254.0, hb.CFG_COG_MM) > 1.0e-3 * 2.0             # 保守側の重心では下限の 2 倍以上（無視できない）
+
+
+def test_design_v3_head_is_113_8_g_plus_electronics_and_its_cog_is_16_2_mm_ahead_of_j1(hb) -> None:
+    """ENTRY-D-0021: シェル 77.7 + 取り込み 23.8 + スキッド 10.3 = 113.8 g、重心 x −198.0（J1 軸 −181.8 → 16.2 mm）、y +3.1。D-0015 の 137〜234 g は全体の値だった。"""
+    assert hb.V3_HEAD_G == pytest.approx(77.7 + 23.8 + 10.3) and hb.V3_COG_X_MM == pytest.approx(16.2) and hb.V3_COG_Y_MM == 3.1
+    m = hb.V3_HEAD_G + hb.V3_ELEC_G[1]
+    assert 1.5 < m / hb.budget()["head_total"] < 1.65
+    assert hb.static_torque_nm(m - 90.0, 104.0) / hb.SOFT_CAP_NM < 0.6                           # 保守側でも上限の 6 割弱
+    assert 3.1 / hb.y_limit_mm(m, 1.0) == pytest.approx(1.09, abs=0.02)                            # k ≥ 約 1.1 N/mm が要る（余裕が小さい）
