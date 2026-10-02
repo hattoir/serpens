@@ -1,0 +1,124 @@
+{
+ "fine_values_deg": [
+  -50.0,
+  -45.0,
+  -37.5,
+  -36.25,
+  -25.0,
+  -12.5,
+  0.0,
+  12.5,
+  25.0,
+  36.25,
+  37.5,
+  45.0,
+  50.0
+ ],
+ "rows": [
+  {
+   "phi": 0.0,
+   "forms": 6306,
+   "v2": null,
+   "fine": {
+    "pockets": 3,
+    "min_mouth_mm": 123.0,
+    "margin_to_neck_mm": 34.5,
+    "max_d_in_mm": 139.0
+   }
+  },
+  {
+   "phi": 15.0,
+   "forms": 15822,
+   "v2": {
+    "pockets": 2,
+    "min_mouth_mm": 117.0,
+    "margin_to_neck_mm": 28.5,
+    "max_d_in_mm": 126.0,
+    "parts": {}
+   },
+   "fine": {
+    "pockets": 3,
+    "min_mouth_mm": 117.0,
+    "margin_to_neck_mm": 28.5,
+    "max_d_in_mm": 127.0
+   }
+  },
+  {
+   "phi": 30.0,
+   "forms": 19910,
+   "v2": {
+    "pockets": 22,
+    "min_mouth_mm": 115.0,
+    "margin_to_neck_mm": 26.5,
+    "max_d_in_mm": 139.0,
+    "parts": {
+     "胸": 1
+    }
+   },
+   "fine": {
+    "pockets": 55,
+    "min_mouth_mm": 115.0,
+    "margin_to_neck_mm": 26.5,
+    "max_d_in_mm": 140.0
+   }
+  },
+  {
+   "phi": 45.0,
+   "forms": 23434,
+   "v2": {
+    "pockets": 58,
+    "min_mouth_mm": 103.0,
+    "margin_to_neck_mm": 14.5,
+    "max_d_in_mm": 140.0,
+    "parts": {
+     "胸": 6
+    }
+   },
+   "fine": {
+    "pockets": 140,
+    "min_mouth_mm": 103.0,
+    "margin_to_neck_mm": 14.5,
+    "max_d_in_mm": 140.0
+   }
+  },
+  {
+   "phi": 60.0,
+   "forms": 29522,
+   "v2": {
+    "pockets": 86,
+    "min_mouth_mm": 89.0,
+    "margin_to_neck_mm": 0.5,
+    "max_d_in_mm": 140.0,
+    "parts": {
+     "胸": 1
+    }
+   },
+   "fine": {
+    "pockets": 204,
+    "min_mouth_mm": 88.0,
+    "margin_to_neck_mm": -0.5,
+    "max_d_in_mm": 140.0
+   }
+  }
+ ],
+ "first_pocket_v2": 15.0,
+ "first_pocket_fine": 0.0,
+ "margin_shift_mm": [
+  [
+   15.0,
+   0.0
+  ],
+  [
+   30.0,
+   0.0
+  ],
+  [
+   45.0,
+   0.0
+  ],
+  [
+   60.0,
+   -1.0
+  ]
+ ]
+}
