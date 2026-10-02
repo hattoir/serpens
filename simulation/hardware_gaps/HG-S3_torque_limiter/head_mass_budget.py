@@ -122,7 +122,7 @@ def main() -> None:
       "5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）で、ここでは使わない。安全・合格の語は使わない。** 再現: `simulation/hardware_gaps/HG-S3_torque_limiter/head_mass_budget.py`。\n")
     A(f"config（変更しない）: `head_total` = {b['head_total']:g} g、`neck_lifted_mass` = {b['neck_lifted_mass']:g} g・重心 {b['neck_lifted_cog_mm']:g} mm（J7 の保守側の基準）、収支の合計 = {b['total']:g} g、`mass_total_g_max` = {b['cap']:g} g。\n")
     A("## 0. 【最新】Design の Fusion 実体（v3、ENTRY-D-0021）での値\n")
-    A(f"頭 = シェル 77.7 + 取り込み 23.8 + スキッド 10.3 = **{V3_HEAD_G:g} g**（CAD_CONCEPT）+ 電子部品 {V3_ELEC_G[0]:g}〜{V3_ELEC_G[1]:g} g（Design の見積もり）= **{V3_HEAD_G + V3_ELEC_G[0]:g}〜{V3_HEAD_G + V3_ELEC_G[1]:g} g**（90 g の {(V3_HEAD_G + V3_ELEC_G[0]) / b['head_total']:.2f}〜{(V3_HEAD_G + V3_ELEC_G[1]) / b['head_total']:.2f} 倍）。"
+    A(f"頭 = シェル 77.7 + 取り込み 23.8 + スキッド 10.3（内訳の和 111.8 g。**Design の報告した合計 {V3_HEAD_G:g} g との 2 g の差は未確認** = ENTRY-E-0017 で依頼）→ 合計の **{V3_HEAD_G:g} g** を使う（CAD_CONCEPT）+ 電子部品 {V3_ELEC_G[0]:g}〜{V3_ELEC_G[1]:g} g（Design の見積もり）= **{V3_HEAD_G + V3_ELEC_G[0]:g}〜{V3_HEAD_G + V3_ELEC_G[1]:g} g**（90 g の {(V3_HEAD_G + V3_ELEC_G[0]) / b['head_total']:.2f}〜{(V3_HEAD_G + V3_ELEC_G[1]) / b['head_total']:.2f} 倍）。"
       f"重心は J1 軸の {V3_COG_X_MM:g} mm 前、y {V3_COG_Y_MM:+g} mm。**§1 以降は、D-0015 の旧い見積もり（137〜234 g を『殻』として電子部品を足していた = 二重計上）での表。比較のために残す（最新は上の v3）。**\n")
     A("| 項目 | 頭 [g] | (a) 増分を 16.2 mm に置く [N·m]（割合）| (a) 増分を 104 mm に置く（保守側）[N·m]（割合）| (b) 頭だけ 16.2 mm [N·m]（割合）| 全体質量の最大 [g]（上限 1700 g に対する割合）|\n|---|---|---|---|---|---|")
     for e in V3_ELEC_G:
