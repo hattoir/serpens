@@ -160,3 +160,14 @@ def test_power_sag_estimates_the_total_source_resistance(im, tmp_path: Path) -> 
     rows = [{"trial": i, "event": "stall", "v_nominal": 7.4, "v_min": 7.4 - 0.20 * ip, "i_peak_a": ip, "brownout": 0} for i, ip in enumerate([1.0, 1.5, 2.0, 2.5])]
     res, _ = im.ingest("power_sag", write(tmp_path / "r.csv", im.COLUMNS["power_sag"], rows), tmp_path / "out")
     assert res["by_event"]["stall"]["r_total_ohm"]["mean"] == pytest.approx(0.20)
+
+
+def test_exposure_groups_by_setting_and_counts_saturated_frames(im, tmp_path: Path) -> None:
+    rows = [{"trial": i, "light": "bright", "floor": "flooring", "object": "cr2032", "exposure_mode": "fixed", "gain": 2.5, "saturated_pct": 80 + i % 5, "diameter_px": 30, "detected": 0}
+            for i in range(10)]
+    rows += [{"trial": 100 + i, "light": "bright", "floor": "flooring", "object": "cr2032", "exposure_mode": "auto", "gain": "", "saturated_pct": 1.0 + i % 3, "diameter_px": 14, "detected": 1}
+             for i in range(10)]
+    res, _ = im.ingest("exposure", write(tmp_path / "e.csv", im.COLUMNS["exposure"], rows), tmp_path / "out")
+    fx, au = res["by_exposure"]["fixed/gain=2.5"], res["by_exposure"]["auto"]
+    assert fx["n"] == 10 and fx["frac_over_pct"] == 1.0 and fx["detect"]["rate"] == 0.0
+    assert au["n"] == 10 and au["frac_over_pct"] == 0.0 and au["detect"]["rate"] == 1.0 and au["saturated_pct"]["max"] < 5

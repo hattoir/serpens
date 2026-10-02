@@ -52,6 +52,7 @@ COLUMNS: dict[str, list[str]] = {
     "thermal": ["date", "operator", "trial", "point", "t_min", "temp_c", "ambient_c", "current_a", "note"],
     "servo_temp": ["date", "operator", "trial", "t_s", "temp_c", "load", "stopped", "note"],
     "stop_time": ["date", "operator", "trial", "trigger", "what", "t_trigger_ms", "t_effect_ms", "esp32_running", "note"],
+    "exposure": ["date", "operator", "trial", "light", "floor", "object", "exposure_mode", "gain", "saturated_pct", "diameter_px", "detected", "note"],
 }
 
 
@@ -61,7 +62,7 @@ def load_csv(path: Path, kind: str) -> list[dict[str, str]]:
     need = {"stop_coast": ["speed_mm_s", "coast_mm"], "capture_time": ["settle_s", "capture_s"], "gait_slip": ["commanded_advance_mm", "measured_advance_mm"],
             "tag_detect": ["distance_mm", "detected"], "imu": ["t_s", "yaw_deg", "ref_yaw_deg"], "contact_load": ["location", "force_n"],
             "current": ["state", "current_a"], "power_sag": ["event", "v_nominal", "v_min"], "trip": ["device", "i_set_a", "tripped"],
-            "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"]}[kind]
+            "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"], "exposure": ["exposure_mode", "saturated_pct"]}[kind]
     if not rows:
         raise ValueError(f"{path}: 行が無い")
     missing = [c for c in need if c not in rows[0]]
@@ -323,10 +324,39 @@ def a_stop_time(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]
             "note": "`contact_release_ms` 20 は要求そのものが未確定（`contact_release_requirements.md`）。この要約は比較の材料で、合否ではない"}
 
 
+def a_exposure(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """実機カメラの露出と飽和: 露出の設定（`exposure_mode` + `gain`）ごとに、飽和画素の割合の分布と、検出の成否（Wilson 95%）。
+    `over_pct` の割合 = 飽和率がその値を超えたフレームの割合（**「撮り直し」の保護の要否の材料**。しきい値 50% は ENTRY-E-0018 (4) の案で、config には無い）。"""
+    over_pct = 50.0
+    by: dict[str, dict[str, list]] = {}
+    for r in rows:
+        sat = num(r, "saturated_pct")
+        if sat is None:
+            continue
+        g = (r.get("gain") or "").strip()
+        key = f"{(r.get('exposure_mode') or '?').strip()}" + (f"/gain={g}" if g else "")
+        d = by.setdefault(key, {"sat": [], "hit": []})
+        d["sat"].append(sat)
+        hit = (r.get("detected") or "").strip()
+        if hit in ("0", "1"):
+            d["hit"].append(int(hit))
+    out = {}
+    for k, d in sorted(by.items()):
+        s = np.array(d["sat"])
+        e = {"n": int(s.size), "saturated_pct": stats(s), "frac_over_pct": float(np.mean(s > over_pct))}
+        if d["hit"]:
+            kk, n = sum(d["hit"]), len(d["hit"])
+            lo, hi = wilson(kk, n)
+            e["detect"] = {"n": n, "rate": kk / n, "ci95": [lo, hi]}
+        out[k] = e
+    return {"by_exposure": out, "over_pct": over_pct,
+            "note": "合成（HG-H2）では gain 2.5 で通常光フレームの 71〜87% が飽和し検出が欠落した。**実機の自動露出がこれを抑えるか**を見る材料。合否ではない"}
+
+
 ANALYZERS: dict[str, Callable[[list[dict[str, str]], dict[str, Any]], dict[str, Any]]] = {
     "stop_coast": a_stop_coast, "capture_time": a_capture_time, "gait_slip": a_gait_slip, "tag_detect": a_tag_detect,
     "imu": a_imu, "contact_load": a_contact_load, "current": a_current,
-    "power_sag": a_power_sag, "trip": a_trip, "thermal": a_thermal, "servo_temp": a_servo_temp, "stop_time": a_stop_time,
+    "power_sag": a_power_sag, "trip": a_trip, "thermal": a_thermal, "servo_temp": a_servo_temp, "stop_time": a_stop_time, "exposure": a_exposure,
 }
 
 
