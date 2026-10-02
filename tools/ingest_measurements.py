@@ -56,6 +56,9 @@ COLUMNS: dict[str, list[str]] = {
     "j1_dead_backlash": ["date", "operator", "trial", "test_id", "direction", "goal_step", "servo_present_step", "output_mm", "note"],
     "j1_push": ["date", "operator", "test_id", "register_torque_limit", "torque_on", "force_n_mean", "force_n_sd", "n_samples", "note"],
     "j1_stopper": ["date", "operator", "speed_dps", "damper", "decel_deg", "torque_limit_reg", "peak_n", "rise_ms", "load_cell_fn_hz", "note"],
+    "tof_floor": ["date", "operator", "trial", "test", "surface", "height_mm", "speed_mm_s", "scenario", "distance_mm", "range_status", "classified", "note"],
+    "limiter_slip": ["date", "operator", "specimen", "direction", "slip_torque_nm", "temp_c", "cycle", "note"],
+    "cable_cycle": ["date", "operator", "trial", "cycles", "continuity_ohm", "wear", "broken", "note"],
 }
 
 
@@ -66,7 +69,8 @@ def load_csv(path: Path, kind: str) -> list[dict[str, str]]:
             "tag_detect": ["distance_mm", "detected"], "imu": ["t_s", "yaw_deg", "ref_yaw_deg"], "contact_load": ["location", "force_n"],
             "current": ["state", "current_a"], "power_sag": ["event", "v_nominal", "v_min"], "trip": ["device", "i_set_a", "tripped"],
             "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"], "exposure": ["exposure_mode", "saturated_pct"], "j1_dead_backlash": ["test_id", "direction", "goal_step", "servo_present_step"],
-            "j1_push": ["register_torque_limit", "torque_on", "force_n_mean"], "j1_stopper": ["damper", "peak_n"]}[kind]
+            "j1_push": ["register_torque_limit", "torque_on", "force_n_mean"], "j1_stopper": ["damper", "peak_n"],
+            "tof_floor": ["test", "surface", "distance_mm"], "limiter_slip": ["specimen", "slip_torque_nm"], "cable_cycle": ["cycles"]}[kind]
     if not rows:
         raise ValueError(f"{path}: 行が無い")
     missing = [c for c in need if c not in rows[0]]
@@ -456,11 +460,93 @@ def a_j1_stopper(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any
             "note": "ピンの許容荷重は prior（σ 200〜350 MPa の下限、曲げ・片持ち）。ロードセルの固有振動数 `load_cell_fn_hz` がピーク幅（`rise_ms`）より低いとピークを過小に読む。**合否ではない**"}
 
 
+# ---- ToF の崖判定（HT-005 / T6）、リミッターの滑りトルク（HG-S3 L1・L2）、ケーブルの耐久（HG-C1 C4）----------------
+LIMITER_WINDOW_NM = (0.7, 1.0)               # config / HG-S3 の窓（暫定。PROVISIONAL）
+LIMITER_TOL_CLOSE = 0.40                      # 個体差がこれを超えると窓が閉じる（HG-S3 の拡張 LB-E-042、dyn 2 の prior。**prior**。実測の個体差で置き換える）
+
+
+def a_tof_floor(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """T6-1 / T6-2 / T6-4: 面（床・縁・黒・鏡面…）ごとに、有効な読みの割合・距離の分布と、床 / 崖の判定の誤り。
+    **崖を床と判定した（見逃し = 危険側）**を別に数える。`scenario` = floor / cliff（実際の状態）、`classified` = floor / cliff / invalid（読みからの判定）。"""
+    by: dict[str, dict[str, Any]] = {}
+    for r in rows:
+        key = f"{(r.get('test') or '?').strip()}/{(r.get('surface') or '?').strip()}"
+        d = by.setdefault(key, {"dist": [], "n": 0, "valid": 0, "floor_n": 0, "floor_as_cliff": 0, "cliff_n": 0, "cliff_as_floor": 0})
+        d["n"] += 1
+        st = (r.get("range_status") or "").strip()
+        dist = num(r, "distance_mm")
+        if st in ("0", "") and dist is not None and dist > 0:
+            d["valid"] += 1
+            d["dist"].append(dist)
+        sc, cl = (r.get("scenario") or "").strip().lower(), (r.get("classified") or "").strip().lower()
+        if sc == "floor" and cl:
+            d["floor_n"] += 1
+            d["floor_as_cliff"] += int(cl == "cliff")
+        if sc == "cliff" and cl:
+            d["cliff_n"] += 1
+            d["cliff_as_floor"] += int(cl == "floor")
+    out = {}
+    for k, d in sorted(by.items()):
+        e: dict[str, Any] = {"n": d["n"], "valid_fraction": d["valid"] / d["n"], "distance_mm": stats(np.array(d["dist"]))}
+        if d["floor_n"]:
+            e["false_cliff_rate"] = d["floor_as_cliff"] / d["floor_n"]
+        if d["cliff_n"]:
+            lo, hi = wilson(d["cliff_as_floor"], d["cliff_n"])
+            e["cliff_missed"] = {"n": d["cliff_n"], "k": d["cliff_as_floor"], "rate": d["cliff_as_floor"] / d["cliff_n"], "ci95": [lo, hi]}
+        out[k] = e
+    return {"by_surface": out, "note": "崖の見逃し（危険側）の率。見逃しが 0 でも n が小さければ上限は 0 ではない（ci95 の上側を見る）。**合否ではない**。3V3 駆動では Wi-Fi 送信・撮影・LED 100 %・ToF のピークを同時にしない（K-0002）"}
+
+
+def a_limiter_slip(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """L1 / L2: 滑りトルクの値と個体差。公称（平均）・標準偏差・個体差（最大の偏差 / 平均）と、窓 0.7〜1.0 N·m に入る個体の割合。
+    温度・繰り返しごとに分ける。個体差が `LIMITER_TOL_CLOSE`（prior）を超えると窓が閉じる、という HG-S3 の読みとの比較（**合否ではない**）。"""
+    by: dict[str, list[float]] = {}
+    for r in rows:
+        x = num(r, "slip_torque_nm")
+        if x is None:
+            continue
+        key = f"{(r.get('direction') or 'any').strip()}/T={(r.get('temp_c') or '?').strip()}/cycle={(r.get('cycle') or '0').strip()}"
+        by.setdefault(key, []).append(x)
+    out = {}
+    for k, v in sorted(by.items()):
+        a = np.array(v)
+        mean = float(a.mean())
+        dev = float(np.max(np.abs(a - mean)) / mean) if mean > 0 else float("nan")
+        out[k] = {"n": int(a.size), "mean_nm": mean, "sd_nm": float(a.std(ddof=1)) if a.size > 1 else 0.0, "max_deviation_frac": dev,
+                  "in_window_fraction": float(np.mean((a >= LIMITER_WINDOW_NM[0]) & (a <= LIMITER_WINDOW_NM[1]))),
+                  "deviation_over_window_closing_prior": bool(dev > LIMITER_TOL_CLOSE)}
+    return {"by_condition": out, "window_nm": list(LIMITER_WINDOW_NM), "window_closing_tolerance_prior": LIMITER_TOL_CLOSE,
+            "note": "窓は PROVISIONAL。n が小さい（試験片 10 個未満）と個体差を過小に見る。歯車の破断トルク（L3）は別（資料 / 破壊試験 = D）"}
+
+
+def a_cable_cycle(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """C4: ±50° 往復の耐久。最大の回数、導通（抵抗）の変化、被覆の擦れ（wear 0/1/2）・断線の最初の回数。`verified_with_cable` の材料（**User 承認と記録が要る**）。"""
+    cyc, ohm, wear_first, break_first = [], [], None, None
+    for r in sorted(rows, key=lambda r: num(r, "cycles") or 0.0):
+        n = num(r, "cycles")
+        if n is None:
+            continue
+        cyc.append(n)
+        o = num(r, "continuity_ohm")
+        if o is not None:
+            ohm.append(o)
+        w = (r.get("wear") or "").strip()
+        if w in ("1", "2") and wear_first is None:
+            wear_first = n
+        if (r.get("broken") or "").strip() in ("1", "true", "True") and break_first is None:
+            break_first = n
+    return {"max_cycles": max(cyc) if cyc else None, "first_wear_at_cycles": wear_first, "first_break_at_cycles": break_first,
+            "continuity_change_frac": (max(ohm) - ohm[0]) / ohm[0] if len(ohm) > 1 and ohm[0] > 0 else None,
+            "target_cycles": 1000,
+            "note": "目標は 1000 往復（0.5 Hz で約 33 分）。擦れも断線も導通の変化も無いことが `joint_limit_policy.verified_with_cable` の材料。**この取り込みは合否を出さない・config を書き換えない**"}
+
+
 ANALYZERS: dict[str, Callable[[list[dict[str, str]], dict[str, Any]], dict[str, Any]]] = {
     "stop_coast": a_stop_coast, "capture_time": a_capture_time, "gait_slip": a_gait_slip, "tag_detect": a_tag_detect,
     "imu": a_imu, "contact_load": a_contact_load, "current": a_current,
     "power_sag": a_power_sag, "trip": a_trip, "thermal": a_thermal, "servo_temp": a_servo_temp, "stop_time": a_stop_time, "exposure": a_exposure,
     "j1_dead_backlash": a_j1_dead_backlash, "j1_push": a_j1_push, "j1_stopper": a_j1_stopper,
+    "tof_floor": a_tof_floor, "limiter_slip": a_limiter_slip, "cable_cycle": a_cable_cycle,
 }
 
 

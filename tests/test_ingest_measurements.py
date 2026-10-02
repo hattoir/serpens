@@ -220,3 +220,35 @@ def test_j1_stopper_peaks_are_grouped_and_compared_with_the_pin(im, tmp_path: Pa
     a, b = res["by_setting"]["tpu/decel=3"], res["by_setting"]["none/decel=0"]
     assert a["n"] == 3 and a["peak_n"]["max"] == 50.0 and b["max_over_steel_pin_capacity"] > a["max_over_steel_pin_capacity"]
     assert abs(a["max_over_steel_pin_capacity"] - 50.0 / res["steel_pin_capacity_n_at_200mpa"]) < 1e-9
+
+
+def test_tof_floor_counts_missed_cliffs_separately_and_valid_fraction(im, tmp_path: Path) -> None:
+    rows = [{"test": "T6-2", "surface": "wood", "scenario": "floor", "distance_mm": 45, "range_status": 0, "classified": "floor"} for _ in range(18)]
+    rows += [{"test": "T6-2", "surface": "wood", "scenario": "floor", "distance_mm": 45, "range_status": 0, "classified": "cliff"} for _ in range(2)]
+    rows += [{"test": "T6-2", "surface": "edge", "scenario": "cliff", "distance_mm": 90, "range_status": 0, "classified": "cliff"} for _ in range(19)]
+    rows += [{"test": "T6-2", "surface": "edge", "scenario": "cliff", "distance_mm": 50, "range_status": 0, "classified": "floor"}]
+    rows += [{"test": "T6-4", "surface": "black", "scenario": "floor", "distance_mm": "", "range_status": 4, "classified": "cliff"} for _ in range(10)]
+    res, _ = im.ingest("tof_floor", write(tmp_path / "t.csv", im.COLUMNS["tof_floor"], rows), tmp_path / "out")
+    w, e, b = res["by_surface"]["T6-2/wood"], res["by_surface"]["T6-2/edge"], res["by_surface"]["T6-4/black"]
+    assert w["false_cliff_rate"] == 0.1 and w["valid_fraction"] == 1.0
+    assert e["cliff_missed"]["k"] == 1 and e["cliff_missed"]["n"] == 20 and e["cliff_missed"]["ci95"][1] > 0.05
+    assert b["valid_fraction"] == 0.0 and b["false_cliff_rate"] == 1.0                      # 黒い床で無効 → 崖と誤判定（止まる側 = 安全側）
+
+
+def test_limiter_slip_deviation_and_window_fraction(im, tmp_path: Path) -> None:
+    vals = [0.8, 0.9, 1.0, 0.7, 0.85, 0.95, 0.75, 0.65, 1.05, 0.8]
+    rows = [{"specimen": i, "direction": "cw", "slip_torque_nm": v, "temp_c": 25, "cycle": 0} for i, v in enumerate(vals)]
+    rows += [{"specimen": i, "direction": "cw", "slip_torque_nm": v * 0.5, "temp_c": 60, "cycle": 0} for i, v in enumerate(vals)]
+    res, _ = im.ingest("limiter_slip", write(tmp_path / "l.csv", im.COLUMNS["limiter_slip"], rows), tmp_path / "out")
+    a, b = res["by_condition"]["cw/T=25/cycle=0"], res["by_condition"]["cw/T=60/cycle=0"]
+    assert abs(a["mean_nm"] - float(np.mean(vals))) < 1e-9 and a["n"] == 10
+    assert a["in_window_fraction"] == 0.8 and b["in_window_fraction"] == 0.0               # 65 と 105 は窓の外 / 60 ℃では全部下回る
+    assert a["deviation_over_window_closing_prior"] is False
+
+
+def test_cable_cycle_finds_first_wear_and_break(im, tmp_path: Path) -> None:
+    rows = [{"trial": i, "cycles": c, "continuity_ohm": 0.10 + (0.02 if c >= 700 else 0.0), "wear": 1 if c >= 500 else 0, "broken": 1 if c >= 900 else 0}
+            for i, c in enumerate((0, 100, 300, 500, 700, 900, 1000))]
+    res, _ = im.ingest("cable_cycle", write(tmp_path / "c.csv", im.COLUMNS["cable_cycle"], rows), tmp_path / "out")
+    assert res["max_cycles"] == 1000 and res["first_wear_at_cycles"] == 500 and res["first_break_at_cycles"] == 900
+    assert abs(res["continuity_change_frac"] - 0.2) < 1e-9
