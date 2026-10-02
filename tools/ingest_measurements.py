@@ -53,6 +53,9 @@ COLUMNS: dict[str, list[str]] = {
     "servo_temp": ["date", "operator", "trial", "t_s", "temp_c", "load", "stopped", "note"],
     "stop_time": ["date", "operator", "trial", "trigger", "what", "t_trigger_ms", "t_effect_ms", "esp32_running", "note"],
     "exposure": ["date", "operator", "trial", "light", "floor", "object", "exposure_mode", "gain", "saturated_pct", "diameter_px", "detected", "note"],
+    "j1_dead_backlash": ["date", "operator", "trial", "test_id", "direction", "goal_step", "servo_present_step", "output_mm", "note"],
+    "j1_push": ["date", "operator", "test_id", "register_torque_limit", "torque_on", "force_n_mean", "force_n_sd", "n_samples", "note"],
+    "j1_stopper": ["date", "operator", "speed_dps", "damper", "decel_deg", "torque_limit_reg", "peak_n", "rise_ms", "load_cell_fn_hz", "note"],
 }
 
 
@@ -62,7 +65,8 @@ def load_csv(path: Path, kind: str) -> list[dict[str, str]]:
     need = {"stop_coast": ["speed_mm_s", "coast_mm"], "capture_time": ["settle_s", "capture_s"], "gait_slip": ["commanded_advance_mm", "measured_advance_mm"],
             "tag_detect": ["distance_mm", "detected"], "imu": ["t_s", "yaw_deg", "ref_yaw_deg"], "contact_load": ["location", "force_n"],
             "current": ["state", "current_a"], "power_sag": ["event", "v_nominal", "v_min"], "trip": ["device", "i_set_a", "tripped"],
-            "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"], "exposure": ["exposure_mode", "saturated_pct"]}[kind]
+            "thermal": ["point", "t_min", "temp_c"], "servo_temp": ["t_s", "temp_c"], "stop_time": ["trigger", "what", "t_trigger_ms", "t_effect_ms"], "exposure": ["exposure_mode", "saturated_pct"], "j1_dead_backlash": ["test_id", "direction", "goal_step", "servo_present_step"],
+            "j1_push": ["register_torque_limit", "torque_on", "force_n_mean"], "j1_stopper": ["damper", "peak_n"]}[kind]
     if not rows:
         raise ValueError(f"{path}: 行が無い")
     missing = [c for c in need if c not in rows[0]]
@@ -353,10 +357,110 @@ def a_exposure(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
             "note": "合成（HG-H2）では gain 2.5 で通常光フレームの 71〜87% が飽和し検出が欠落した。**実機の自動露出がこれを抑えるか**を見る材料。合否ではない"}
 
 
+# ---- J1（頭ピッチ）の実測（HT-002 / 003 / 004 / 012。LB-E-059）-----------------------------------------------
+J1_ARM_MM = 44.0                                            # J1 軸から横スキッドの前端 / ダイヤルゲージまでの腕 [mm]（j1_head_pitch.md §1。ASSUMED。実測で置き換える）
+J1_STEP_DEG = 360.0 / 4096.0
+
+
+def _j1_opt():
+    """`simulation/hardware_gaps/HG-H1_actuator/j1_range_opt.py` を読む（範囲の候補・窓の端の速さの式を再利用。式を二重に持たない）。"""
+    import importlib.util
+    p = ROOT / "simulation" / "hardware_gaps" / "HG-H1_actuator" / "j1_range_opt.py"
+    spec = importlib.util.spec_from_file_location("j1_range_opt", p)
+    m = importlib.util.module_from_spec(spec)
+    sys.modules["j1_range_opt"] = m
+    spec.loader.exec_module(m)
+    return m
+
+
+def a_j1_dead_backlash(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """J1-1（不感帯 D）と J1-2（バックラッシ B）→ 範囲の端の「減速できる速さ」を、**測った D・B で**再計算する（prior の置き換え）。
+    D = J1-1 の |読み値 − 目標| の最大（ステップ。量子化を含む上界）。B = J1-2 の、同じ目標へ上から / 下から着いたときの**出力側の**差（ダイヤルゲージ、腕 44 mm）。
+    エンコーダがモーター側なら（サーボの読み値の差 < 出力の差の半分）B は位置の誤差に足される。出力側なら B は読み値に出ているので D に含まれる。"""
+    o = _j1_opt()
+    errs: dict[str, list[float]] = {}
+    for r in rows:
+        if (r.get("test_id") or "").strip().upper() != "J1-1":
+            continue
+        g, p = num(r, "goal_step"), num(r, "servo_present_step")
+        if g is None or p is None:
+            continue
+        errs.setdefault((r.get("direction") or "?").strip().lower(), []).append(abs(p - g))
+    d_by_dir = {k: float(max(v)) for k, v in errs.items()}
+    d_hat = max(d_by_dir.values()) if d_by_dir else None
+    by_goal: dict[float, dict[str, list[tuple[float, float]]]] = {}
+    for r in rows:
+        if (r.get("test_id") or "").strip().upper() != "J1-2":
+            continue
+        g, s, out = num(r, "goal_step"), num(r, "servo_present_step"), num(r, "output_mm")
+        if g is None or s is None or out is None:
+            continue
+        by_goal.setdefault(g, {}).setdefault((r.get("direction") or "?").strip().lower(), []).append((s, out))
+    b_out, b_servo = [], []
+    for g, dd in by_goal.items():
+        if "up" in dd and "down" in dd:
+            mo = lambda k, i: float(np.mean([x[i] for x in dd[k]]))
+            b_out.append(abs(mo("up", 1) - mo("down", 1)) / J1_ARM_MM * 180.0 / math.pi / J1_STEP_DEG)           # mm → rad → ° → ステップ
+            b_servo.append(abs(mo("up", 0) - mo("down", 0)))
+    b_hat = float(np.mean(b_out)) if b_out else None
+    motor_side = None if not b_out else bool(np.mean(b_servo) < 0.5 * np.mean(b_out))
+    res: dict[str, Any] = {"dead_band_steps": d_hat, "dead_band_by_direction": d_by_dir, "backlash_steps": b_hat, "backlash_n_goals": len(b_out),
+                           "encoder_on_motor_side": motor_side, "arm_mm": J1_ARM_MM}
+    if d_hat is None:
+        res["note"] = "J1-1 の行が無い（D が決まらない）"
+        return res
+    m_steps = 0.5 + d_hat + (b_hat if (motor_side and b_hat is not None) else 0.0)
+    m_deg = m_steps * J1_STEP_DEG
+    cap = {}
+    for side, cands in (("hi", o.HI_CANDIDATES), ("lo", o.LO_CANDIDATES)):
+        for e in cands:
+            w = o.speed_cap_dps(e, side, m_deg, o.A_DECEL_MIN)
+            cap[f"{side}:{e:g}"] = {"cap_dps_at_conservative_decel": w, "feasible": bool(w >= o.V_NEAR_MIN)}
+    res.update({"position_error_steps": m_steps, "position_error_deg": m_deg, "decel_conservative_dps2": o.A_DECEL_MIN, "v_near_min_dps": o.V_NEAR_MIN, "edges": cap,
+                "note": "prior（D 0〜4、B 0〜8 ステップ、エンコーダがモーター側の確率 0.5）を測った値に置き換えた再計算。減速度は保守側（1000 °/s²。最大 2233）。**判定ではなく、範囲を決め直す材料**"})
+    return res
+
+
+def a_j1_push(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """J1-3: 上限レジスタごとの押す力（サーボ分 = トルク ON − OFF）。暫定しきい値 5.7 N（PROVISIONAL）の半分 2.8 N と頭の重さ（約 1 N）との比を添える（合否ではない）。"""
+    off = [num(r, "force_n_mean") for r in rows if (r.get("torque_on") or "").strip() in ("0", "false", "False") and num(r, "force_n_mean") is not None]
+    base = float(np.mean(off)) if off else None
+    by: dict[str, list[float]] = {}
+    for r in rows:
+        if (r.get("torque_on") or "").strip() not in ("1", "true", "True"):
+            continue
+        f = num(r, "force_n_mean")
+        if f is None:
+            continue
+        by.setdefault((r.get("register_torque_limit") or "?").strip(), []).append(f)
+    out = {}
+    for k, v in sorted(by.items(), key=lambda kv: float(kv[0]) if kv[0].replace(".", "", 1).isdigit() else 1e9):
+        f = float(np.mean(v)) - (base or 0.0)
+        out[k] = {"n": len(v), "servo_force_n": f, "ratio_to_2p8_n": f / 2.8, "ratio_to_head_weight_1n": f / 1.0}
+    return {"torque_off_baseline_n": base, "by_register": out, "provisional_threshold_n": 5.7,
+            "note": "5.7 N は PROVISIONAL / SAFETY_UNVERIFIED。OFF の基準が無いと servo_force は ON の値そのまま（過大になりうる）"}
+
+
+def a_j1_stopper(rows: list[dict[str, str]], c: dict[str, Any]) -> dict[str, Any]:
+    """ストッパーの衝撃: (緩衝材, 減速開始角) ごとのピーク荷重 N。ピン（鋼 φ3、曲げ）の許容荷重の prior（σ 200 MPa の下限）との比を添える（合否ではない）。"""
+    o = _j1_opt()
+    by: dict[str, list[float]] = {}
+    for r in rows:
+        pk = num(r, "peak_n")
+        if pk is None:
+            continue
+        by.setdefault(f"{(r.get('damper') or '?').strip()}/decel={(r.get('decel_deg') or '?').strip()}", []).append(pk)
+    cap = o.pin_capacity("steel", 200.0)
+    out = {k: {"n": len(v), "peak_n": stats(np.array(v)), "max_over_steel_pin_capacity": float(max(v) / cap)} for k, v in sorted(by.items())}
+    return {"by_setting": out, "steel_pin_capacity_n_at_200mpa": cap,
+            "note": "ピンの許容荷重は prior（σ 200〜350 MPa の下限、曲げ・片持ち）。ロードセルの固有振動数 `load_cell_fn_hz` がピーク幅（`rise_ms`）より低いとピークを過小に読む。**合否ではない**"}
+
+
 ANALYZERS: dict[str, Callable[[list[dict[str, str]], dict[str, Any]], dict[str, Any]]] = {
     "stop_coast": a_stop_coast, "capture_time": a_capture_time, "gait_slip": a_gait_slip, "tag_detect": a_tag_detect,
     "imu": a_imu, "contact_load": a_contact_load, "current": a_current,
     "power_sag": a_power_sag, "trip": a_trip, "thermal": a_thermal, "servo_temp": a_servo_temp, "stop_time": a_stop_time, "exposure": a_exposure,
+    "j1_dead_backlash": a_j1_dead_backlash, "j1_push": a_j1_push, "j1_stopper": a_j1_stopper,
 }
 
 

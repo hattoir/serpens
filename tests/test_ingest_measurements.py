@@ -171,3 +171,52 @@ def test_exposure_groups_by_setting_and_counts_saturated_frames(im, tmp_path: Pa
     fx, au = res["by_exposure"]["fixed/gain=2.5"], res["by_exposure"]["auto"]
     assert fx["n"] == 10 and fx["frac_over_pct"] == 1.0 and fx["detect"]["rate"] == 0.0
     assert au["n"] == 10 and au["frac_over_pct"] == 0.0 and au["detect"]["rate"] == 1.0 and au["saturated_pct"]["max"] < 5
+
+
+def _j1_rows_dead_backlash(d_steps: int, backlash_steps: float, motor_side: bool = True) -> list[dict]:
+    rows = []
+    for g in range(-5, 6):                                                      # J1-1: 目標 ±5 ステップ、上から / 下から。読み値は目標から最大 d_steps ずれる
+        for dr, sgn in (("up", 1), ("down", -1)):
+            rows.append({"trial": len(rows), "test_id": "J1-1", "direction": dr, "goal_step": g, "servo_present_step": g + sgn * (abs(g) % (d_steps + 1)), "output_mm": ""})
+    mm_per_step = 44.0 * math.radians(360.0 / 4096.0)
+    for g in (-10, 0, 10):                                                      # J1-2: 同じ目標へ上から / 下から。出力側の差 = backlash_steps × 1 ステップの弧長
+        for dr, sgn in (("up", 0.5), ("down", -0.5)):
+            rows.append({"trial": len(rows), "test_id": "J1-2", "direction": dr, "goal_step": g, "servo_present_step": g if motor_side else g + sgn * backlash_steps,
+                         "output_mm": sgn * backlash_steps * mm_per_step})
+    return rows
+
+
+def test_j1_dead_band_and_backlash_are_recovered_and_replace_the_prior(im, tmp_path: Path) -> None:
+    rows = _j1_rows_dead_backlash(3, 6.0, motor_side=True)
+    res, _ = im.ingest("j1_dead_backlash", write(tmp_path / "j.csv", im.COLUMNS["j1_dead_backlash"], rows), tmp_path / "out")
+    assert res["dead_band_steps"] == 3.0
+    assert abs(res["backlash_steps"] - 6.0) < 1e-6 and res["encoder_on_motor_side"] is True
+    assert abs(res["position_error_steps"] - (0.5 + 3 + 6.0)) < 1e-9
+    # 位置の誤差が大きいほど、窓の端の手前で出せる速さは小さくなる（ストッパーが窓の端に近い候補ほど先に成り立たなくなる）
+    res0, _ = im.ingest("j1_dead_backlash", write(tmp_path / "j0.csv", im.COLUMNS["j1_dead_backlash"], _j1_rows_dead_backlash(0, 0.0)), tmp_path / "out0")
+    for k, v in res["edges"].items():
+        assert v["cap_dps_at_conservative_decel"] <= res0["edges"][k]["cap_dps_at_conservative_decel"] + 1e-9
+    assert any(v["feasible"] for v in res0["edges"].values()) and not all(v["feasible"] for v in res["edges"].values())
+
+
+def test_j1_backlash_on_the_output_encoder_is_not_added(im, tmp_path: Path) -> None:
+    rows = _j1_rows_dead_backlash(2, 6.0, motor_side=False)
+    res, _ = im.ingest("j1_dead_backlash", write(tmp_path / "j.csv", im.COLUMNS["j1_dead_backlash"], rows), tmp_path / "out")
+    assert res["encoder_on_motor_side"] is False and abs(res["position_error_steps"] - (0.5 + res["dead_band_steps"])) < 1e-9
+
+
+def test_j1_push_subtracts_the_torque_off_baseline(im, tmp_path: Path) -> None:
+    rows = [{"test_id": "J1-3", "register_torque_limit": 0, "torque_on": 0, "force_n_mean": 1.0, "force_n_sd": 0.01, "n_samples": 10},
+            {"test_id": "J1-3", "register_torque_limit": 8, "torque_on": 1, "force_n_mean": 1.5, "force_n_sd": 0.01, "n_samples": 10},
+            {"test_id": "J1-3", "register_torque_limit": 20, "torque_on": 1, "force_n_mean": 4.2, "force_n_sd": 0.01, "n_samples": 10}]
+    res, _ = im.ingest("j1_push", write(tmp_path / "p.csv", im.COLUMNS["j1_push"], rows), tmp_path / "out")
+    assert abs(res["by_register"]["8"]["servo_force_n"] - 0.5) < 1e-9 and abs(res["by_register"]["20"]["ratio_to_2p8_n"] - 3.2 / 2.8) < 1e-9
+
+
+def test_j1_stopper_peaks_are_grouped_and_compared_with_the_pin(im, tmp_path: Path) -> None:
+    rows = [{"speed_dps": 120, "damper": "tpu", "decel_deg": 3, "torque_limit_reg": 167, "peak_n": p, "rise_ms": 2, "load_cell_fn_hz": 800} for p in (30, 40, 50)]
+    rows += [{"speed_dps": 120, "damper": "none", "decel_deg": 0, "torque_limit_reg": 167, "peak_n": 120, "rise_ms": 1, "load_cell_fn_hz": 800}]
+    res, _ = im.ingest("j1_stopper", write(tmp_path / "s.csv", im.COLUMNS["j1_stopper"], rows), tmp_path / "out")
+    a, b = res["by_setting"]["tpu/decel=3"], res["by_setting"]["none/decel=0"]
+    assert a["n"] == 3 and a["peak_n"]["max"] == 50.0 and b["max_over_steel_pin_capacity"] > a["max_over_steel_pin_capacity"]
+    assert abs(a["max_over_steel_pin_capacity"] - 50.0 / res["steel_pin_capacity_n_at_200mpa"]) < 1e-9
