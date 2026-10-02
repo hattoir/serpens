@@ -1,0 +1,39 @@
+{
+ "base": {
+  "n": 96,
+  "n_ok": 1,
+  "max_feasible_e_mm": 0.0,
+  "best_bow_mm": 11.915119476266584,
+  "feasible_e": [
+   0.0
+  ],
+  "feasible_a": [
+   25.0
+  ],
+  "feasible_dz": [
+   20.0
+  ]
+ },
+ "wide": {
+  "n": 1296,
+  "n_ok": 15,
+  "max_feasible_e_mm": 2.5,
+  "best_bow_mm": 6.620116999918428,
+  "feasible_e": [
+   0.0,
+   2.5
+  ],
+  "feasible_a": [
+   7.5,
+   15.0,
+   20.0,
+   25.0
+  ],
+  "feasible_dz": [
+   0.0,
+   10.0,
+   20.0,
+   40.0
+  ]
+ }
+}

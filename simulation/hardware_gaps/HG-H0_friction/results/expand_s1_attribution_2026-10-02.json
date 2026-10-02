@@ -1,0 +1,106 @@
+{
+ "A_fine_grid_only": {
+  "waves": [
+   0.75,
+   1.0,
+   1.25,
+   1.5
+  ],
+  "boundaries": {
+   "decoupled": {
+    "FW5": 5.264393666491955,
+    "FW5:speed_only": 5.264393666491955,
+    "FW6_HEADYAW": 5.264393666491955,
+    "FW6_HEADYAW:speed_only": 5.264393666491955,
+    "FW6_YAW5": 3.3187444647878204,
+    "FW6_YAW5:speed_only": 3.3187444647878204,
+    "FW7_YAW5_HEADYAW": 3.639558655090321,
+    "FW7_YAW5_HEADYAW:speed_only": 3.639558655090321,
+    "FW7_YAW6": 2.294426653107908,
+    "FW7_YAW6:speed_only": 2.294426653107908
+   },
+   "ellipse": {
+    "FW5": 2.7594593229224293,
+    "FW5:speed_only": 2.7594593229224293,
+    "FW6_HEADYAW": 2.7594593229224293,
+    "FW6_HEADYAW:speed_only": 2.7594593229224293,
+    "FW6_YAW5": 2.092181079212349,
+    "FW6_YAW5:speed_only": 2.092181079212349,
+    "FW7_YAW5_HEADYAW": 2.092181079212349,
+    "FW7_YAW5_HEADYAW:speed_only": 2.092181079212349,
+    "FW7_YAW6": 1.5862606242654866,
+    "FW7_YAW6:speed_only": 1.5862606242654866
+   }
+  }
+ },
+ "B_plus_0.5": {
+  "waves": [
+   0.5,
+   0.75,
+   1.0,
+   1.25,
+   1.5
+  ],
+  "boundaries": {
+   "decoupled": {
+    "FW5": 3.026208907817826,
+    "FW5:speed_only": 3.026208907817826,
+    "FW6_HEADYAW": 3.026208907817826,
+    "FW6_HEADYAW:speed_only": 3.026208907817826,
+    "FW6_YAW5": 1.9077627355335152,
+    "FW6_YAW5:speed_only": 1.9077627355335152,
+    "FW7_YAW5_HEADYAW": 1.9077627355335152,
+    "FW7_YAW5_HEADYAW:speed_only": 1.9077627355335152,
+    "FW7_YAW6": 1.5862606242654866,
+    "FW7_YAW6:speed_only": 1.5862606242654866
+   },
+   "ellipse": {
+    "FW5": 1.9077627355335152,
+    "FW5:speed_only": 1.9077627355335152,
+    "FW6_HEADYAW": 1.9077627355335152,
+    "FW6_HEADYAW:speed_only": 1.9077627355335152,
+    "FW6_YAW5": 1.4464373747979375,
+    "FW6_YAW5:speed_only": 1.4464373747979375,
+    "FW7_YAW5_HEADYAW": 1.5862606242654866,
+    "FW7_YAW5_HEADYAW:speed_only": 1.5862606242654866,
+    "FW7_YAW6": 1.3189390489858044,
+    "FW7_YAW6:speed_only": 1.3189390489858044
+   }
+  }
+ },
+ "C_plus_2.0": {
+  "waves": [
+   0.75,
+   1.0,
+   1.25,
+   1.5,
+   2.0
+  ],
+  "boundaries": {
+   "decoupled": {
+    "FW5": 5.264393666491955,
+    "FW5:speed_only": 5.264393666491955,
+    "FW6_HEADYAW": 5.264393666491955,
+    "FW6_HEADYAW:speed_only": 5.264393666491955,
+    "FW6_YAW5": 3.3187444647878204,
+    "FW6_YAW5:speed_only": 3.3187444647878204,
+    "FW7_YAW5_HEADYAW": 3.639558655090321,
+    "FW7_YAW5_HEADYAW:speed_only": 3.639558655090321,
+    "FW7_YAW6": 2.294426653107908,
+    "FW7_YAW6:speed_only": 2.294426653107908
+   },
+   "ellipse": {
+    "FW5": 2.7594593229224293,
+    "FW5:speed_only": 2.7594593229224293,
+    "FW6_HEADYAW": 2.7594593229224293,
+    "FW6_HEADYAW:speed_only": 2.7594593229224293,
+    "FW6_YAW5": 2.092181079212349,
+    "FW6_YAW5:speed_only": 2.092181079212349,
+    "FW7_YAW5_HEADYAW": 2.092181079212349,
+    "FW7_YAW5_HEADYAW:speed_only": 2.092181079212349,
+    "FW7_YAW6": 1.5862606242654866,
+    "FW7_YAW6:speed_only": 1.5862606242654866
+   }
+  }
+ }
+}

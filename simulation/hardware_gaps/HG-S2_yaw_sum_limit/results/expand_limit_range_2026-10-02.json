@@ -1,0 +1,25 @@
+{
+ "max_yaw_sum_of_any_gait_deg": 215.56587706672832,
+ "limits": {
+  "180": {
+   "max_speed_change_mm_s": 0.0,
+   "max_turn_radius_reduction_mm": 152.23819288775917,
+   "max_turn_radius_reduction_frac": 0.9826528593198193
+  },
+  "215": {
+   "max_speed_change_mm_s": 0.0,
+   "max_turn_radius_reduction_mm": 178.30948347486407,
+   "max_turn_radius_reduction_frac": 0.9826528593198193
+  },
+  "250": {
+   "max_speed_change_mm_s": 0.0,
+   "max_turn_radius_reduction_mm": 178.30948347486407,
+   "max_turn_radius_reduction_frac": 0.9826528593198193
+  },
+  "290": {
+   "max_speed_change_mm_s": 0.0,
+   "max_turn_radius_reduction_mm": 178.30948347486407,
+   "max_turn_radius_reduction_frac": 0.9826528593198193
+  }
+ }
+}

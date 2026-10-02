@@ -1,0 +1,20 @@
+{
+ "base": {
+  "max_peak_demand_trackable_p90_nm": 0.24423957224803577,
+  "p_backdrive_gt_cap": 0.20533333333333334,
+  "f_impact_p50_n": 9.00266869208323,
+  "runtime_p05_min_heaviest": 5.952306906865294
+ },
+ "wide": {
+  "max_peak_demand_trackable_p90_nm": null,
+  "p_backdrive_gt_cap": 0.23533333333333334,
+  "f_impact_p50_n": 3.4442722917633803,
+  "runtime_p05_min_heaviest": 2.721331159524853
+ },
+ "shift": {
+  "max_peak_demand_trackable_p90_nm": null,
+  "p_backdrive_gt_cap": 0.1461038961038961,
+  "f_impact_p50_n": -0.6174165228592489,
+  "runtime_p05_min_heaviest": -0.5428106779262148
+ }
+}

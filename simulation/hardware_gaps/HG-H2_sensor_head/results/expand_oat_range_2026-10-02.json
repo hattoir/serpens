@@ -1,0 +1,393 @@
+{
+ "extra": [
+  {
+   "tag": "fov_h_deg=30.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "fov_h_deg=120.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "width_px=320",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "width_px=3200",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "cam_height_mm=10.0",
+   "ok": true,
+   "recall_patrol": 0.75,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "cam_height_mm=90.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "cam_pitch_deg=5.0",
+   "ok": false,
+   "recall_patrol": 0.0625,
+   "recall_inspect_online": 0.125,
+   "false_alarm_patrol": 0.0,
+   "missed": "bead_6mm;button_cr2032;button_lr44;coin_1yen;magnet_ferrite;magnet_neo;pill_white"
+  },
+  {
+   "tag": "cam_pitch_deg=75.0",
+   "ok": false,
+   "recall_patrol": 0.625,
+   "recall_inspect_online": 0.625,
+   "false_alarm_patrol": 0.0,
+   "missed": "button_lr44;coin_1yen;crumb"
+  },
+  {
+   "tag": "distortion_k1=-0.7",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "focus_mm=30.0",
+   "ok": false,
+   "recall_patrol": 0.875,
+   "recall_inspect_online": 0.875,
+   "false_alarm_patrol": 0.0,
+   "missed": "button_lr44"
+  },
+  {
+   "tag": "focus_mm=20000.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "aperture_mm=0.25",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "aperture_mm=3.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "motion_blur_px=20.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "exposure_gain=0.25",
+   "ok": false,
+   "recall_patrol": 0.9375,
+   "recall_inspect_online": 0.875,
+   "false_alarm_patrol": 0.0,
+   "missed": "button_lr44"
+  },
+  {
+   "tag": "exposure_gain=5.0",
+   "ok": false,
+   "recall_patrol": 0.0625,
+   "recall_inspect_online": 0.125,
+   "false_alarm_patrol": 0.0,
+   "missed": "bead_6mm;button_cr2032;button_lr44;coin_1yen;crumb;magnet_neo;pill_white"
+  },
+  {
+   "tag": "read_noise=20.0",
+   "ok": false,
+   "recall_patrol": 0.5,
+   "recall_inspect_online": 0.5,
+   "false_alarm_patrol": 0.0,
+   "missed": "button_lr44;coin_1yen;crumb;magnet_ferrite"
+  },
+  {
+   "tag": "floor_albedo=0.1",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "floor_albedo=0.95",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "raking_led_height_mm=50.0",
+   "ok": false,
+   "recall_patrol": 0.625,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "shadow_factor=0.05",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "shadow_factor=0.95",
+   "ok": false,
+   "recall_patrol": 0.0,
+   "recall_inspect_online": 0.875,
+   "false_alarm_patrol": 0.0,
+   "missed": "crumb"
+  },
+  {
+   "tag": "line_width_mm=0.5",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "line_width_mm=12.0",
+   "ok": true,
+   "recall_patrol": 1.0,
+   "recall_inspect_online": 1.0,
+   "false_alarm_patrol": 0.0,
+   "missed": ""
+  },
+  {
+   "tag": "ambient_lux=400.0",
+   "ok": false,
+   "recall_patrol": 0.0,
+   "recall_inspect_online": 0.0,
+   "false_alarm_patrol": 0.0,
+   "missed": "bead_6mm;button_cr2032;button_lr44;coin_1yen;crumb;magnet_ferrite;magnet_neo;pill_white"
+  },
+  {
+   "tag": "ambient_lux=1000.0",
+   "ok": false,
+   "recall_patrol": 0.0,
+   "recall_inspect_online": 0.0,
+   "false_alarm_patrol": 0.0,
+   "missed": "bead_6mm;button_cr2032;button_lr44;coin_1yen;crumb;magnet_ferrite;magnet_neo;pill_white"
+  }
+ ],
+ "pass_range": {
+  "fov_h_deg": {
+   "nominal": 65.0,
+   "pass": [
+    30.0,
+    50.0,
+    65.0,
+    80.0,
+    100.0,
+    120.0
+   ],
+   "fail": []
+  },
+  "width_px": {
+   "nominal": 1600,
+   "pass": [
+    320.0,
+    640.0,
+    1024.0,
+    1600.0,
+    2048.0,
+    3200.0
+   ],
+   "fail": []
+  },
+  "cam_height_mm": {
+   "nominal": 30.0,
+   "pass": [
+    10.0,
+    20.0,
+    30.0,
+    45.0,
+    60.0,
+    90.0
+   ],
+   "fail": []
+  },
+  "cam_pitch_deg": {
+   "nominal": 25.0,
+   "pass": [
+    15.0,
+    25.0,
+    35.0
+   ],
+   "fail": [
+    5.0,
+    50.0,
+    75.0
+   ]
+  },
+  "distortion_k1": {
+   "nominal": 0.0,
+   "pass": [
+    -0.7,
+    -0.35,
+    -0.2,
+    -0.1,
+    0.0
+   ],
+   "fail": []
+  },
+  "focus_mm": {
+   "nominal": 100.0,
+   "pass": [
+    70.0,
+    100.0,
+    200.0,
+    500.0,
+    5000.0,
+    20000.0
+   ],
+   "fail": [
+    30.0
+   ]
+  },
+  "aperture_mm": {
+   "nominal": 1.0,
+   "pass": [
+    0.25,
+    0.5,
+    1.0,
+    1.5,
+    3.0
+   ],
+   "fail": []
+  },
+  "motion_blur_px": {
+   "nominal": 0.0,
+   "pass": [
+    0.0,
+    2.0,
+    5.0,
+    10.0,
+    20.0
+   ],
+   "fail": []
+  },
+  "exposure_gain": {
+   "nominal": 1.0,
+   "pass": [
+    0.5,
+    1.0,
+    1.5
+   ],
+   "fail": [
+    0.25,
+    2.5,
+    5.0
+   ]
+  },
+  "read_noise": {
+   "nominal": 2.0,
+   "pass": [
+    2.0,
+    5.0
+   ],
+   "fail": [
+    10.0,
+    20.0
+   ]
+  },
+  "floor_albedo": {
+   "nominal": 0.5,
+   "pass": [
+    0.1,
+    0.2,
+    0.5,
+    0.8,
+    0.95
+   ],
+   "fail": []
+  },
+  "raking_led_height_mm": {
+   "nominal": 6.0,
+   "pass": [
+    3.0,
+    6.0,
+    12.0
+   ],
+   "fail": [
+    25.0,
+    50.0
+   ]
+  },
+  "shadow_factor": {
+   "nominal": 0.35,
+   "pass": [
+    0.05,
+    0.2,
+    0.35,
+    0.6
+   ],
+   "fail": [
+    0.85,
+    0.95
+   ]
+  },
+  "line_width_mm": {
+   "nominal": 3.0,
+   "pass": [
+    0.5,
+    1.0,
+    3.0,
+    6.0,
+    12.0
+   ],
+   "fail": []
+  },
+  "ambient_lux": {
+   "nominal": 8.0,
+   "pass": [
+    8.0,
+    50.0,
+    150.0
+   ],
+   "fail": [
+    400.0,
+    1000.0
+   ]
+  }
+ }
+}
