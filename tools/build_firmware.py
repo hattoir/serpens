@@ -42,6 +42,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="ファームのコンパイル（書き込みはしない）")
     ap.add_argument("--cli", default=None, help="arduino-cli の場所")
     ap.add_argument("--fqbn", default=FQBN)
+    ap.add_argument("--sketch", default=None, help="コンパイルするスケッチのフォルダ（既定: firmware/serpens_esp32。頭の XIAO は firmware/serpens_head_xiao）")
     ap.add_argument("--build-path", default=None, help="中間ファイルの置き場所")
     ap.add_argument("--define", action="append", default=[], metavar="NAME[=VAL]",
                     help="コンパイルだけの確認用のマクロ（例: --define SERPENS_SERVO_FAKE=1 --define SERPENS_SERVO_SELFTEST=1。"
@@ -57,7 +58,7 @@ def main() -> int:
         cmd += ["--build-path", args.build_path]
     if args.define:
         cmd += ["--build-property", "compiler.cpp.extra_flags=" + " ".join(f"-D{d}" for d in args.define)]
-    cmd.append(str(SKETCH))
+    cmd.append(str(Path(args.sketch).resolve()) if args.sketch else str(SKETCH))
     print("$ " + " ".join(cmd))
     r = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     out = (r.stdout or "") + (r.stderr or "")
