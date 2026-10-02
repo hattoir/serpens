@@ -2,7 +2,18 @@
 
 <!-- 作業のたびに更新する。ここが次のセッションの出発点になる。 -->
 
-_last updated: 2026-09-14_
+_last updated: 2026-10-02（Engineering の HBCL 節を追加。それ以外の節は各見出しの日付のまま = 履歴。古い記述は注記で示し、消していない）_
+
+## 2026-10-02 Engineering（HBCL Phase 1）: branch `agent/engineering-hwb-2026-10-01`（統合 `f8f2229` から）
+
+- 全件テスト（**Engineering が実測**、`adf8dde`、clean worktree、`PYTHONIOENCODING=utf-8 .venv/Scripts/python.exe -m pytest -q -rs -p no:cacheprovider`）: **745 passed / 2 skipped / 1 warning、525.55 s**。skip = `ai-shared` が git 管理外・YOLO の重み無し。warning = `test_pilot_tools` の subprocess 読み取りの cp932 デコード（既存）。統合 base の実測は 671 passed / 2 skipped（`9033abb`、Integration）。
+- 次の状態の詳細: `ai-shared/engineering-state.md`（現在地）、Ledger `ai-outbox/closed-loop/LEDGER.md`（LB-E-）、ENTRY-E-0015 / E-0016 / E-0017。
+- **古い記述の注記**（本ファイルの下の節。履歴として残す）:
+  - 「Mosquitto のサービス停止・無効化はユーザーが管理者で実行する」「1. 管理者で Mosquitto サービスを止めて無効化する」: **2026-10-02 実測で `mosquitto` は Status = Stopped / StartType = Disabled**（`Get-Service`）。**完了済み**。
+  - 「main にローカルコミット済み・未 push（User 判断待ち）」（2026-09-29 の節）: この worktree では確認できない。push の有無は人が git で確認する（Engineering は push しない）。
+  - 「EXP-ENG-0001 のしきい値 1.5〜2.5」は楽観値（HG-H0 の `decision_boundary.md` が新しい）。
+  - 6 本目のモーター（OQ-0101）は User 未決。CAD・MVP は 5 サーボ。
+- HARDWARE_VERIFIED = 0 / HUMAN_EVALUATED = 0 のまま。
 
 ## 2026-10-01 統合（Integration、HBCL Phase 0）: `integration/hw-boundary-2026-10-01`
 

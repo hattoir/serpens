@@ -295,6 +295,7 @@ OBSERVE → PRIORITIZE → DESIGN → BUILD → TEST → CRITIQUE → FIX → DO
 
 CAD・機構・部品配置・機械仕様に関わる作業では、最初に **[CAD.md](CAD.md)** を読む。
 2026-09-26のFloor Watch MVPは5サーボ（J1 Pitch、J2〜J5 Yaw）・車輪なし腹面。
+**モーター数の方針は 6（User 2026-09-29。6 本目の使い方 = OQ-0101 は未決: Head Yaw / Body Yaw / 5 のまま）。CAD・MVP は 5 サーボ。2026-10-02 時点で両者は併存し、最終は User（Human Approval）。**
 以下に残る9軸説明は従来構成であり、現MVPのCAD構成と混同しない。
 CAD.mdの値は確度と検証範囲を確認し、既存の制御設定を自動で置き換えない。
 

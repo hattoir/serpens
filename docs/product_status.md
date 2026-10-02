@@ -20,7 +20,7 @@
 | Locomotion | 実装済み（模擬） | serpenoid 歩容、2D シミュレータ、**MuJoCo の 3D モデル**（任意依存）、Belly 3種、歩容掃引（Pareto 候補） | 摩擦もサーボ応答もすべて未実測。**サーボゲインで前進量が変わる**（kp 1/2 と 2 倍で約 1.16 倍。2026-09-29 に MuJoCo の pitch 符号を直す前は ±45% としていた）ので、実機での同定が最優先 |
 | Sensors | 部分 | 頭部 I/O の行プロトコル（ToF・タッチ×2・LED×2）とモック（[head_io.py](../serpens/hw/head_io.py)）、サーボの位置/負荷/温度/電圧の読み出し（[state_poller.py](../serpens/hw/state_poller.py)） | **IMU が無い。** 搭載カメラも無い。電流センサも無い |
 | Vision | 実装済み（外部カメラ前提） | ArUco・床ホモグラフィ・YOLO。**模擬画像の Vision で閉ループ**（[phase4_vision_bridge.md](phase4_vision_bridge.md)）。実画像経路 `CameraObserver`（カメラ / 録画 → 自己位置・人）を `--camera` に接続。見失い後は人が K で位置を確認 | 実カメラでは未測定。上方の外部カメラ前提。所有者の個人識別は無い |
-| Networking | **未着手** | USB CDC（PC 直結）だけ | Wi-Fi、PC が落ちたときの network fallback が無い |
+| Networking | **部分（2026-10-02 注記。作成時の 09-14 は未着手）** | USB CDC（PC 直結）+ MQTT の橋（`serpens/api/bridge.py`: Task / Event、`safety_state`、LWT。模擬のブローカーと、Mosquitto の実ブローカーで試験。経緯は `agent/DECISIONS.md` 2026-09-29）。ESP32 の Wi-Fi は未 | **機体（ESP32）の Wi-Fi・PC が落ちたときの network fallback は無い**。MQTT は PC 側。実機の通信は未実測 |
 | Behavior | 実装済み（模擬） | 内部状態 4 種 + 効用、10 状態、**語彙（primitives）/ 文法（grammar, config）/ 移動（locomotion）**。stop-and-go・一次反応・呼吸の位相波・予備動作・視線そらし（[motion_quality.md](motion_quality.md)） | 充電要求・所有者探索の状態が無い。「蛇らしさ」は人が見ての評価が未。LLM は不使用（憲章どおり） |
 | Charging | **未着手** | 無し | ドック・姿勢・接点・充電制御のすべて |
 | Safety | 部分 | PC 側の 3 種停止とラッチ（[safety.py](../serpens/safety.py)）、機体側の watchdog・緊急停止ラッチ・上限強制（[device.py](../serpens/link/device.py)）、**安全の絶対値**（[safety_limits.md](safety_limits.md)、`tests/test_safety_limits.py`） | 接触→脱力 20ms が未達（現状 800ms）。電気的制限（層2）が丸ごと無い。物理の緊急停止スイッチが無い |
