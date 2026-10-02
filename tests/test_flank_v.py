@@ -127,3 +127,13 @@ def test_s_sweep_boundary_torque_limit_cannot_protect_the_wedge_for_any_s_in_the
         assert flank_v.s_needed_mm(tau, th) > s_band_max
     assert flank_v.s_needed_mm(0.26, th) < s_band_max                  # Design の 0.26 N·m は、s が十分大きい位置でだけ許容
     assert flank_v.allowed_torque_nm(th, flank_v.s_needed_mm(0.45, th)) == pytest.approx(0.45)
+
+
+def test_design_contact_s_makes_the_allowed_torque_far_below_the_gait_need_for_j2_j5_and_below_the_j7_hold_for_j1() -> None:
+    """ENTRY-D-0020（Design の s。p5 を代表値に）: J2〜J5 の 5.7 N × s(p5) は 0.03 N·m 以下 = 歩容の必要（0.13）の 21% 以下。J1 は表のどの θ_E でも J7 の静的保持 0.204 N·m を下回る。"""
+    th = flank_v.thresholds()["hand_finger"]
+    a25 = [flank_v.allowed_torque_nm(th, r[4]) for r in flank_v.DESIGN_S_J25]
+    assert len(a25) == 15 and max(a25) < 0.03 and max(a25) / flank_v.GAIT_NEED_NM[0] < 0.22
+    a1 = [flank_v.allowed_torque_nm(th, r[3]) for r in flank_v.DESIGN_S_J1]
+    assert len(a1) == 11 and all(x < flank_v.J7_STATIC_NM for x in a1)
+    assert all(r[4] >= r[3] for r in flank_v.DESIGN_S_J25)                       # p5 は最小以上（データの整合）
