@@ -1,0 +1,26 @@
+{
+ "w100_L56.2 (current)": {
+  "width_mm": 100.0,
+  "tip_mm": 56.2,
+  "by_yaw": {
+   "30": {
+    "pockets": 22,
+    "min_mouth_mm": 115.0,
+    "margin_to_neck_mm": 26.5,
+    "max_d_in_mm": 139.0
+   },
+   "45": {
+    "pockets": 58,
+    "min_mouth_mm": 103.0,
+    "margin_to_neck_mm": 14.5,
+    "max_d_in_mm": 140.0
+   },
+   "60": {
+    "pockets": 86,
+    "min_mouth_mm": 89.0,
+    "margin_to_neck_mm": 0.5,
+    "max_d_in_mm": 140.0
+   }
+  }
+ }
+}

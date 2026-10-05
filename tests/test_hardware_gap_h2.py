@@ -106,3 +106,17 @@ def test_defocused_far_field_line_dropout_is_not_an_object_but_near_specular_sti
     objs = [c for c in detect(frames, cam, plane, cfg)[0] if c.is_object]
     hit = [c for c in objs if abs(c.floor_xy_mm[0]) < 12.0 and abs(c.floor_xy_mm[1] - yc) < 25.0]
     assert hit and any(k["kind"] == "metal_disc" for k in hit[0].kinds)
+
+
+def test_window_term_is_neutral_by_default_and_scales_and_veils_lit_frames_only(h2) -> None:
+    """R-032: 窓の透過率 T・フレア f。既定（T = 1、f = 0）は**何もしない**（従来の結果と同一）。T は全枚に掛かり、霧は 'dark' 以外にだけ足される。"""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    frames = {"dark": np.full((8, 8), 10, np.uint8), "normal": np.full((8, 8), 110, np.uint8), "raking": np.full((8, 8), 60, np.uint8)}
+    assert h2.apply_window(frames, {}) is frames
+    assert h2.apply_window(frames, {"window_T": 1.0, "window_flare": 0.0}) is frames
+    t = h2.apply_window(frames, {"window_T": 0.5, "window_flare": 0.0})
+    assert int(t["normal"][0, 0]) == 55 and int(t["dark"][0, 0]) == 5
+    f = h2.apply_window(frames, {"window_T": 1.0, "window_flare": 0.2})
+    assert int(f["dark"][0, 0]) == 10                                               # 全消灯の枚には足さない
+    assert int(f["normal"][0, 0]) == 110 + round(0.2 * (110 - 10)) and int(f["raking"][0, 0]) == 60 + round(0.2 * (60 - 10))

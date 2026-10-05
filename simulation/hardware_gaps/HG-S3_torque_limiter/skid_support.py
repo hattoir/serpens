@@ -40,12 +40,14 @@ def _load(name: str, rel: str):
 
 
 def masses() -> dict:
+    """頭の質量・重心・全体質量の入力。**2026-10-05（R-030）: Design の Fusion v3（113.8 g、重心 J1 軸の 16.2 mm 前）+ 電子部品 25〜30 g（ASSUMED）= 139〜144 g に更新**
+    （以前は D-0015 の殻 137〜234 g + 電子 10〜20 g = 147〜254 g、重心 19 mm。D-0020 / D-0021 で撤回された値）。"""
     hb = _load("head_mass_budget_for_skid", "simulation/hardware_gaps/HG-S3_torque_limiter/head_mass_budget.py")
     b = hb.budget()
-    heads = [hb.head_total_g(s, e) for s in hb.SHELL_G for e in hb.ELEC_G]
+    heads = [hb.V3_HEAD_G + e for e in hb.V3_ELEC_G]
     t_lo = hb.total_mass_g(min(heads) - b["head_total"])["min"]
     t_hi = hb.total_mass_g(max(heads) - b["head_total"])["max"]
-    return {"head_lo": min(heads), "head_hi": max(heads), "total_lo": t_lo, "total_hi": t_hi, "cog_mm": hb.DESIGN_COG_MM}
+    return {"head_lo": min(heads), "head_hi": max(heads), "total_lo": t_lo, "total_hi": t_hi, "cog_mm": hb.V3_COG_X_MM}
 
 
 def j1_torque_nm(f: float, total_g: float, k_dyn: float, l_skid_mm: float, head_g: float, cog_mm: float) -> float:
@@ -80,7 +82,7 @@ def main() -> None:
     A("# 頭スキッドで体の前側を支えるときの J1 の負荷（OQ-0105。2026-10-01）\n")
     A("**ANALYTIC + Monte Carlo（prior）。PROVISIONAL。実機で未確認（HARDWARE_VERIFIED = 0）。f（頭スキッドが受ける体の重さの割合）・k_dyn・L_skid は ASSUMED。"
       "5.7 N・0.25 N·m は暫定（SAFETY_UNVERIFIED）で、ここでは使わない。安全・合格の語は使わない。** 再現: `simulation/hardware_gaps/HG-S3_torque_limiter/skid_support.py`。\n")
-    A(f"入力: 頭 {m['head_lo']:g}〜{m['head_hi']:g} g（殻 137〜234 g + 電子 10〜20 g。重心 {m['cog_mm']:g} mm）、全体 {m['total_lo']:.0f}〜{m['total_hi']:.0f} g（`head_mass_budget.py`）、"
+    A(f"入力: 頭 {m['head_lo']:g}〜{m['head_hi']:g} g（Design の Fusion v3 113.8 g + 電子 25〜30 g = ASSUMED。2026-10-05 に更新。重心 {m['cog_mm']:g} mm）、全体 {m['total_lo']:.0f}〜{m['total_hi']:.0f} g（`head_mass_budget.py`）、"
       f"スキッド前端の腕 {L_SKID_MM[0]:g}〜{L_SKID_MM[1]:g} mm、動的な割増 {K_DYN[0]:g}〜{K_DYN[1]:g}、f = 0〜{F_MAX:g}。\n")
     A("## 1. f を掃引した J1 の静的トルク（中央値の入力: 全体・頭・腕・割増の中央値）\n")
     tg, hg = (m["total_lo"] + m["total_hi"]) / 2, (m["head_lo"] + m["head_hi"]) / 2
@@ -113,5 +115,41 @@ def main() -> None:
     print("wrote", out)
 
 
+# ---- スキッド底の高さの差 δ と、頭スキッドが受ける割合 f（R-031。2026-10-05）-----------------------------------
+def skid_share(ks: float, kb: float, delta_mm: float, wf_n: float) -> float:
+    """体の前側の重さ wf_n [N] を、スキッド（押し込み剛性 ks [N/mm]）と足の帯（kb [N/mm]）が**並列**に床で受けるとき、スキッドの分担 f。
+    前側を剛体とみなし、帯の底を基準にスキッド底が δ [mm] 低い（δ > 0 = スキッドが出ている、δ < 0 = 上げてある）。共通の沈み z（帯）で
+    F_b = kb z、F_s = ks max(0, z + δ)、F_s + F_b = wf → F_s = ks (wf + kb δ) / (ks + kb)（スキッドが接しているとき）、f = F_s / wf を [0, 1] に切る。
+    **ANALYTIC。剛体・並列ばね・床は線形の仮定（ASSUMED）。k は未測定（HT-012）。実機で未確認。**"""
+    f = ks / (ks + kb) * (1.0 + kb * delta_mm / wf_n)
+    return max(0.0, min(1.0, f))
+
+
+def delta_report() -> str:
+    m = masses()
+    wf = 0.5 * m["total_hi"] / 1000.0 * G                              # 体の前半分 × 全体最大（保守側）
+    L = ["# スキッド底の高さの差 δ と、頭スキッドが受ける割合 f（R-031。2026-10-05）\n",
+         "**ANALYTIC（剛体・並列ばね・線形の床）。床の押し込み剛性 k は未測定（HT-012）。実機で未確認。HARDWARE_VERIFIED = 0。5.7 N・0.25 N·m は暫定で使わない。** "
+         f"体の前側の重さ = 全体最大 {m['total_hi']:.0f} g の半分 = {wf:.1f} N。f = ks/(ks+kb) × (1 + kb δ / 前側の重さ)（0〜1 に切る）。δ > 0 = スキッドが帯より出ている。\n",
+         "## 1. ks = kb（スキッドと帯が同じ剛さ）\n", "| k [N/mm]（マット → フローリング）| δ = −1.0 | −0.5 | 0 | +0.5 |", "|---|---|---|---|---|"]
+    for k in (0.3, 1.0, 3.0, 10.0, 30.0):
+        L.append(f"| {k:g} | " + " | ".join(f"{skid_share(k, k, d, wf):.2f}" for d in (-1.0, -0.5, 0.0, 0.5)) + " |")
+    L += ["\n## 2. ks = 2 kb（スキッドの方が硬い）\n", "| k（kb）[N/mm] | δ = −1.0 | −0.5 | 0 | +0.5 |", "|---|---|---|---|---|"]
+    for k in (0.3, 1.0, 3.0, 10.0, 30.0):
+        L.append(f"| {k:g} | " + " | ".join(f"{skid_share(2 * k, k, d, wf):.2f}" for d in (-1.0, -0.5, 0.0, 0.5)) + " |")
+    L += ["\n## 3. 読み（Engineering の見立て。PROPOSED。決めるのは Design / Integration）\n",
+          "- **危険なのは δ の公差が正に振れること**: 硬い床（k ≥ 10 N/mm）では、δ = +0.5 mm でスキッドが体の前側をほぼ全部（f 0.9〜1.0）受け、δ = 0 でも ks/(ks+kb) = 0.5〜0.67。",
+          "- **δ < 0（スキッドを上げる）は、硬い床の f を 0 近くまで下げる**（δ = −1 で k ≥ 10 → 0、−0.5 で 0.07〜0.09）。**厳しくする側なので Engineering に異論は無い**。印刷の公差 ±0.5 mm を見込んで**公称 −0.75 mm（−0.25〜−1.25）**にすれば、公差を含めても δ が正にならない。",
+          "- **ただし柔らかいマット（k ≲ 1 N/mm）の f はほとんど下がらない**（δ = −1 でも 0.41〜0.55）。**f の上限（E-0015 の仮定 0.5）はマットで決まり、δ では変わらない**。ks が kb の 2 倍なら 0.67 まで。R-027 の f の上限は、k の実測（HT-012）が出るまで 0.5〜0.67 を置く。",
+          "- 副作用: 口の前縁が |δ| だけ上がる（c が増える）。取り込み率の表（`j1_range_opt.py` の intake）では c = 1.1 mm でも 0.95〜0.96、c ≤ 0.6 mm は 1.0。J1 で補正できる範囲（−4〜+3°）なら吸収できる。ToF の床との距離は |δ| mm 増える（崖の判定の Δ に対して小さい）。"
+          "顎の接地感（Design の見た目）は Design の領分。"]
+    return "\n".join(L) + "\n"
+
+
 if __name__ == "__main__":
-    main()
+    if "--delta" in sys.argv:
+        txt = delta_report()
+        (ROOT / "simulation" / "results" / "skid_delta_2026-10-05.md").write_text(txt, encoding="utf-8", newline="\n")
+        print(txt)
+    else:
+        main()

@@ -1,0 +1,110 @@
+[
+ {
+  "tag": "pitch=15,crop=0",
+  "ok": true,
+  "recall_patrol": 0.75,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=15,crop=6",
+  "ok": false,
+  "recall_patrol": 0.625,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=15,crop=11.5",
+  "ok": false,
+  "recall_patrol": 0.625,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=20,crop=0",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=20,crop=6",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=20,crop=11.5",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=25,crop=0",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=25,crop=6",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=25,crop=11.5",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=30,crop=0",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=30,crop=6",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ },
+ {
+  "tag": "pitch=30,crop=11.5",
+  "ok": true,
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "far_phantom_inspect": 0.0,
+  "missed": ""
+ }
+]

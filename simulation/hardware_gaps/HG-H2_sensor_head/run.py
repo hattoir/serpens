@@ -119,6 +119,23 @@ class Degrader:
         return np.clip(x, 0, 255).astype(np.uint8)
 
 
+# ---- カメラの窓（透過率 T・フレア f。R-032 / Design の `h2_window_flare.py` と同じ定義）----------------------
+def apply_window(frames: dict[str, np.ndarray], p: dict[str, Any]) -> dict[str, np.ndarray]:
+    """窓の劣化: 全枚に透過率 T を掛け、LED が点いた枚（'dark' 以外）に一様な霧 f × (その枚の平均の明るさ − 全消灯の枚の平均) を足す。
+    雑音は劣化器（Degrader）が後で足すので、ここでは足さない（= 窓の後ろで雑音が入る、元の σ のまま）。`window_T` / `window_flare` が無い、または (1, 0) なら**何もしない**（従来の結果と同一）。
+    窓 A / B / C の実際の T・f は未測定（G1 の付け替え治具で測る）。SYNTHETIC。"""
+    T, f = float(p.get("window_T", 1.0)), float(p.get("window_flare", 0.0))
+    if T == 1.0 and f == 0.0:
+        return frames
+    amb = float(frames["dark"].astype(np.float32).mean()) if "dark" in frames else 0.0
+    out = {}
+    for k, im in frames.items():
+        v = im.astype(np.float32)
+        veil = 0.0 if k == "dark" else f * max(float(v.mean()) - amb, 0.0)
+        out[k] = np.clip(T * v + veil, 0, 255).astype(np.uint8)
+    return out
+
+
 # ---- 1 条件の評価 --------------------------------------------------------------------------------
 def scenes(p: dict[str, Any]) -> list[tuple[str, str, bool, Scene, float, float]]:
     """(名前, kind, 陽性か, Scene, x, y)。物は線上（x=0）と線外、陰性は 2 位置。"""
@@ -154,7 +171,7 @@ def evaluate_condition(args: tuple[str, dict[str, Any]]) -> dict[str, Any]:
     rng = np.random.default_rng(int(SW["seed"]))
     rows = []
     for name, kind, positive, sc, x, y in scenes(p):
-        frames = {k: deg(v, rng) for k, v in rend.render(sc).items()}
+        frames = {k: deg(v, rng) for k, v in apply_window(rend.render(sc), p).items()}
         res: dict[str, Any] = {"tag": tag, "name": name, "kind": kind, "positive": positive, "on_line": abs(x) < 1e-9}
         for stage, with_line in (("patrol", False), ("inspect", True)):
             try:

@@ -1,0 +1,107 @@
+[
+ {
+  "tag": "nominal+T1f0",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "nominal+T0.4f0.05",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "nominal+T0.4f0.2",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "shadow=0.6+T1f0",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "shadow=0.6+T0.4f0.05",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "shadow=0.6+T0.4f0.2",
+  "patrol": 0.0,
+  "inspect": 0.875,
+  "fa": 0.0,
+  "ok": false
+ },
+ {
+  "tag": "gain=0.5+T1f0",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "gain=0.5+T0.4f0.05",
+  "patrol": 0.875,
+  "inspect": 0.75,
+  "fa": 0.0,
+  "ok": false
+ },
+ {
+  "tag": "gain=0.5+T0.4f0.2",
+  "patrol": 0.75,
+  "inspect": 0.625,
+  "fa": 0.0,
+  "ok": false
+ },
+ {
+  "tag": "noise=5+T1f0",
+  "patrol": 1.0,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "noise=5+T0.4f0.05",
+  "patrol": 0.8125,
+  "inspect": 0.625,
+  "fa": 0.0,
+  "ok": false
+ },
+ {
+  "tag": "noise=5+T0.4f0.2",
+  "patrol": 0.875,
+  "inspect": 0.75,
+  "fa": 0.0,
+  "ok": false
+ },
+ {
+  "tag": "ambient=150+T1f0",
+  "patrol": 0.9375,
+  "inspect": 1.0,
+  "fa": 0.0,
+  "ok": true
+ },
+ {
+  "tag": "ambient=150+T0.4f0.05",
+  "patrol": 0.75,
+  "inspect": 0.75,
+  "fa": 0.0,
+  "ok": false
+ },
+ {
+  "tag": "ambient=150+T0.4f0.2",
+  "patrol": 0.75,
+  "inspect": 0.75,
+  "fa": 0.0,
+  "ok": false
+ }
+]

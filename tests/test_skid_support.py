@@ -47,3 +47,20 @@ def test_monte_carlo_is_reproducible_and_ordered(sk) -> None:
     a, b = sk.mc(n=4000), sk.mc(n=4000)
     assert a["p50"] == b["p50"] and a["p95"] == b["p95"]
     assert a["p50"] < a["p95"] <= a["max"] and a["p_gt"][0.5] >= a["p_gt"][0.75] >= a["p_gt"][1.0]
+
+
+def test_skid_share_is_the_series_parallel_formula_and_a_raised_skid_unloads_a_hard_floor(sk) -> None:
+    """R-031: 帯とスキッドが並列のばねで前側の重さを受ける。δ = 0 で ks = kb なら半分、スキッドを上げる（δ < 0）と硬い床では 0 になり、
+    スキッドが出る（δ > 0）と硬い床ではほぼ全部を受ける。柔らかいマット（k 小）では δ の効きが小さい。"""
+    wf = 6.0
+    assert sk.skid_share(5.0, 5.0, 0.0, wf) == pytest.approx(0.5)
+    assert sk.skid_share(30.0, 30.0, -1.0, wf) == 0.0 and sk.skid_share(30.0, 30.0, 0.5, wf) == 1.0
+    assert sk.skid_share(0.3, 0.3, -1.0, wf) > 0.45                                  # マットでは上げても f はほとんど下がらない
+    assert sk.skid_share(2.0, 1.0, 0.0, wf) == pytest.approx(2.0 / 3.0)               # スキッドが 2 倍硬い
+    assert all(0.0 <= sk.skid_share(k, k, d, wf) <= 1.0 for k in (0.1, 1, 10, 100) for d in (-3, -1, 0, 1, 3))
+
+
+def test_masses_use_design_v3_head(sk) -> None:
+    """R-030: 頭の質量の入力は Fusion v3（113.8 g）+ 電子 25〜30 g = 139〜144 g、重心は J1 軸の 16.2 mm 前。"""
+    m = sk.masses()
+    assert m["head_lo"] == pytest.approx(138.8) and m["head_hi"] == pytest.approx(143.8) and m["cog_mm"] == pytest.approx(16.2)

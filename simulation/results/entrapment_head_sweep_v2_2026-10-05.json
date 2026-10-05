@@ -1,0 +1,26 @@
+{
+ "w103.2_L30": {
+  "width_mm": 103.2,
+  "tip_mm": 30.0,
+  "by_yaw": {
+   "30": {
+    "pockets": 10,
+    "min_mouth_mm": 127.0,
+    "margin_to_neck_mm": 38.5,
+    "max_d_in_mm": 140.0
+   },
+   "45": {
+    "pockets": 16,
+    "min_mouth_mm": 120.0,
+    "margin_to_neck_mm": 31.5,
+    "max_d_in_mm": 140.0
+   },
+   "60": {
+    "pockets": 28,
+    "min_mouth_mm": 113.0,
+    "margin_to_neck_mm": 24.5,
+    "max_d_in_mm": 140.0
+   }
+  }
+ }
+}

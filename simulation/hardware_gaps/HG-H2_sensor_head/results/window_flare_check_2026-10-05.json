@@ -1,0 +1,82 @@
+[
+ {
+  "tag": "T=1,f=0",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=1,f=0.05",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=1,f=0.1",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=1,f=0.2",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=0.7,f=0",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=0.7,f=0.054",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=0.7,f=0.1",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=0.4,f=0",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=0.4,f=0.015",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ },
+ {
+  "tag": "T=0.4,f=0.05",
+  "recall_patrol": 1.0,
+  "recall_inspect_online": 1.0,
+  "false_alarm_patrol": 0.0,
+  "ok": true,
+  "missed": ""
+ }
+]
